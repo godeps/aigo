@@ -35,8 +35,12 @@ func (e *Engine) runJimengVideo(ctx context.Context, apiKey string, g workflow.G
 		submitBody["binary_data_base64"] = []string{b64s}
 	}
 
+	subBody, err := jsonBody(submitBody)
+	if err != nil {
+		return "", fmt.Errorf("newapi: jimeng submit marshal: %w", err)
+	}
 	subURL := jimengURL(e.apiURL("/jimeng/"), jimengSubmitAction, e.jimengVer)
-	subRaw, err := e.doRequest(ctx, http.MethodPost, subURL, apiKey, mustJSON(submitBody), "application/json")
+	subRaw, err := e.doRequest(ctx, http.MethodPost, subURL, apiKey, subBody, "application/json")
 	if err != nil {
 		return "", err
 	}
@@ -62,9 +66,8 @@ func jimengURL(base, action, version string) string {
 	return u.String()
 }
 
-func mustJSON(v any) []byte {
-	b, _ := json.Marshal(v)
-	return b
+func jsonBody(v any) ([]byte, error) {
+	return json.Marshal(v)
 }
 
 type jimengEnvelope struct {
@@ -133,7 +136,11 @@ func (e *Engine) pollJimeng(ctx context.Context, apiKey string, g workflow.Graph
 	ticker := time.NewTicker(e.pollInterval)
 	defer ticker.Stop()
 	for {
-		raw, err := e.doRequest(ctx, http.MethodPost, getURL, apiKey, mustJSON(getBody), "application/json")
+		gb, jerr := jsonBody(getBody)
+		if jerr != nil {
+			return "", fmt.Errorf("newapi: jimeng get marshal: %w", jerr)
+		}
+		raw, err := e.doRequest(ctx, http.MethodPost, getURL, apiKey, gb, "application/json")
 		if err != nil {
 			return "", err
 		}
@@ -158,6 +165,9 @@ func jimengParseResultURL(body []byte) (mediaURL string, done bool, err error) {
 		return "", false, fmt.Errorf("newapi: jimeng get decode: %w", err)
 	}
 	if env.Code != 0 {
+		if jimengNonZeroContinuePoll(env.Code, env.Message) {
+			return "", false, nil
+		}
 		return "", true, fmt.Errorf("newapi: jimeng get code=%d msg=%s", env.Code, env.Message)
 	}
 	var dataObj map[string]any
@@ -169,8 +179,26 @@ func jimengParseResultURL(body []byte) (mediaURL string, done bool, err error) {
 	if u := deepFindHTTPURL(dataObj); u != "" {
 		return u, true, nil
 	}
-	// 可能仍在处理：无 URL 且无明显失败
+	// code==0 但尚无 URL：任务可能仍在处理
 	return "", false, nil
+}
+
+// jimengNonZeroContinuePoll 在轮询 GetResult 时，部分网关用非 0 code 或文案表示「仍在处理」而非终态失败。
+func jimengNonZeroContinuePoll(code int, msg string) bool {
+	switch code {
+	case 429, 503, 504:
+		return true
+	}
+	m := strings.ToLower(strings.TrimSpace(msg))
+	for _, k := range []string{
+		"process", "running", "pending", "queue", "wait", "async",
+		"处理", "进行", "排队", "等待", "未就绪", "not ready", "submitted",
+	} {
+		if strings.Contains(m, k) {
+			return true
+		}
+	}
+	return false
 }
 
 func deepFindHTTPURL(m map[string]any) string {

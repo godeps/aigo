@@ -75,6 +75,9 @@ func Float64Option(g workflow.Graph, keys ...string) (float64, bool) {
 }
 
 func ExtractImageSizeOpenAI(g workflow.Graph) string {
+	if s, ok := StringOptionFromClassTypes(g, []string{"ImageOptions"}, "size"); ok {
+		return strings.ReplaceAll(s, "*", "x")
+	}
 	if s, ok := StringOption(g, "size"); ok {
 		return strings.ReplaceAll(s, "*", "x")
 	}
@@ -107,6 +110,11 @@ func normalizeOpenAIImageSize(width, height int) string {
 
 // FirstImageURL 返回首张参考图 URL（图生视频等）。
 func FirstImageURL(g workflow.Graph) (string, bool) {
+	for _, ref := range g.FindByClassType("LoadImage") {
+		if u, ok := ref.Node.StringInput("url"); ok && u != "" {
+			return u, true
+		}
+	}
 	for _, id := range g.SortedNodeIDs() {
 		node := g[id]
 		if !strings.Contains(strings.ToLower(node.ClassType), "image") {
@@ -120,6 +128,13 @@ func FirstImageURL(g workflow.Graph) (string, bool) {
 }
 
 func ExtractVideoDimensions(g workflow.Graph) (width, height int, ok bool) {
+	for _, ref := range g.FindByClassType("VideoOptions") {
+		w, okW := ref.Node.IntInput("width")
+		h, okH := ref.Node.IntInput("height")
+		if okW && okH {
+			return w, h, true
+		}
+	}
 	if w, okW := IntOption(g, "width"); okW {
 		if h, okH := IntOption(g, "height"); okH {
 			return w, h, true
@@ -215,6 +230,33 @@ func ExtractSpeechSpeed(g workflow.Graph) (float64, bool) {
 		}
 	}
 	return Float64Option(g, "speed")
+}
+
+// ExtractNegativePrompt 优先从 NegativePrompt 节点读取，再回退全图 stringOption。
+func ExtractNegativePrompt(g workflow.Graph) (string, bool) {
+	for _, ref := range g.FindByClassType("NegativePrompt") {
+		if v, ok := ref.Node.StringInput("negative_prompt"); ok && strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v), true
+		}
+	}
+	return StringOption(g, "negative_prompt")
+}
+
+// ExtractVideoDuration 优先 VideoOptions.duration，再回退全图。
+func ExtractVideoDuration(g workflow.Graph) (float64, bool) {
+	if d, ok := Float64OptionFromClassTypes(g, []string{"VideoOptions"}, "duration"); ok && d > 0 {
+		return d, true
+	}
+	if d, ok := IntOptionFromClassTypes(g, []string{"VideoOptions"}, "duration"); ok && d > 0 {
+		return float64(d), true
+	}
+	if d, ok := Float64Option(g, "duration"); ok && d > 0 {
+		return d, true
+	}
+	if d, ok := IntOption(g, "duration"); ok && d > 0 {
+		return float64(d), true
+	}
+	return 0, false
 }
 
 func resolveLinkString(g workflow.Graph, ref []any, seen map[string]bool) (string, bool, error) {

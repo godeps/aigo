@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/godeps/aigo/engine/httpx"
 	"github.com/godeps/aigo/engine/newapi/internal/graph"
 	"github.com/godeps/aigo/engine/newapi/internal/rt"
 	"github.com/godeps/aigo/workflow"
@@ -45,6 +46,8 @@ type Config struct {
 	PollInterval      time.Duration
 	// 即梦
 	JimengVersion string // 查询参数 Version，默认 2022-08-31
+	// DisableRemoteMediaFetch 为 true 时，图中 image_url/audio_url 不再发起 HTTP GET（降低 SSRF 风险；默认 false）。
+	DisableRemoteMediaFetch bool
 }
 
 // Engine 实现 engine.Engine。
@@ -58,16 +61,14 @@ type Engine struct {
 	style        string
 	httpClient   *http.Client
 	waitVideo    bool
-	pollInterval time.Duration
-	jimengVer    string
+	pollInterval            time.Duration
+	jimengVer               string
+	allowRemoteMediaFetch   bool
 }
 
 // New 创建引擎。Kind 为空且 Route 为空时，默认 KindImage。
 func New(cfg Config) *Engine {
-	hc := cfg.HTTPClient
-	if hc == nil {
-		hc = http.DefaultClient
-	}
+	hc := httpx.OrDefault(cfg.HTTPClient, httpx.DefaultTimeout)
 	kind := cfg.Kind
 	if kind == "" && cfg.Route == RouteAuto {
 		kind = KindImage
@@ -88,17 +89,18 @@ func New(cfg Config) *Engine {
 	}
 
 	return &Engine{
-		origin:       origin,
-		route:        cfg.Route,
-		kind:         kind,
-		model:        strings.TrimSpace(cfg.Model),
-		apiKey:       strings.TrimSpace(cfg.APIKey),
-		quality:      cfg.Quality,
-		style:        cfg.Style,
-		httpClient:   hc,
-		waitVideo:    cfg.WaitForCompletion,
-		pollInterval: poll,
-		jimengVer:    jv,
+		origin:                origin,
+		route:                 cfg.Route,
+		kind:                  kind,
+		model:                 strings.TrimSpace(cfg.Model),
+		apiKey:                strings.TrimSpace(cfg.APIKey),
+		quality:               cfg.Quality,
+		style:                 cfg.Style,
+		httpClient:            hc,
+		waitVideo:             cfg.WaitForCompletion,
+		pollInterval:          poll,
+		jimengVer:             jv,
+		allowRemoteMediaFetch: !cfg.DisableRemoteMediaFetch,
 	}
 }
 
@@ -136,35 +138,7 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (string, error) 
 		return "", ErrMissingAPIKey
 	}
 
-	r := e.effectiveRoute()
-	switch r {
-	case RouteOpenAIImagesGenerations:
-		return e.runOpenAIImageGenerations(ctx, apiKey, g)
-	case RouteOpenAIImagesEdits:
-		return e.runOpenAIImageEdits(ctx, apiKey, g)
-	case RouteOpenAIVideoGenerations:
-		return e.runOpenAIVideoGenerations(ctx, apiKey, g)
-	case RouteOpenAISpeech:
-		return e.runOpenAISpeech(ctx, apiKey, g)
-	case RouteOpenAITranscriptions:
-		return e.runOpenAIWhisper(ctx, apiKey, g, "/v1/audio/transcriptions")
-	case RouteOpenAITranslations:
-		return e.runOpenAIWhisper(ctx, apiKey, g, "/v1/audio/translations")
-	case RouteKlingText2Video:
-		return e.runKlingVideo(ctx, apiKey, g, "/kling/v1/videos/text2video")
-	case RouteKlingImage2Video:
-		return e.runKlingVideo(ctx, apiKey, g, "/kling/v1/videos/image2video")
-	case RouteJimengVideo:
-		return e.runJimengVideo(ctx, apiKey, g)
-	case RouteSoraVideos:
-		return e.runSoraVideo(ctx, apiKey, g)
-	case RouteQwenImagesGenerations:
-		return e.runQwenImageGenerations(ctx, apiKey, g)
-	case RouteGeminiGenerateContent:
-		return e.runGeminiGenerateContent(ctx, apiKey, g)
-	default:
-		return "", fmt.Errorf("newapi: unknown Route %q", r)
-	}
+	return e.dispatch(ctx, apiKey, g)
 }
 
 func wrapGraphErr(err error) error {
@@ -179,6 +153,9 @@ func wrapGraphErr(err error) error {
 	}
 	if errors.Is(err, graph.ErrMissingAudioSource) {
 		return ErrMissingAudioSource
+	}
+	if errors.Is(err, graph.ErrRemoteMediaDisabled) {
+		return ErrRemoteMediaDisabled
 	}
 	return err
 }

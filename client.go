@@ -59,6 +59,18 @@ type AgentTask struct {
 	VoiceDesignResponseFormat string
 	// OmitVoiceDesignPreview 为 true 时，Execute 返回的 JSON 不含预览音频 data URI。
 	OmitVoiceDesignPreview bool
+
+	// Structured 可选；非 nil 时已设置的子字段覆盖顶层同语义的图像/视频参数（见 BuildGraph）。
+	Structured *AgentTaskStructured
+}
+
+// AgentTaskStructured 将图像与视频选项分组；便于扩展而无需继续增大 AgentTask 扁平字段。
+type AgentTaskStructured struct {
+	ImageSize      string
+	ImageWatermark *bool
+	VideoDuration  int
+	VideoSize      string
+	VideoWatermark *bool
 }
 
 // Selection is the selector's routing decision.
@@ -218,19 +230,46 @@ func BuildGraph(task AgentTask) workflow.Graph {
 		nextID++
 	}
 
+	imgSize := task.Size
+	imgWM := task.Watermark
+	vidDur := task.Duration
+	vidSize := task.Size
+	vidWM := task.Watermark
+	if task.Structured != nil {
+		if task.Structured.ImageSize != "" {
+			imgSize = task.Structured.ImageSize
+		}
+		if task.Structured.ImageWatermark != nil {
+			imgWM = task.Structured.ImageWatermark
+		}
+		if task.Structured.VideoDuration > 0 {
+			vidDur = task.Structured.VideoDuration
+		}
+		if task.Structured.VideoSize != "" {
+			vidSize = task.Structured.VideoSize
+		}
+		if task.Structured.VideoWatermark != nil {
+			vidWM = task.Structured.VideoWatermark
+		}
+	}
+
 	imageOptions := map[string]any{}
 	videoOptions := map[string]any{}
 
-	if task.Size != "" {
-		imageOptions["size"] = task.Size
-		videoOptions["size"] = task.Size
+	if imgSize != "" {
+		imageOptions["size"] = imgSize
 	}
-	if task.Duration > 0 {
-		videoOptions["duration"] = task.Duration
+	if vidSize != "" {
+		videoOptions["size"] = vidSize
 	}
-	if task.Watermark != nil {
-		imageOptions["watermark"] = *task.Watermark
-		videoOptions["watermark"] = *task.Watermark
+	if vidDur > 0 {
+		videoOptions["duration"] = vidDur
+	}
+	if imgWM != nil {
+		imageOptions["watermark"] = *imgWM
+	}
+	if vidWM != nil {
+		videoOptions["watermark"] = *vidWM
 	}
 
 	if len(imageOptions) > 0 {

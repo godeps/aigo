@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/godeps/aigo/engine/httpx"
 	"github.com/godeps/aigo/workflow"
 )
 
@@ -53,10 +54,7 @@ type Engine struct {
 
 // New creates an OpenAI engine instance.
 func New(cfg Config) *Engine {
-	httpClient := cfg.HTTPClient
-	if httpClient == nil {
-		httpClient = http.DefaultClient
-	}
+	httpClient := httpx.OrDefault(cfg.HTTPClient, httpx.DefaultTimeout)
 
 	baseURL := strings.TrimRight(cfg.BaseURL, "/")
 	if baseURL == "" {

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/godeps/aigo/engine/aliyun/internal/audiogen"
+	"github.com/godeps/aigo/engine/httpx"
 	"github.com/godeps/aigo/engine/aliyun/internal/ierr"
 	"github.com/godeps/aigo/engine/aliyun/internal/imggen"
 	"github.com/godeps/aigo/engine/aliyun/internal/runtime"
@@ -60,10 +61,7 @@ type Engine struct {
 
 // New creates a Bailian execution engine.
 func New(cfg Config) *Engine {
-	httpClient := cfg.HTTPClient
-	if httpClient == nil {
-		httpClient = http.DefaultClient
-	}
+	httpClient := httpx.OrDefault(cfg.HTTPClient, httpx.DefaultTimeout)
 
 	baseURL := strings.TrimRight(cfg.BaseURL, "/")
 	if baseURL == "" {

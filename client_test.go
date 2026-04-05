@@ -207,6 +207,75 @@ func TestClientExecuteTaskAutoRoutesWithSelector(t *testing.T) {
 	}
 }
 
+func TestBuildGraphStructuredOverrides(t *testing.T) {
+	t.Parallel()
+	wmTrue := true
+	wmFalse := false
+	g := BuildGraph(AgentTask{
+		Prompt:    "p",
+		Size:      "1024x1024",
+		Duration:  1,
+		Watermark: &wmTrue,
+		Structured: &AgentTaskStructured{
+			ImageSize:       "512x512",
+			ImageWatermark:  &wmFalse,
+			VideoDuration:   8,
+			VideoSize:       "1920x1080",
+			VideoWatermark:  &wmFalse,
+		},
+	})
+	img, ok := g["2"]
+	if !ok || img.ClassType != "ImageOptions" {
+		t.Fatalf("image options node: %#v", g)
+	}
+	if s, _ := img.StringInput("size"); s != "512x512" {
+		t.Fatalf("image size %q", s)
+	}
+	vid, ok := g["3"]
+	if !ok || vid.ClassType != "VideoOptions" {
+		t.Fatalf("video options: %#v", g)
+	}
+	if s, _ := vid.StringInput("size"); s != "1920x1080" {
+		t.Fatalf("video size %q", s)
+	}
+	if d, _ := vid.IntInput("duration"); d != 8 {
+		t.Fatalf("video duration %d", d)
+	}
+}
+
+func TestInterpretOutputKind(t *testing.T) {
+	t.Parallel()
+	if InterpretOutputKind("https://x/a.png") != OutputURL {
+		t.Fatal("url")
+	}
+	if InterpretOutputKind("data:image/png;base64,QQ==") != OutputDataURI {
+		t.Fatal("data uri")
+	}
+	if InterpretOutputKind(`{"a":1}`) != OutputJSON {
+		t.Fatal("json")
+	}
+	if InterpretOutputKind("hello") != OutputPlainText {
+		t.Fatal("plain")
+	}
+}
+
+func TestExecuteWithHint(t *testing.T) {
+	t.Parallel()
+	c := NewClient()
+	if err := c.RegisterEngine("s", stubEngine{result: "https://cdn.example.com/x"}); err != nil {
+		t.Fatal(err)
+	}
+	h, err := c.ExecuteWithHint(context.Background(), "s", workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "t"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h.Kind != OutputURL || h.Raw != "https://cdn.example.com/x" {
+		t.Fatalf("%+v", h)
+	}
+}
+
 func TestClientExecutePromptAuto(t *testing.T) {
 	t.Parallel()
 

@@ -30,7 +30,7 @@ func (e *Engine) runQwenImageGenerations(ctx context.Context, apiKey string, g w
 		"parameters": map[string]any{},
 	}
 	params := payload["parameters"].(map[string]any)
-	if neg, ok := graph.StringOption(g, "negative_prompt"); ok {
+	if neg, ok := graph.ExtractNegativePrompt(g); ok {
 		params["negative_prompt"] = neg
 	}
 	if s := graph.ExtractImageSizeOpenAI(g); s != "" {

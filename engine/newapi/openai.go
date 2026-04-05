@@ -60,7 +60,7 @@ func (e *Engine) runOpenAIImageEdits(ctx context.Context, apiKey string, g workf
 	if err != nil {
 		return "", wrapGraphErr(err)
 	}
-	imgBytes, err := graph.ImageBytesForEdits(g, e.httpClient)
+	imgBytes, err := graph.ImageBytesForEdits(g, e.httpClient, e.allowRemoteMediaFetch)
 	if err != nil {
 		return "", wrapGraphErr(err)
 	}
@@ -141,27 +141,25 @@ func (e *Engine) buildStandardVideoPayload(g workflow.Graph) (map[string]any, er
 	if img, ok := graph.FirstImageURL(g); ok {
 		payload["image"] = img
 	}
-	if d, ok := graph.Float64Option(g, "duration"); ok && d > 0 {
+	if d, ok := graph.ExtractVideoDuration(g); ok {
 		payload["duration"] = d
-	} else if d, ok := graph.IntOption(g, "duration"); ok && d > 0 {
-		payload["duration"] = float64(d)
 	}
 	if w, h, ok := graph.ExtractVideoDimensions(g); ok {
 		payload["width"] = w
 		payload["height"] = h
 	}
-	if fps, ok := graph.IntOption(g, "fps"); ok && fps > 0 {
+	if fps, ok := graph.IntOptionPreferVideoOptions(g, "fps"); ok && fps > 0 {
 		payload["fps"] = fps
 	}
-	if seed, ok := graph.IntOption(g, "seed"); ok {
+	if seed, ok := graph.IntOptionPreferVideoOptions(g, "seed"); ok {
 		payload["seed"] = seed
 	}
-	if n, ok := graph.IntOption(g, "n"); ok && n > 0 {
+	if n, ok := graph.IntOptionPreferVideoOptions(g, "n"); ok && n > 0 {
 		payload["n"] = n
 	}
 	payload["response_format"] = "url"
 	meta := map[string]any{}
-	if neg, ok := graph.StringOption(g, "negative_prompt"); ok {
+	if neg, ok := graph.ExtractNegativePrompt(g); ok {
 		meta["negative_prompt"] = neg
 	}
 	if len(meta) > 0 {
@@ -241,7 +239,7 @@ func (e *Engine) runOpenAISpeech(ctx context.Context, apiKey string, g workflow.
 }
 
 func (e *Engine) runOpenAIWhisper(ctx context.Context, apiKey string, g workflow.Graph, path string) (string, error) {
-	fn, audio, err := graph.AudioBytesForWhisper(g, e.httpClient)
+	fn, audio, err := graph.AudioBytesForWhisper(g, e.httpClient, e.allowRemoteMediaFetch)
 	if err != nil {
 		return "", wrapGraphErr(err)
 	}

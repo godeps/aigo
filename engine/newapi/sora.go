@@ -28,19 +28,17 @@ func (e *Engine) runSoraVideo(ctx context.Context, apiKey string, g workflow.Gra
 	if img, ok := graph.FirstImageURL(g); ok {
 		_ = w.WriteField("image", img)
 	}
-	if d, ok := graph.Float64Option(g, "duration"); ok && d > 0 {
+	if d, ok := graph.ExtractVideoDuration(g); ok {
 		_ = w.WriteField("duration", fmt.Sprintf("%g", d))
-	} else if d, ok := graph.IntOption(g, "duration"); ok && d > 0 {
-		_ = w.WriteField("duration", fmt.Sprintf("%d", d))
 	}
 	if vw, vh, ok := graph.ExtractVideoDimensions(g); ok {
 		_ = w.WriteField("width", fmt.Sprintf("%d", vw))
 		_ = w.WriteField("height", fmt.Sprintf("%d", vh))
 	}
-	if fps, ok := graph.IntOption(g, "fps"); ok && fps > 0 {
+	if fps, ok := graph.IntOptionPreferVideoOptions(g, "fps"); ok && fps > 0 {
 		_ = w.WriteField("fps", fmt.Sprintf("%d", fps))
 	}
-	if seed, ok := graph.IntOption(g, "seed"); ok {
+	if seed, ok := graph.IntOptionPreferVideoOptions(g, "seed"); ok {
 		_ = w.WriteField("seed", fmt.Sprintf("%d", seed))
 	}
 	if err := w.Close(); err != nil {
