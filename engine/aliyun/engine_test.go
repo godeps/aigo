@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/godeps/aigo/pkg/workflow"
+	"github.com/godeps/aigo/workflow"
 )
 
 func TestExecuteQwenImageAsync(t *testing.T) {
@@ -344,5 +345,111 @@ func TestExecuteWanVideoEditAsync(t *testing.T) {
 	second := media[1].(map[string]any)
 	if first["type"] != "video" || second["type"] != "reference_image" {
 		t.Fatalf("media = %#v", media)
+	}
+}
+
+func TestExecuteQwenTTSNonStream(t *testing.T) {
+	t.Parallel()
+
+	var payload map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/services/aigc/multimodal-generation/generation" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"output":{"audio":{"url":"https://audio.example.com/out.wav","data":""}}}`))
+	}))
+	defer server.Close()
+
+	engine := New(Config{
+		APIKey:  "test-key",
+		BaseURL: server.URL + "/api/v1",
+		Model:   ModelQwenTTSFlash,
+	})
+
+	graph := workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "你好，欢迎使用语音合成。"}},
+		"2": {ClassType: "AudioOptions", Inputs: map[string]any{"voice": "Cherry", "language_type": "Chinese"}},
+	}
+
+	got, err := engine.Execute(context.Background(), graph)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if got != "https://audio.example.com/out.wav" {
+		t.Fatalf("Execute() = %q", got)
+	}
+
+	if payload["model"] != ModelQwenTTSFlash {
+		t.Fatalf("model = %#v", payload["model"])
+	}
+	input := payload["input"].(map[string]any)
+	if input["text"] != "你好，欢迎使用语音合成。" || input["voice"] != "Cherry" {
+		t.Fatalf("input = %#v", input)
+	}
+	if input["language_type"] != "Chinese" {
+		t.Fatalf("language_type = %#v", input["language_type"])
+	}
+}
+
+func TestExecuteQwenVoiceDesign(t *testing.T) {
+	t.Parallel()
+
+	var payload map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/services/audio/tts/customization" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"output":{"voice":"qwen-tts-vd-test-voice","target_model":"qwen3-tts-vd-2026-01-26","preview_audio":{"data":"ZmFrZQ==","sample_rate":24000,"response_format":"wav"}}}`))
+	}))
+	defer server.Close()
+
+	engine := New(Config{
+		APIKey:  "test-key",
+		BaseURL: server.URL + "/api/v1",
+		Model:   ModelQwenVoiceDesign,
+	})
+
+	graph := workflow.Graph{
+		"1": {ClassType: "VoiceDesignInput", Inputs: map[string]any{
+			"voice_prompt":  "沉稳的中年男性播音员，语速平稳。",
+			"preview_text":  "各位听众晚上好。",
+			"target_model":  "qwen3-tts-vd-2026-01-26",
+			"preferred_name": "news",
+			"language":       "zh",
+		}},
+	}
+
+	got, err := engine.Execute(context.Background(), graph)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	var decoded struct {
+		Type         string `json:"type"`
+		Voice        string `json:"voice"`
+		TargetModel  string `json:"target_model"`
+		PreviewAudio string `json:"preview_audio"`
+	}
+	if err := json.Unmarshal([]byte(got), &decoded); err != nil {
+		t.Fatalf("result json: %v", got)
+	}
+	if decoded.Type != "qwen-voice-design" || decoded.Voice != "qwen-tts-vd-test-voice" {
+		t.Fatalf("decoded = %#v", decoded)
+	}
+	if !strings.HasPrefix(decoded.PreviewAudio, "data:audio/wav;base64,") {
+		t.Fatalf("preview = %q", decoded.PreviewAudio)
+	}
+
+	in := payload["input"].(map[string]any)
+	if in["action"] != "create" || in["target_model"] != "qwen3-tts-vd-2026-01-26" {
+		t.Fatalf("input = %#v", in)
 	}
 }

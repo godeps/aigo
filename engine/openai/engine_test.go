@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/godeps/aigo/pkg/workflow"
+	"github.com/godeps/aigo/workflow"
 )
 
 func TestCompileExtractsPromptAndSize(t *testing.T) {

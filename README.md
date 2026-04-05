@@ -64,6 +64,18 @@ result, err := client.ExecuteTask(ctx, "video", aigo.AgentTask{
 
 `ExecuteTask` compiles the request into a workflow graph internally and forwards it to the registered engine.
 
+If you want the LLM inside your agent to choose the engine on its own, use `ExecutePromptAuto` or `ExecuteTaskAuto` with a selector:
+
+```go
+result, err := client.ExecuteTaskAuto(ctx, selector, aigo.AgentTask{
+	Prompt:   "make a 2 second product video",
+	Duration: 2,
+	Size:     "1280*720",
+})
+```
+
+The selector only decides routing. The actual generation still runs through the chosen engine.
+
 ## Low-Level API
 
 If your agent already emits workflow graphs, call `Execute` directly:
@@ -90,7 +102,7 @@ result, err := client.Execute(ctx, "img", graph)
 
 ## Alibaba Cloud Models
 
-`pkg/engine/aliyun` currently supports:
+`engine/aliyun` currently supports:
 
 - `aliyun.ModelQwenImage`
 - `aliyun.ModelWanImage`
@@ -112,6 +124,7 @@ Runnable examples:
 - `go run ./examples/aliyun_qwen_image`
 - `go run ./examples/aliyun_wan_image`
 - `go run ./examples/aliyun_zimage`
+- `go run ./examples/agent_auto_router`
 - `go run ./examples/aliyun_wan_t2v`
 - `go run ./examples/aliyun_wan_r2v`
 - `go run ./examples/aliyun_wan_videoedit`

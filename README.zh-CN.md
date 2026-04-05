@@ -64,6 +64,18 @@ result, err := client.ExecuteTask(ctx, "video", aigo.AgentTask{
 
 `ExecuteTask` 会先把高层任务编译成 `workflow.Graph`，再路由到指定引擎。
 
+如果你希望 Agent 内部的 LLM 自己决定该调用哪个引擎，可以使用 `ExecutePromptAuto` 或 `ExecuteTaskAuto`，并传入一个 selector：
+
+```go
+result, err := client.ExecuteTaskAuto(ctx, selector, aigo.AgentTask{
+	Prompt:   "生成一条 2 秒产品广告视频",
+	Duration: 2,
+	Size:     "1280*720",
+})
+```
+
+selector 只负责“选路”，真正的生成仍然由被选中的 engine 执行。
+
 ## 低层 API
 
 如果你的 Agent 已经能直接生成工作流图，就继续调用 `Execute`：
@@ -90,7 +102,7 @@ result, err := client.Execute(ctx, "img", graph)
 
 ## 阿里云百炼模型
 
-`pkg/engine/aliyun` 当前支持：
+`engine/aliyun` 当前支持：
 
 - `aliyun.ModelQwenImage`
 - `aliyun.ModelWanImage`
@@ -112,6 +124,7 @@ export DASHSCOPE_API_KEY=your_key
 - `go run ./examples/aliyun_qwen_image`
 - `go run ./examples/aliyun_wan_image`
 - `go run ./examples/aliyun_zimage`
+- `go run ./examples/agent_auto_router`
 - `go run ./examples/aliyun_wan_t2v`
 - `go run ./examples/aliyun_wan_r2v`
 - `go run ./examples/aliyun_wan_videoedit`
@@ -120,3 +133,4 @@ export DASHSCOPE_API_KEY=your_key
 
 - 阿里云返回的结果 URL 是临时 OSS 链接，拿到后应立即保存。
 - 截至 `2026-04-05`，阿里云公开文档里文生视频和参考生视频的模型名仍为 `wan2.6-t2v`、`wan2.6-r2v`，公开的 `wan2.7` 视频模型是 `wan2.7-videoedit`。
+

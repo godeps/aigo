@@ -7,8 +7,8 @@ import (
 	"time"
 
 	aigo "github.com/godeps/aigo"
-	"github.com/godeps/aigo/pkg/engine/aliyun"
-	"github.com/godeps/aigo/pkg/workflow"
+	"github.com/godeps/aigo/engine/aliyun"
+	"github.com/godeps/aigo/workflow"
 )
 
 func main() {

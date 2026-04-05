@@ -3,7 +3,7 @@ package engine
 import (
 	"context"
 
-	"github.com/godeps/aigo/pkg/workflow"
+	"github.com/godeps/aigo/workflow"
 )
 
 // Engine executes a workflow graph against a concrete backend.

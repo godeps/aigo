@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/godeps/aigo/pkg/workflow"
+	"github.com/godeps/aigo/workflow"
 )
 
 func TestExecuteReturnsPromptID(t *testing.T) {

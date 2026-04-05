@@ -11,7 +11,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/godeps/aigo/pkg/workflow"
+	"github.com/godeps/aigo/workflow"
 )
 
 const (

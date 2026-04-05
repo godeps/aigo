@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/godeps/aigo/pkg/workflow"
+	"github.com/godeps/aigo/workflow"
 )
 
 const defaultPollInterval = 2 * time.Second

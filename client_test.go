@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/godeps/aigo/pkg/workflow"
+	"github.com/godeps/aigo/workflow"
 )
 
 type stubEngine struct {
@@ -153,4 +153,80 @@ func TestClientExecuteTaskBuildsMediaGraph(t *testing.T) {
 
 func boolPtr(v bool) *bool {
 	return &v
+}
+
+type stubSelector struct {
+	gotTask    AgentTask
+	gotEngines []string
+	result     Selection
+	err        error
+}
+
+func (s *stubSelector) SelectEngine(_ context.Context, task AgentTask, engines []string) (Selection, error) {
+	s.gotTask = task
+	s.gotEngines = append([]string(nil), engines...)
+	return s.result, s.err
+}
+
+func TestClientExecuteTaskAutoRoutesWithSelector(t *testing.T) {
+	t.Parallel()
+
+	client := NewClient()
+	if err := client.RegisterEngine("img", stubEngine{result: "image-url"}); err != nil {
+		t.Fatalf("RegisterEngine(img) error = %v", err)
+	}
+	if err := client.RegisterEngine("video", stubEngine{result: "video-url"}); err != nil {
+		t.Fatalf("RegisterEngine(video) error = %v", err)
+	}
+
+	selector := &stubSelector{
+		result: Selection{
+			Engine: "video",
+			Reason: "the task asks for a short video",
+		},
+	}
+
+	result, err := client.ExecuteTaskAuto(context.Background(), selector, AgentTask{
+		Prompt:   "make a 2 second ad video",
+		Duration: 2,
+	})
+	if err != nil {
+		t.Fatalf("ExecuteTaskAuto() error = %v", err)
+	}
+	if result.Engine != "video" || result.Output != "video-url" {
+		t.Fatalf("ExecuteTaskAuto() = %#v", result)
+	}
+	if result.Reason != "the task asks for a short video" {
+		t.Fatalf("Reason = %q", result.Reason)
+	}
+	if selector.gotTask.Duration != 2 {
+		t.Fatalf("selector task = %#v", selector.gotTask)
+	}
+	if len(selector.gotEngines) != 2 || selector.gotEngines[0] != "img" || selector.gotEngines[1] != "video" {
+		t.Fatalf("selector engines = %#v", selector.gotEngines)
+	}
+}
+
+func TestClientExecutePromptAuto(t *testing.T) {
+	t.Parallel()
+
+	client := NewClient()
+	if err := client.RegisterEngine("img", stubEngine{result: "image-url"}); err != nil {
+		t.Fatalf("RegisterEngine(img) error = %v", err)
+	}
+
+	selector := &stubSelector{
+		result: Selection{Engine: "img"},
+	}
+
+	result, err := client.ExecutePromptAuto(context.Background(), selector, "draw a castle")
+	if err != nil {
+		t.Fatalf("ExecutePromptAuto() error = %v", err)
+	}
+	if result.Output != "image-url" || result.Engine != "img" {
+		t.Fatalf("ExecutePromptAuto() = %#v", result)
+	}
+	if selector.gotTask.Prompt != "draw a castle" {
+		t.Fatalf("selector prompt = %#v", selector.gotTask)
+	}
 }
