@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/godeps/aigo/engine/aigoerr"
 	"github.com/godeps/aigo/engine/aliyun/internal/graphx"
 	"github.com/godeps/aigo/engine/aliyun/internal/ierr"
 	"github.com/godeps/aigo/engine/aliyun/internal/runtime"
@@ -83,7 +84,7 @@ func RunTTS(ctx context.Context, rt *runtime.RT, apiKey, model string, graph wor
 		return "", fmt.Errorf("aliyun: read qwen tts response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("aliyun: qwen tts request failed with status %s: %s", resp.Status, strings.TrimSpace(string(respBody)))
+		return "", aigoerr.FromHTTPResponse(resp, respBody, "aliyun")
 	}
 
 	var decoded struct {

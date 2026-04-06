@@ -5,21 +5,24 @@ import (
 	"encoding/json"
 	"strings"
 
+	"github.com/godeps/aigo/engine"
 	"github.com/godeps/aigo/workflow"
 )
 
-// OutputKind 表示引擎返回字符串的启发式分类（Execute 仍返回原始字符串，本类型供调用方解析）。
-type OutputKind int
+// OutputKind is an alias for engine.OutputKind.
+type OutputKind = engine.OutputKind
 
 const (
-	OutputUnknown OutputKind = iota
-	OutputURL
-	OutputDataURI
-	OutputJSON
-	OutputPlainText
+	OutputUnknown   = engine.OutputUnknown
+	OutputURL       = engine.OutputURL
+	OutputDataURI   = engine.OutputDataURI
+	OutputJSON      = engine.OutputJSON
+	OutputPlainText = engine.OutputPlainText
 )
 
 // OutputHint 包含原始输出与 InterpretOutputKind 的推断类别。
+//
+// Deprecated: Use Result instead; Execute now returns Result with Kind populated.
 type OutputHint struct {
 	Kind OutputKind
 	Raw  string
@@ -46,10 +49,12 @@ func InterpretOutputKind(s string) OutputKind {
 }
 
 // ExecuteWithHint 等价于 Execute，并附带 InterpretOutputKind 结果。
+//
+// Deprecated: Use Execute directly; Result now includes Kind.
 func (c *Client) ExecuteWithHint(ctx context.Context, engineName string, graph workflow.Graph) (OutputHint, error) {
-	raw, err := c.Execute(ctx, engineName, graph)
+	r, err := c.Execute(ctx, engineName, graph)
 	if err != nil {
 		return OutputHint{}, err
 	}
-	return OutputHint{Kind: InterpretOutputKind(raw), Raw: raw}, nil
+	return OutputHint{Kind: r.Kind, Raw: r.Value}, nil
 }

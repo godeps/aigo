@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/godeps/aigo/engine/newapi/internal/graph"
+	epoll "github.com/godeps/aigo/engine/poll"
 	"github.com/godeps/aigo/workflow"
 )
 
@@ -133,30 +133,24 @@ func (e *Engine) pollJimeng(ctx context.Context, apiKey string, g workflow.Graph
 	_ = graph.MergeJSONObject(g, getBody, "jimeng_get_extra")
 	getBody["req_key"] = strings.TrimSpace(reqKey)
 	getBody["task_id"] = taskID
-	ticker := time.NewTicker(e.pollInterval)
-	defer ticker.Stop()
-	for {
+	return epoll.Poll(ctx, epoll.Config{Interval: e.pollInterval}, func(ctx context.Context) (string, bool, error) {
 		gb, jerr := jsonBody(getBody)
 		if jerr != nil {
-			return "", fmt.Errorf("newapi: jimeng get marshal: %w", jerr)
+			return "", false, fmt.Errorf("newapi: jimeng get marshal: %w", jerr)
 		}
 		raw, err := e.doRequest(ctx, http.MethodPost, getURL, apiKey, gb, "application/json")
 		if err != nil {
-			return "", err
+			return "", false, err
 		}
 		url, done, perr := jimengParseResultURL(raw)
 		if perr != nil {
-			return "", perr
+			return "", false, perr
 		}
 		if done {
-			return url, nil
+			return url, true, nil
 		}
-		select {
-		case <-ctx.Done():
-			return "", fmt.Errorf("newapi: jimeng wait %q: %w", taskID, ctx.Err())
-		case <-ticker.C:
-		}
-	}
+		return "", false, nil
+	})
 }
 
 func jimengParseResultURL(body []byte) (mediaURL string, done bool, err error) {

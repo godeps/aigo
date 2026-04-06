@@ -8,12 +8,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/godeps/aigo/engine"
 	"github.com/godeps/aigo/engine/aliyun/internal/audiogen"
-	"github.com/godeps/aigo/engine/httpx"
 	"github.com/godeps/aigo/engine/aliyun/internal/ierr"
 	"github.com/godeps/aigo/engine/aliyun/internal/imggen"
 	"github.com/godeps/aigo/engine/aliyun/internal/runtime"
 	"github.com/godeps/aigo/engine/aliyun/internal/vidgen"
+	"github.com/godeps/aigo/engine/httpx"
 	"github.com/godeps/aigo/workflow"
 )
 
@@ -90,10 +91,29 @@ func New(cfg Config) *Engine {
 	}
 }
 
+type aliyunHandler func(ctx context.Context, rt *runtime.RT, apiKey, model string, graph workflow.Graph) (string, error)
+
+type modelEntry struct {
+	handler aliyunHandler
+	kind    engine.OutputKind
+}
+
+var modelTable = map[string]modelEntry{
+	ModelQwenImage:            {imggen.RunQwenImage, engine.OutputURL},
+	ModelWanImage:             {imggen.RunMultimodalImage, engine.OutputURL},
+	ModelZImageTurbo:          {imggen.RunMultimodalImage, engine.OutputURL},
+	ModelWanTextToVideo:       {vidgen.RunTextToVideo, engine.OutputURL},
+	ModelWanReferenceVideo:    {vidgen.RunReferenceToVideo, engine.OutputURL},
+	ModelWanVideoEdit:         {vidgen.RunVideoEdit, engine.OutputURL},
+	ModelQwenTTSFlash:         {audiogen.RunTTS, engine.OutputURL},
+	ModelQwenTTSInstructFlash: {audiogen.RunTTS, engine.OutputURL},
+	ModelQwenVoiceDesign:      {audiogen.RunVoiceDesign, engine.OutputJSON},
+}
+
 // Execute compiles the workflow graph into the configured Bailian model request.
-func (e *Engine) Execute(ctx context.Context, graph workflow.Graph) (string, error) {
+func (e *Engine) Execute(ctx context.Context, graph workflow.Graph) (engine.Result, error) {
 	if err := graph.Validate(); err != nil {
-		return "", fmt.Errorf("aliyun: validate graph: %w", err)
+		return engine.Result{}, fmt.Errorf("aliyun: validate graph: %w", err)
 	}
 
 	apiKey := e.apiKey
@@ -101,29 +121,40 @@ func (e *Engine) Execute(ctx context.Context, graph workflow.Graph) (string, err
 		apiKey = os.Getenv("DASHSCOPE_API_KEY")
 	}
 	if apiKey == "" {
-		return "", ErrMissingAPIKey
+		return engine.Result{}, ErrMissingAPIKey
 	}
 
-	switch {
-	case imggen.IsQwenImageModel(e.model):
-		return imggen.RunQwenImage(ctx, &e.rt, apiKey, e.model, graph)
-	case imggen.IsMultimodalImageModel(e.model):
-		return imggen.RunMultimodalImage(ctx, &e.rt, apiKey, e.model, graph)
-	case isQwenVoiceDesignModel(e.model):
-		return audiogen.RunVoiceDesign(ctx, &e.rt, apiKey, e.model, graph)
-	case audiogen.IsTTSModel(e.model):
-		return audiogen.RunTTS(ctx, &e.rt, apiKey, e.model, graph)
-	case vidgen.IsVideoEditModel(e.model):
-		return vidgen.RunVideoEdit(ctx, &e.rt, apiKey, e.model, graph)
-	case vidgen.IsReferenceToVideoModel(e.model):
-		return vidgen.RunReferenceToVideo(ctx, &e.rt, apiKey, e.model, graph)
-	case vidgen.IsTextToVideoModel(e.model):
-		return vidgen.RunTextToVideo(ctx, &e.rt, apiKey, e.model, graph)
-	default:
-		return "", fmt.Errorf("%w: %s", ErrUnsupportedModel, e.model)
+	entry, ok := modelTable[e.model]
+	if !ok {
+		return engine.Result{}, fmt.Errorf("%w: %s", ErrUnsupportedModel, e.model)
 	}
+	value, err := entry.handler(ctx, &e.rt, apiKey, e.model, graph)
+	if err != nil {
+		return engine.Result{}, err
+	}
+	kind := entry.kind
+	if kind == engine.OutputURL && strings.HasPrefix(value, "data:") {
+		kind = engine.OutputDataURI
+	}
+	return engine.Result{Value: value, Kind: kind}, nil
 }
 
-func isQwenVoiceDesignModel(model string) bool {
-	return strings.EqualFold(strings.TrimSpace(model), ModelQwenVoiceDesign)
+// Capabilities implements engine.Describer.
+func (e *Engine) Capabilities() engine.Capability {
+	cap := engine.Capability{
+		Models:       []string{e.model},
+		SupportsPoll: e.rt.WaitForCompletion,
+		SupportsSync: !e.rt.WaitForCompletion,
+	}
+	switch e.model {
+	case ModelQwenImage, ModelWanImage, ModelZImageTurbo:
+		cap.MediaTypes = []string{"image"}
+	case ModelWanTextToVideo, ModelWanReferenceVideo, ModelWanVideoEdit:
+		cap.MediaTypes = []string{"video"}
+	case ModelQwenTTSFlash, ModelQwenTTSInstructFlash:
+		cap.MediaTypes = []string{"audio"}
+	case ModelQwenVoiceDesign:
+		cap.MediaTypes = []string{"audio"}
+	}
+	return cap
 }

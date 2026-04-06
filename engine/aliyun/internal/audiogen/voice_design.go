@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/godeps/aigo/engine/aigoerr"
 	"github.com/godeps/aigo/engine/aliyun/internal/graphx"
 	"github.com/godeps/aigo/engine/aliyun/internal/runtime"
 	"github.com/godeps/aigo/workflow"
@@ -80,7 +81,7 @@ func RunVoiceDesign(ctx context.Context, rt *runtime.RT, apiKey, designModel str
 		return "", fmt.Errorf("aliyun: read voice design response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("aliyun: voice design request failed with status %s: %s", resp.Status, strings.TrimSpace(string(respBody)))
+		return "", aigoerr.FromHTTPResponse(resp, respBody, "aliyun")
 	}
 
 	var decoded struct {

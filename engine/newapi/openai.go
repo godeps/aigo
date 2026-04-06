@@ -12,8 +12,9 @@ import (
 	"net/http"
 	"net/textproto"
 	"strings"
-	"time"
 
+	"github.com/godeps/aigo/engine/aigoerr"
+	epoll "github.com/godeps/aigo/engine/poll"
 	"github.com/godeps/aigo/engine/newapi/internal/graph"
 	"github.com/godeps/aigo/engine/newapi/internal/poll"
 	"github.com/godeps/aigo/workflow"
@@ -170,39 +171,33 @@ func (e *Engine) buildStandardVideoPayload(g workflow.Graph) (map[string]any, er
 }
 
 func (e *Engine) pollVideoGET(ctx context.Context, apiKey string, urlForID func(string) string, taskID string) (string, error) {
-	ticker := time.NewTicker(e.pollInterval)
-	defer ticker.Stop()
-	for {
+	return epoll.Poll(ctx, epoll.Config{Interval: e.pollInterval}, func(ctx context.Context) (string, bool, error) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlForID(taskID), nil)
 		if err != nil {
-			return "", fmt.Errorf("newapi: build video get: %w", err)
+			return "", false, fmt.Errorf("newapi: build video get: %w", err)
 		}
 		req.Header.Set("Authorization", "Bearer "+apiKey)
 		resp, err := e.httpClient.Do(req)
 		if err != nil {
-			return "", fmt.Errorf("newapi: video get: %w", err)
+			return "", false, fmt.Errorf("newapi: video get: %w", err)
 		}
 		body, rerr := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if rerr != nil {
-			return "", fmt.Errorf("newapi: read video get: %w", rerr)
+			return "", false, fmt.Errorf("newapi: read video get: %w", rerr)
 		}
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			return "", fmt.Errorf("newapi: video get status %s: %s", resp.Status, strings.TrimSpace(string(body)))
+			return "", false, aigoerr.FromHTTPResponse(resp, body, "newapi")
 		}
 		url, done, perr := poll.ParseVideoJSON(body)
 		if perr != nil {
-			return "", perr
+			return "", false, perr
 		}
 		if done {
-			return url, nil
+			return url, true, nil
 		}
-		select {
-		case <-ctx.Done():
-			return "", fmt.Errorf("newapi: wait video task %q: %w", taskID, ctx.Err())
-		case <-ticker.C:
-		}
-	}
+		return "", false, nil
+	})
 }
 
 func (e *Engine) runOpenAISpeech(ctx context.Context, apiKey string, g workflow.Graph) (string, error) {
@@ -300,7 +295,7 @@ func (e *Engine) doRequest(ctx context.Context, method, url, apiKey string, body
 		return nil, fmt.Errorf("newapi: read body: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("newapi: status %s: %s", resp.Status, strings.TrimSpace(string(out)))
+		return nil, aigoerr.FromHTTPResponse(resp, out, "newapi")
 	}
 	return out, nil
 }

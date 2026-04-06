@@ -82,8 +82,8 @@ func TestExecuteCallsImagesAPI(t *testing.T) {
 		t.Fatalf("Execute() error = %v", err)
 	}
 
-	if got != "https://cdn.example.com/image.png" {
-		t.Fatalf("Execute() = %q, want image URL", got)
+	if got.Value != "https://cdn.example.com/image.png" {
+		t.Fatalf("Execute() = %q, want image URL", got.Value)
 	}
 
 	if gotPayload["prompt"] != "an astronaut reading in a tea house" {

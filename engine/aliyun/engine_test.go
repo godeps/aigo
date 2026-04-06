@@ -58,8 +58,8 @@ func TestExecuteQwenImageAsync(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	if got != "https://img.example.com/qwen.png" {
-		t.Fatalf("Execute() = %q", got)
+	if got.Value != "https://img.example.com/qwen.png" {
+		t.Fatalf("Execute() = %q", got.Value)
 	}
 
 	if createPayload["model"] != ModelQwenImage {
@@ -109,8 +109,8 @@ func TestExecuteWanImageSync(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	if got != "https://img.example.com/wan.png" {
-		t.Fatalf("Execute() = %q", got)
+	if got.Value != "https://img.example.com/wan.png" {
+		t.Fatalf("Execute() = %q", got.Value)
 	}
 
 	if payload["model"] != ModelWanImage {
@@ -155,8 +155,8 @@ func TestExecuteZImageSync(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	if got != "https://img.example.com/zimage.png" {
-		t.Fatalf("Execute() = %q", got)
+	if got.Value != "https://img.example.com/zimage.png" {
+		t.Fatalf("Execute() = %q", got.Value)
 	}
 
 	if payload["model"] != ModelZImageTurbo {
@@ -218,8 +218,8 @@ func TestExecuteWanVideoT2VAsync(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	if got != "https://video.example.com/t2v.mp4" {
-		t.Fatalf("Execute() = %q", got)
+	if got.Value != "https://video.example.com/t2v.mp4" {
+		t.Fatalf("Execute() = %q", got.Value)
 	}
 
 	if createPayload["model"] != ModelWanTextToVideo {
@@ -278,8 +278,8 @@ func TestExecuteWanReferenceVideoAsync(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	if got != "https://video.example.com/r2v.mp4" {
-		t.Fatalf("Execute() = %q", got)
+	if got.Value != "https://video.example.com/r2v.mp4" {
+		t.Fatalf("Execute() = %q", got.Value)
 	}
 
 	input := createPayload["input"].(map[string]any)
@@ -332,8 +332,8 @@ func TestExecuteWanVideoEditAsync(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	if got != "https://video.example.com/edit.mp4" {
-		t.Fatalf("Execute() = %q", got)
+	if got.Value != "https://video.example.com/edit.mp4" {
+		t.Fatalf("Execute() = %q", got.Value)
 	}
 
 	input := createPayload["input"].(map[string]any)
@@ -379,8 +379,8 @@ func TestExecuteQwenTTSNonStream(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	if got != "https://audio.example.com/out.wav" {
-		t.Fatalf("Execute() = %q", got)
+	if got.Value != "https://audio.example.com/out.wav" {
+		t.Fatalf("Execute() = %q", got.Value)
 	}
 
 	if payload["model"] != ModelQwenTTSFlash {
@@ -438,8 +438,8 @@ func TestExecuteQwenVoiceDesign(t *testing.T) {
 		TargetModel  string `json:"target_model"`
 		PreviewAudio string `json:"preview_audio"`
 	}
-	if err := json.Unmarshal([]byte(got), &decoded); err != nil {
-		t.Fatalf("result json: %v", got)
+	if err := json.Unmarshal([]byte(got.Value), &decoded); err != nil {
+		t.Fatalf("result json: %v", got.Value)
 	}
 	if decoded.Type != "qwen-voice-design" || decoded.Voice != "qwen-tts-vd-test-voice" {
 		t.Fatalf("decoded = %#v", decoded)

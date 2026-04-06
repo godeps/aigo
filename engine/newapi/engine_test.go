@@ -36,8 +36,8 @@ func TestExecuteImage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out != "https://cdn.example.com/1.png" {
-		t.Fatalf("got %q", out)
+	if out.Value != "https://cdn.example.com/1.png" {
+		t.Fatalf("got %q", out.Value)
 	}
 }
 
@@ -81,8 +81,8 @@ func TestExecuteVideoPoll(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out != "https://v.example.com/out.mp4" {
-		t.Fatalf("got %q", out)
+	if out.Value != "https://v.example.com/out.mp4" {
+		t.Fatalf("got %q", out.Value)
 	}
 }
 
@@ -125,8 +125,8 @@ func TestExecuteKlingText2Video(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out != "https://v.example.com/k.mp4" {
-		t.Fatalf("got %q", out)
+	if out.Value != "https://v.example.com/k.mp4" {
+		t.Fatalf("got %q", out.Value)
 	}
 }
 
@@ -157,7 +157,7 @@ func TestExecuteSpeechDataURI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(out) < 30 || out[:5] != "data:" {
-		t.Fatalf("unexpected %q", out)
+	if len(out.Value) < 30 || out.Value[:5] != "data:" {
+		t.Fatalf("unexpected %q", out.Value)
 	}
 }

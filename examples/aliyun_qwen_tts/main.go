@@ -22,9 +22,11 @@ func main() {
 	defer cancel()
 
 	url, err := client.ExecuteTask(ctx, "tts", aigo.AgentTask{
-		Prompt:       "你好，这是通义千问语音合成示例。",
-		Voice:        "Cherry",
-		LanguageType: "Chinese",
+		Prompt: "你好，这是通义千问语音合成示例。",
+		TTS: &aigo.TTSOptions{
+			Voice:        "Cherry",
+			LanguageType: "Chinese",
+		},
 	})
 	if err != nil {
 		log.Fatal(err)

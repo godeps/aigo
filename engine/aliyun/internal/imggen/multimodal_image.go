@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/godeps/aigo/engine/aigoerr"
 	"github.com/godeps/aigo/engine/aliyun/internal/graphx"
 	"github.com/godeps/aigo/engine/aliyun/internal/runtime"
 	"github.com/godeps/aigo/workflow"
@@ -95,7 +96,7 @@ func RunMultimodalImage(ctx context.Context, rt *runtime.RT, apiKey, model strin
 		return "", fmt.Errorf("aliyun: read multimodal image response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("aliyun: multimodal image request failed with status %s: %s", resp.Status, strings.TrimSpace(string(respBody)))
+		return "", aigoerr.FromHTTPResponse(resp, respBody, "aliyun")
 	}
 
 	var decoded struct {

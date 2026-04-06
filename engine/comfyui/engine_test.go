@@ -45,8 +45,8 @@ func TestExecuteReturnsPromptID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	if got != "prompt-123" {
-		t.Fatalf("Execute() = %q, want prompt id", got)
+	if got.Value != "prompt-123" {
+		t.Fatalf("Execute() = %q, want prompt id", got.Value)
 	}
 }
 
@@ -90,7 +90,7 @@ func TestExecuteWaitsForHistory(t *testing.T) {
 	}
 
 	want := server.URL + "/view?filename=result.png&subfolder=outputs&type=output"
-	if got != want {
-		t.Fatalf("Execute() = %q, want %q", got, want)
+	if got.Value != want {
+		t.Fatalf("Execute() = %q, want %q", got.Value, want)
 	}
 }

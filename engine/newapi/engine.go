@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/godeps/aigo/engine"
 	"github.com/godeps/aigo/engine/httpx"
 	"github.com/godeps/aigo/engine/newapi/internal/graph"
 	"github.com/godeps/aigo/engine/newapi/internal/rt"
@@ -115,16 +116,35 @@ func (e *Engine) apiURL(path string) string {
 	return rt.Join(e.origin, path)
 }
 
+// classifyOutput heuristically classifies a raw string result.
+func classifyOutput(s string) engine.OutputKind {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return engine.OutputUnknown
+	}
+	if strings.HasPrefix(s, "data:") {
+		return engine.OutputDataURI
+	}
+	lower := strings.ToLower(s)
+	if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
+		return engine.OutputURL
+	}
+	if len(s) > 0 && (s[0] == '{' || s[0] == '[') {
+		return engine.OutputJSON
+	}
+	return engine.OutputPlainText
+}
+
 // Execute 按 Route/Kind 调用对应 HTTP 接口。
-func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (string, error) {
+func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, error) {
 	if err := g.Validate(); err != nil {
-		return "", fmt.Errorf("newapi: validate graph: %w", err)
+		return engine.Result{}, fmt.Errorf("newapi: validate graph: %w", err)
 	}
 	if e.origin == "" {
-		return "", ErrMissingBaseURL
+		return engine.Result{}, ErrMissingBaseURL
 	}
 	if e.model == "" {
-		return "", fmt.Errorf("newapi: Model is empty")
+		return engine.Result{}, fmt.Errorf("newapi: Model is empty")
 	}
 
 	apiKey := e.apiKey
@@ -135,10 +155,14 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (string, error) 
 		apiKey = os.Getenv("NEWAPI_KEY")
 	}
 	if apiKey == "" {
-		return "", ErrMissingAPIKey
+		return engine.Result{}, ErrMissingAPIKey
 	}
 
-	return e.dispatch(ctx, apiKey, g)
+	raw, err := e.dispatch(ctx, apiKey, g)
+	if err != nil {
+		return engine.Result{}, err
+	}
+	return engine.Result{Value: raw, Kind: classifyOutput(raw)}, nil
 }
 
 func wrapGraphErr(err error) error {
@@ -158,4 +182,27 @@ func wrapGraphErr(err error) error {
 		return ErrRemoteMediaDisabled
 	}
 	return err
+}
+
+// Capabilities implements engine.Describer.
+func (e *Engine) Capabilities() engine.Capability {
+	cap := engine.Capability{
+		Models: []string{e.model},
+	}
+	switch e.kind {
+	case KindImage:
+		cap.MediaTypes = []string{"image"}
+		cap.SupportsSync = true
+	case KindVideo:
+		cap.MediaTypes = []string{"video"}
+		cap.SupportsPoll = e.waitVideo
+		cap.SupportsSync = !e.waitVideo
+	case KindSpeech:
+		cap.MediaTypes = []string{"audio"}
+		cap.SupportsSync = true
+	default:
+		cap.MediaTypes = []string{"image"}
+		cap.SupportsSync = true
+	}
+	return cap
 }

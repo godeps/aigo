@@ -8,11 +8,12 @@ import (
 
 	"github.com/godeps/aigo/engine/aliyun/internal/ierr"
 	"github.com/godeps/aigo/workflow"
+	"github.com/godeps/aigo/workflow/resolve"
 )
 
 func Prompt(graph workflow.Graph) (string, error) {
 	for _, ref := range graph.FindByClassType("CLIPTextEncode") {
-		prompt, ok, err := resolveNodeString(graph, ref.ID, map[string]bool{})
+		prompt, ok, err := resolve.ResolveNodeString(graph, ref.ID, map[string]bool{})
 		if err != nil {
 			return "", fmt.Errorf("aliyun: resolve prompt from node %q: %w", ref.ID, err)
 		}
@@ -31,48 +32,15 @@ func Prompt(graph workflow.Graph) (string, error) {
 }
 
 func StringOption(graph workflow.Graph, keys ...string) (string, bool) {
-	for _, id := range graph.SortedNodeIDs() {
-		node := graph[id]
-		for _, key := range keys {
-			if value, ok := node.StringInput(key); ok && strings.TrimSpace(value) != "" {
-				return value, true
-			}
-		}
-	}
-	return "", false
+	return resolve.StringOption(graph, keys...)
 }
 
 func IntOption(graph workflow.Graph, keys ...string) (int, bool) {
-	for _, id := range graph.SortedNodeIDs() {
-		node := graph[id]
-		for _, key := range keys {
-			if value, ok := node.IntInput(key); ok {
-				return value, true
-			}
-		}
-	}
-	return 0, false
+	return resolve.IntOption(graph, keys...)
 }
 
 func BoolOption(graph workflow.Graph, keys ...string) (bool, bool) {
-	for _, id := range graph.SortedNodeIDs() {
-		node := graph[id]
-		for _, key := range keys {
-			raw, ok := node.Input(key)
-			if !ok {
-				continue
-			}
-			switch value := raw.(type) {
-			case bool:
-				return value, true
-			case string:
-				if parsed, err := strconv.ParseBool(value); err == nil {
-					return parsed, true
-				}
-			}
-		}
-	}
-	return false, false
+	return resolve.BoolOption(graph, keys...)
 }
 
 func Size(graph workflow.Graph, fallback string) string {
@@ -303,63 +271,4 @@ func VoiceDesignResponseFormat(graph workflow.Graph) (string, bool) {
 		return v, true
 	}
 	return StringOption(graph, "response_format")
-}
-
-func resolveNodeString(graph workflow.Graph, nodeID string, seen map[string]bool) (string, bool, error) {
-	if seen[nodeID] {
-		return "", false, fmt.Errorf("cycle detected at node %q", nodeID)
-	}
-	seen[nodeID] = true
-
-	node, ok := graph[nodeID]
-	if !ok {
-		return "", false, fmt.Errorf("node %q not found", nodeID)
-	}
-
-	for _, key := range []string{"text", "prompt", "string", "value"} {
-		if value, ok := node.StringInput(key); ok && strings.TrimSpace(value) != "" {
-			return value, true, nil
-		}
-		raw, exists := node.Input(key)
-		if !exists {
-			continue
-		}
-		resolved, ok, err := resolveValueString(graph, raw, seen)
-		if err != nil {
-			return "", false, err
-		}
-		if ok && strings.TrimSpace(resolved) != "" {
-			return resolved, true, nil
-		}
-	}
-
-	return "", false, nil
-}
-
-func resolveValueString(graph workflow.Graph, value any, seen map[string]bool) (string, bool, error) {
-	switch v := value.(type) {
-	case string:
-		return v, true, nil
-	case []any:
-		return resolveLinkString(graph, v, seen)
-	default:
-		return "", false, nil
-	}
-}
-
-func resolveLinkString(graph workflow.Graph, ref []any, seen map[string]bool) (string, bool, error) {
-	if len(ref) == 0 {
-		return "", false, nil
-	}
-
-	nodeID, ok := ref[0].(string)
-	if !ok {
-		return "", false, nil
-	}
-
-	nextSeen := make(map[string]bool, len(seen))
-	for k, v := range seen {
-		nextSeen[k] = v
-	}
-	return resolveNodeString(graph, nodeID, nextSeen)
 }

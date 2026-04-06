@@ -9,10 +9,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
-	"time"
 
+	"github.com/godeps/aigo/engine/aigoerr"
 	"github.com/godeps/aigo/engine/aliyun/internal/runtime"
+	"github.com/godeps/aigo/engine/poll"
 )
 
 // URLExtractor 描述从 task output 中取结果 URL 的路径。
@@ -46,7 +46,7 @@ func Submit(ctx context.Context, rt *runtime.RT, apiKey, path string, payload ma
 		return "", fmt.Errorf("aliyun: read task creation response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("aliyun: async task creation failed with status %s: %s", resp.Status, strings.TrimSpace(string(respBody)))
+		return "", aigoerr.FromHTTPResponse(resp, respBody, "aliyun")
 	}
 
 	taskID, err := parseTaskID(respBody)
@@ -61,27 +61,19 @@ func Submit(ctx context.Context, rt *runtime.RT, apiKey, path string, payload ma
 }
 
 func wait(ctx context.Context, rt *runtime.RT, apiKey, taskID string, ex URLExtractor) (string, error) {
-	ticker := time.NewTicker(rt.PollInterval)
-	defer ticker.Stop()
-
-	for {
+	return poll.Poll(ctx, poll.Config{Interval: rt.PollInterval}, func(ctx context.Context) (string, bool, error) {
 		url, done, err := fetch(ctx, rt, apiKey, taskID, ex)
 		if err != nil {
-			return "", err
+			return "", false, fmt.Errorf("aliyun: wait for task %q: %w", taskID, err)
 		}
 		if done {
 			if url == "" {
-				return taskID, nil
+				return taskID, true, nil
 			}
-			return url, nil
+			return url, true, nil
 		}
-
-		select {
-		case <-ctx.Done():
-			return "", fmt.Errorf("aliyun: wait for task %q: %w", taskID, ctx.Err())
-		case <-ticker.C:
-		}
-	}
+		return "", false, nil
+	})
 }
 
 func fetch(ctx context.Context, rt *runtime.RT, apiKey, taskID string, ex URLExtractor) (string, bool, error) {
@@ -102,7 +94,7 @@ func fetch(ctx context.Context, rt *runtime.RT, apiKey, taskID string, ex URLExt
 		return "", false, fmt.Errorf("aliyun: read task query response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", false, fmt.Errorf("aliyun: task query failed with status %s: %s", resp.Status, strings.TrimSpace(string(body)))
+		return "", false, aigoerr.FromHTTPResponse(resp, body, "aliyun")
 	}
 
 	var result map[string]any

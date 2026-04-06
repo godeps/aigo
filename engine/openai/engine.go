@@ -11,8 +11,11 @@ import (
 	"os"
 	"strings"
 
+	"github.com/godeps/aigo/engine"
+	"github.com/godeps/aigo/engine/aigoerr"
 	"github.com/godeps/aigo/engine/httpx"
 	"github.com/godeps/aigo/workflow"
+	"github.com/godeps/aigo/workflow/resolve"
 )
 
 const (
@@ -95,7 +98,7 @@ func (e *Engine) Compile(graph workflow.Graph) (Request, error) {
 	}
 
 	for _, ref := range graph.FindByClassType("CLIPTextEncode") {
-		prompt, ok, err := resolveNodeString(graph, ref.ID, map[string]bool{})
+		prompt, ok, err := resolve.ResolveNodeString(graph, ref.ID, map[string]bool{})
 		if err != nil {
 			return Request{}, fmt.Errorf("openai: resolve prompt from node %q: %w", ref.ID, err)
 		}
@@ -109,7 +112,7 @@ func (e *Engine) Compile(graph workflow.Graph) (Request, error) {
 		width, okW := ref.Node.IntInput("width")
 		height, okH := ref.Node.IntInput("height")
 		if okW && okH {
-			req.Size = normalizeSize(width, height)
+			req.Size = resolve.NormalizeOpenAIImageSize(width, height)
 			break
 		}
 	}
@@ -122,10 +125,10 @@ func (e *Engine) Compile(graph workflow.Graph) (Request, error) {
 }
 
 // Execute compiles the workflow and calls the OpenAI images API.
-func (e *Engine) Execute(ctx context.Context, graph workflow.Graph) (string, error) {
+func (e *Engine) Execute(ctx context.Context, graph workflow.Graph) (engine.Result, error) {
 	req, err := e.Compile(graph)
 	if err != nil {
-		return "", err
+		return engine.Result{}, err
 	}
 
 	apiKey := e.apiKey
@@ -133,7 +136,7 @@ func (e *Engine) Execute(ctx context.Context, graph workflow.Graph) (string, err
 		apiKey = os.Getenv("OPENAI_API_KEY")
 	}
 	if apiKey == "" {
-		return "", errors.New("openai: missing API key")
+		return engine.Result{}, errors.New("openai: missing API key")
 	}
 
 	payload := map[string]any{
@@ -150,29 +153,29 @@ func (e *Engine) Execute(ctx context.Context, graph workflow.Graph) (string, err
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return "", fmt.Errorf("openai: marshal request: %w", err)
+		return engine.Result{}, fmt.Errorf("openai: marshal request: %w", err)
 	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, e.baseURL+"/images/generations", bytes.NewReader(body))
 	if err != nil {
-		return "", fmt.Errorf("openai: build request: %w", err)
+		return engine.Result{}, fmt.Errorf("openai: build request: %w", err)
 	}
 	httpReq.Header.Set("Authorization", "Bearer "+apiKey)
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := e.httpClient.Do(httpReq)
 	if err != nil {
-		return "", fmt.Errorf("openai: create image request failed: %w", err)
+		return engine.Result{}, fmt.Errorf("openai: create image request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("openai: read response: %w", err)
+		return engine.Result{}, fmt.Errorf("openai: read response: %w", err)
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("openai: create image request failed with status %s: %s", resp.Status, strings.TrimSpace(string(respBody)))
+		return engine.Result{}, aigoerr.FromHTTPResponse(resp, respBody, "openai")
 	}
 
 	var decoded struct {
@@ -182,97 +185,29 @@ func (e *Engine) Execute(ctx context.Context, graph workflow.Graph) (string, err
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(respBody, &decoded); err != nil {
-		return "", fmt.Errorf("openai: decode response: %w", err)
+		return engine.Result{}, fmt.Errorf("openai: decode response: %w", err)
 	}
 
 	if len(decoded.Data) == 0 {
-		return "", errors.New("openai: response did not contain generated images")
+		return engine.Result{}, errors.New("openai: response did not contain generated images")
 	}
 
 	if decoded.Data[0].URL != "" {
-		return decoded.Data[0].URL, nil
+		return engine.Result{Value: decoded.Data[0].URL, Kind: engine.OutputURL}, nil
 	}
 	if decoded.Data[0].B64JSON != "" {
-		return "data:image/png;base64," + decoded.Data[0].B64JSON, nil
+		return engine.Result{Value: "data:image/png;base64," + decoded.Data[0].B64JSON, Kind: engine.OutputDataURI}, nil
 	}
 
-	return "", errors.New("openai: response did not contain a usable image result")
+	return engine.Result{}, errors.New("openai: response did not contain a usable image result")
 }
 
-func resolveNodeString(graph workflow.Graph, nodeID string, seen map[string]bool) (string, bool, error) {
-	if seen[nodeID] {
-		return "", false, fmt.Errorf("cycle detected at node %q", nodeID)
-	}
-	seen[nodeID] = true
-
-	node, ok := graph[nodeID]
-	if !ok {
-		return "", false, fmt.Errorf("node %q not found", nodeID)
-	}
-
-	if value, ok := node.StringInput("text"); ok && strings.TrimSpace(value) != "" {
-		return value, true, nil
-	}
-
-	for _, key := range []string{"text", "prompt", "string", "value"} {
-		value, exists := node.Input(key)
-		if !exists {
-			continue
-		}
-		resolved, ok, err := resolveValueString(graph, value, seen)
-		if err != nil {
-			return "", false, err
-		}
-		if ok && strings.TrimSpace(resolved) != "" {
-			return resolved, true, nil
-		}
-	}
-
-	return "", false, nil
-}
-
-func resolveValueString(graph workflow.Graph, value any, seen map[string]bool) (string, bool, error) {
-	switch v := value.(type) {
-	case string:
-		return v, true, nil
-	case []any:
-		return resolveLinkString(graph, v, seen)
-	default:
-		return "", false, nil
-	}
-}
-
-func resolveLinkString(graph workflow.Graph, ref []any, seen map[string]bool) (string, bool, error) {
-	if len(ref) == 0 {
-		return "", false, nil
-	}
-
-	nodeID, ok := ref[0].(string)
-	if !ok {
-		return "", false, nil
-	}
-
-	nextSeen := make(map[string]bool, len(seen))
-	for k, v := range seen {
-		nextSeen[k] = v
-	}
-
-	return resolveNodeString(graph, nodeID, nextSeen)
-}
-
-func normalizeSize(width, height int) string {
-	switch {
-	case width == 1024 && height == 1024:
-		return "1024x1024"
-	case width == 1024 && height == 1536:
-		return "1024x1536"
-	case width == 1536 && height == 1024:
-		return "1536x1024"
-	case width > height:
-		return "1536x1024"
-	case height > width:
-		return "1024x1536"
-	default:
-		return defaultSize
+// Capabilities implements engine.Describer.
+func (e *Engine) Capabilities() engine.Capability {
+	return engine.Capability{
+		MediaTypes:   []string{"image"},
+		Models:       []string{e.model},
+		Sizes:        []string{"1024x1024", "1024x1792", "1792x1024"},
+		SupportsSync: true,
 	}
 }

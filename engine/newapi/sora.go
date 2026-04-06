@@ -10,9 +10,10 @@ import (
 	"mime/multipart"
 	"net/http"
 	"strings"
-	"time"
 
+	"github.com/godeps/aigo/engine/aigoerr"
 	"github.com/godeps/aigo/engine/newapi/internal/graph"
+	epoll "github.com/godeps/aigo/engine/poll"
 	"github.com/godeps/aigo/workflow"
 )
 
@@ -66,25 +67,23 @@ func (e *Engine) runSoraVideo(ctx context.Context, apiKey string, g workflow.Gra
 }
 
 func (e *Engine) pollSora(ctx context.Context, apiKey, id string) (string, error) {
-	ticker := time.NewTicker(e.pollInterval)
-	defer ticker.Stop()
-	for {
+	return epoll.Poll(ctx, epoll.Config{Interval: e.pollInterval}, func(ctx context.Context) (string, bool, error) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, e.apiURL("/v1/videos/"+id), nil)
 		if err != nil {
-			return "", err
+			return "", false, err
 		}
 		req.Header.Set("Authorization", "Bearer "+apiKey)
 		resp, err := e.httpClient.Do(req)
 		if err != nil {
-			return "", fmt.Errorf("newapi: sora get: %w", err)
+			return "", false, fmt.Errorf("newapi: sora get: %w", err)
 		}
 		body, rerr := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if rerr != nil {
-			return "", rerr
+			return "", false, rerr
 		}
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			return "", fmt.Errorf("newapi: sora get status %s: %s", resp.Status, strings.TrimSpace(string(body)))
+			return "", false, aigoerr.FromHTTPResponse(resp, body, "newapi")
 		}
 		var st struct {
 			Status string `json:"status"`
@@ -93,26 +92,26 @@ func (e *Engine) pollSora(ctx context.Context, apiKey, id string) (string, error
 			} `json:"error"`
 		}
 		if err := json.Unmarshal(body, &st); err != nil {
-			return "", fmt.Errorf("newapi: sora decode: %w", err)
+			return "", false, fmt.Errorf("newapi: sora decode: %w", err)
 		}
 		switch strings.ToLower(strings.TrimSpace(st.Status)) {
 		case "completed", "succeeded", "success":
-			return e.fetchSoraContent(ctx, apiKey, id)
+			result, err := e.fetchSoraContent(ctx, apiKey, id)
+			if err != nil {
+				return "", false, err
+			}
+			return result, true, nil
 		case "failed", "error", "canceled", "cancelled":
 			msg := st.Status
 			if st.Error != nil && st.Error.Message != "" {
 				msg = st.Error.Message
 			}
-			return "", fmt.Errorf("newapi: sora task failed: %s", msg)
+			return "", false, fmt.Errorf("newapi: sora task failed: %s", msg)
 		default:
 			// queued, in_progress, ...
 		}
-		select {
-		case <-ctx.Done():
-			return "", fmt.Errorf("newapi: sora wait %q: %w", id, ctx.Err())
-		case <-ticker.C:
-		}
-	}
+		return "", false, nil
+	})
 }
 
 func (e *Engine) fetchSoraContent(ctx context.Context, apiKey, id string) (string, error) {
@@ -131,7 +130,7 @@ func (e *Engine) fetchSoraContent(ctx context.Context, apiKey, id string) (strin
 		return "", err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("newapi: sora content status %s: %s", resp.Status, strings.TrimSpace(string(videoBytes)))
+		return "", aigoerr.FromHTTPResponse(resp, videoBytes, "newapi")
 	}
 	ct := resp.Header.Get("Content-Type")
 	if ct == "" {

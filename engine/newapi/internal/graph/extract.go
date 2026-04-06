@@ -6,11 +6,12 @@ import (
 	"strings"
 
 	"github.com/godeps/aigo/workflow"
+	"github.com/godeps/aigo/workflow/resolve"
 )
 
 func ExtractPrompt(g workflow.Graph) (string, error) {
 	for _, ref := range g.FindByClassType("CLIPTextEncode") {
-		prompt, ok, err := resolveNodeString(g, ref.ID, map[string]bool{})
+		prompt, ok, err := resolve.ResolveNodeString(g, ref.ID, map[string]bool{})
 		if err != nil {
 			return "", fmt.Errorf("graph: resolve prompt from node %q: %w", ref.ID, err)
 		}
@@ -27,51 +28,15 @@ func ExtractPrompt(g workflow.Graph) (string, error) {
 }
 
 func StringOption(g workflow.Graph, keys ...string) (string, bool) {
-	for _, id := range g.SortedNodeIDs() {
-		node := g[id]
-		for _, key := range keys {
-			if v, ok := node.StringInput(key); ok && strings.TrimSpace(v) != "" {
-				return v, true
-			}
-		}
-	}
-	return "", false
+	return resolve.StringOption(g, keys...)
 }
 
 func IntOption(g workflow.Graph, keys ...string) (int, bool) {
-	for _, id := range g.SortedNodeIDs() {
-		node := g[id]
-		for _, key := range keys {
-			if v, ok := node.IntInput(key); ok {
-				return v, true
-			}
-		}
-	}
-	return 0, false
+	return resolve.IntOption(g, keys...)
 }
 
 func Float64Option(g workflow.Graph, keys ...string) (float64, bool) {
-	for _, id := range g.SortedNodeIDs() {
-		node := g[id]
-		for _, key := range keys {
-			if v, ok := node.IntInput(key); ok {
-				return float64(v), true
-			}
-			raw, ok := node.Input(key)
-			if !ok {
-				continue
-			}
-			switch t := raw.(type) {
-			case float64:
-				return t, true
-			case string:
-				if f, err := strconv.ParseFloat(t, 64); err == nil {
-					return f, true
-				}
-			}
-		}
-	}
-	return 0, false
+	return resolve.Float64Option(g, keys...)
 }
 
 func ExtractImageSizeOpenAI(g workflow.Graph) string {
@@ -85,27 +50,10 @@ func ExtractImageSizeOpenAI(g workflow.Graph) string {
 		w, okW := ref.Node.IntInput("width")
 		h, okH := ref.Node.IntInput("height")
 		if okW && okH {
-			return normalizeOpenAIImageSize(w, h)
+			return resolve.NormalizeOpenAIImageSize(w, h)
 		}
 	}
 	return "1024x1024"
-}
-
-func normalizeOpenAIImageSize(width, height int) string {
-	switch {
-	case width == 1024 && height == 1024:
-		return "1024x1024"
-	case width == 1024 && height == 1536:
-		return "1024x1536"
-	case width == 1536 && height == 1024:
-		return "1536x1024"
-	case width > height:
-		return "1536x1024"
-	case height > width:
-		return "1024x1536"
-	default:
-		return "1024x1024"
-	}
 }
 
 // FirstImageURL 返回首张参考图 URL（图生视频等）。
@@ -148,49 +96,6 @@ func ExtractVideoDimensions(g workflow.Graph) (width, height int, ok bool) {
 		}
 	}
 	return 0, 0, false
-}
-
-func resolveNodeString(g workflow.Graph, nodeID string, seen map[string]bool) (string, bool, error) {
-	if seen[nodeID] {
-		return "", false, fmt.Errorf("cycle detected at node %q", nodeID)
-	}
-	seen[nodeID] = true
-
-	node, ok := g[nodeID]
-	if !ok {
-		return "", false, fmt.Errorf("node %q not found", nodeID)
-	}
-
-	if value, ok := node.StringInput("text"); ok && strings.TrimSpace(value) != "" {
-		return value, true, nil
-	}
-
-	for _, key := range []string{"text", "prompt", "string", "value"} {
-		raw, exists := node.Input(key)
-		if !exists {
-			continue
-		}
-		resolved, ok, err := resolveValueString(g, raw, seen)
-		if err != nil {
-			return "", false, err
-		}
-		if ok && strings.TrimSpace(resolved) != "" {
-			return resolved, true, nil
-		}
-	}
-
-	return "", false, nil
-}
-
-func resolveValueString(g workflow.Graph, value any, seen map[string]bool) (string, bool, error) {
-	switch v := value.(type) {
-	case string:
-		return v, true, nil
-	case []any:
-		return resolveLinkString(g, v, seen)
-	default:
-		return "", false, nil
-	}
 }
 
 func ExtractSpeechVoice(g workflow.Graph) (string, bool) {
@@ -257,19 +162,4 @@ func ExtractVideoDuration(g workflow.Graph) (float64, bool) {
 		return float64(d), true
 	}
 	return 0, false
-}
-
-func resolveLinkString(g workflow.Graph, ref []any, seen map[string]bool) (string, bool, error) {
-	if len(ref) == 0 {
-		return "", false, nil
-	}
-	nodeID, ok := ref[0].(string)
-	if !ok {
-		return "", false, nil
-	}
-	nextSeen := make(map[string]bool, len(seen))
-	for k, v := range seen {
-		nextSeen[k] = v
-	}
-	return resolveNodeString(g, nodeID, nextSeen)
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/godeps/aigo/engine"
 	"github.com/godeps/aigo/workflow"
 )
 
@@ -13,8 +14,8 @@ type stubEngine struct {
 	err    error
 }
 
-func (s stubEngine) Execute(context.Context, workflow.Graph) (string, error) {
-	return s.result, s.err
+func (s stubEngine) Execute(context.Context, workflow.Graph) (engine.Result, error) {
+	return engine.Result{Value: s.result}, s.err
 }
 
 func TestClientRegisterAndExecute(t *testing.T) {
@@ -33,8 +34,14 @@ func TestClientRegisterAndExecute(t *testing.T) {
 		t.Fatalf("Execute() error = %v", err)
 	}
 
-	if got != "ok" {
-		t.Fatalf("Execute() = %q, want %q", got, "ok")
+	if got.Value != "ok" {
+		t.Fatalf("Execute() = %q, want %q", got.Value, "ok")
+	}
+	if got.Engine != "stub" {
+		t.Fatalf("Execute().Engine = %q, want %q", got.Engine, "stub")
+	}
+	if got.Elapsed <= 0 {
+		t.Fatal("Execute().Elapsed should be positive")
 	}
 }
 
@@ -66,9 +73,9 @@ type captureEngine struct {
 	graph workflow.Graph
 }
 
-func (c *captureEngine) Execute(_ context.Context, graph workflow.Graph) (string, error) {
+func (c *captureEngine) Execute(_ context.Context, graph workflow.Graph) (engine.Result, error) {
 	c.graph = graph
-	return "captured", nil
+	return engine.Result{Value: "captured"}, nil
 }
 
 func TestClientExecutePromptBuildsGraph(t *testing.T) {
@@ -84,8 +91,8 @@ func TestClientExecutePromptBuildsGraph(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExecutePrompt() error = %v", err)
 	}
-	if got != "captured" {
-		t.Fatalf("ExecutePrompt() = %q", got)
+	if got.Value != "captured" {
+		t.Fatalf("ExecutePrompt() = %q", got.Value)
 	}
 
 	node, ok := engine.graph["1"]
@@ -124,8 +131,8 @@ func TestClientExecuteTaskBuildsMediaGraph(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExecuteTask() error = %v", err)
 	}
-	if got != "captured" {
-		t.Fatalf("ExecuteTask() = %q", got)
+	if got.Value != "captured" {
+		t.Fatalf("ExecuteTask() = %q", got.Value)
 	}
 
 	if _, ok := engine.graph["1"]; !ok {
@@ -193,7 +200,7 @@ func TestClientExecuteTaskAutoRoutesWithSelector(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExecuteTaskAuto() error = %v", err)
 	}
-	if result.Engine != "video" || result.Output != "video-url" {
+	if result.Engine != "video" || result.Output.Value != "video-url" {
 		t.Fatalf("ExecuteTaskAuto() = %#v", result)
 	}
 	if result.Reason != "the task asks for a short video" {
@@ -276,6 +283,139 @@ func TestExecuteWithHint(t *testing.T) {
 	}
 }
 
+func TestExecuteWithFallback_FirstSuccess(t *testing.T) {
+	t.Parallel()
+
+	client := NewClient()
+	_ = client.RegisterEngine("a", stubEngine{result: "from-a"})
+	_ = client.RegisterEngine("b", stubEngine{result: "from-b"})
+
+	r, err := client.ExecuteWithFallback(context.Background(), []string{"a", "b"}, workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "t"}},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if r.Engine != "a" || r.Output.Value != "from-a" {
+		t.Fatalf("got engine=%q output=%q", r.Engine, r.Output.Value)
+	}
+	if len(r.Skipped) != 0 {
+		t.Fatalf("expected 0 skipped, got %d", len(r.Skipped))
+	}
+}
+
+func TestExecuteWithFallback_SkipsFailures(t *testing.T) {
+	t.Parallel()
+
+	client := NewClient()
+	_ = client.RegisterEngine("bad", stubEngine{err: errors.New("boom")})
+	_ = client.RegisterEngine("good", stubEngine{result: "ok"})
+
+	r, err := client.ExecuteWithFallback(context.Background(), []string{"bad", "good"}, workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "t"}},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if r.Engine != "good" || r.Output.Value != "ok" {
+		t.Fatalf("got engine=%q output=%q", r.Engine, r.Output.Value)
+	}
+	if len(r.Skipped) != 1 || r.Skipped[0].Engine != "bad" {
+		t.Fatalf("skipped = %+v", r.Skipped)
+	}
+}
+
+func TestExecuteWithFallback_AllFail(t *testing.T) {
+	t.Parallel()
+
+	client := NewClient()
+	_ = client.RegisterEngine("a", stubEngine{err: errors.New("fail-a")})
+	_ = client.RegisterEngine("b", stubEngine{err: errors.New("fail-b")})
+
+	_, err := client.ExecuteWithFallback(context.Background(), []string{"a", "b"}, workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "t"}},
+	})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestExecuteWithFallback_EmptyList(t *testing.T) {
+	t.Parallel()
+
+	client := NewClient()
+	_, err := client.ExecuteWithFallback(context.Background(), nil, workflow.Graph{})
+	if err == nil {
+		t.Fatal("expected error for empty list")
+	}
+}
+
+func TestExecuteTaskWithFallback(t *testing.T) {
+	t.Parallel()
+
+	client := NewClient()
+	_ = client.RegisterEngine("e1", stubEngine{err: errors.New("nope")})
+	_ = client.RegisterEngine("e2", stubEngine{result: "yes"})
+
+	r, err := client.ExecuteTaskWithFallback(context.Background(), []string{"e1", "e2"}, AgentTask{Prompt: "hello"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Engine != "e2" {
+		t.Fatalf("engine = %q", r.Engine)
+	}
+}
+
+func TestExecuteAsync(t *testing.T) {
+	t.Parallel()
+
+	client := NewClient()
+	_ = client.RegisterEngine("s", stubEngine{result: "async-ok"})
+
+	ch := client.ExecuteAsync(context.Background(), "s", workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "t"}},
+	})
+	ar := <-ch
+	if ar.Err != nil {
+		t.Fatalf("unexpected error: %v", ar.Err)
+	}
+	if ar.Result.Value != "async-ok" {
+		t.Fatalf("got %q", ar.Result.Value)
+	}
+}
+
+func TestExecuteAsync_Error(t *testing.T) {
+	t.Parallel()
+
+	client := NewClient()
+	_ = client.RegisterEngine("bad", stubEngine{err: errors.New("fail")})
+
+	ch := client.ExecuteAsync(context.Background(), "bad", workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "t"}},
+	})
+	ar := <-ch
+	if ar.Err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestExecuteAsync_ContextCancel(t *testing.T) {
+	t.Parallel()
+
+	client := NewClient()
+	// no engine registered — Execute will fail with ErrEngineNotFound
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately
+
+	ch := client.ExecuteAsync(ctx, "missing", workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "t"}},
+	})
+	ar := <-ch
+	if ar.Err == nil {
+		t.Fatal("expected error")
+	}
+}
+
 func TestClientExecutePromptAuto(t *testing.T) {
 	t.Parallel()
 
@@ -292,7 +432,7 @@ func TestClientExecutePromptAuto(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExecutePromptAuto() error = %v", err)
 	}
-	if result.Output != "image-url" || result.Engine != "img" {
+	if result.Output.Value != "image-url" || result.Engine != "img" {
 		t.Fatalf("ExecutePromptAuto() = %#v", result)
 	}
 	if selector.gotTask.Prompt != "draw a castle" {

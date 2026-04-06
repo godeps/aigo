@@ -44,8 +44,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if strings.HasPrefix(out, "data:") {
-		fmt.Println("data URI length:", len(out))
+	if strings.HasPrefix(out.Value, "data:") {
+		fmt.Println("data URI length:", len(out.Value))
 	} else {
 		fmt.Println(out)
 	}

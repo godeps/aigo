@@ -12,7 +12,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/godeps/aigo/engine"
+	"github.com/godeps/aigo/engine/aigoerr"
 	"github.com/godeps/aigo/engine/httpx"
+	"github.com/godeps/aigo/engine/poll"
 	"github.com/godeps/aigo/workflow"
 )
 
@@ -55,12 +58,12 @@ func New(cfg Config) *Engine {
 }
 
 // Execute enqueues the graph on a ComfyUI server and returns either the prompt id or the first output URL.
-func (e *Engine) Execute(ctx context.Context, graph workflow.Graph) (string, error) {
+func (e *Engine) Execute(ctx context.Context, graph workflow.Graph) (engine.Result, error) {
 	if e.baseURL == "" {
-		return "", errors.New("comfyui: base URL is required")
+		return engine.Result{}, errors.New("comfyui: base URL is required")
 	}
 	if err := graph.Validate(); err != nil {
-		return "", fmt.Errorf("comfyui: validate graph: %w", err)
+		return engine.Result{}, fmt.Errorf("comfyui: validate graph: %w", err)
 	}
 
 	payload := struct {
@@ -73,73 +76,65 @@ func (e *Engine) Execute(ctx context.Context, graph workflow.Graph) (string, err
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return "", fmt.Errorf("comfyui: marshal prompt: %w", err)
+		return engine.Result{}, fmt.Errorf("comfyui: marshal prompt: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, e.baseURL+"/prompt", bytes.NewReader(body))
 	if err != nil {
-		return "", fmt.Errorf("comfyui: build prompt request: %w", err)
+		return engine.Result{}, fmt.Errorf("comfyui: build prompt request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := e.httpClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("comfyui: enqueue prompt: %w", err)
+		return engine.Result{}, fmt.Errorf("comfyui: enqueue prompt: %w", err)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("comfyui: read prompt response: %w", err)
+		return engine.Result{}, fmt.Errorf("comfyui: read prompt response: %w", err)
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("comfyui: enqueue prompt failed with status %s: %s", resp.Status, strings.TrimSpace(string(respBody)))
+		return engine.Result{}, aigoerr.FromHTTPResponse(resp, respBody, "comfyui")
 	}
 
 	var queued struct {
 		PromptID string `json:"prompt_id"`
 	}
 	if err := json.Unmarshal(respBody, &queued); err != nil {
-		return "", fmt.Errorf("comfyui: decode prompt response: %w", err)
+		return engine.Result{}, fmt.Errorf("comfyui: decode prompt response: %w", err)
 	}
 	if queued.PromptID == "" {
-		return "", errors.New("comfyui: prompt response did not include prompt_id")
+		return engine.Result{}, errors.New("comfyui: prompt response did not include prompt_id")
 	}
 
 	if !e.waitForCompletion {
-		return queued.PromptID, nil
+		return engine.Result{Value: queued.PromptID, Kind: engine.OutputPlainText}, nil
 	}
 
 	result, err := e.waitForResult(ctx, queued.PromptID)
 	if err != nil {
-		return "", err
+		return engine.Result{}, err
 	}
 	if result == "" {
-		return queued.PromptID, nil
+		return engine.Result{Value: queued.PromptID, Kind: engine.OutputPlainText}, nil
 	}
-	return result, nil
+	return engine.Result{Value: result, Kind: engine.OutputURL}, nil
 }
 
 func (e *Engine) waitForResult(ctx context.Context, promptID string) (string, error) {
-	ticker := time.NewTicker(e.pollInterval)
-	defer ticker.Stop()
-
-	for {
+	return poll.Poll(ctx, poll.Config{Interval: e.pollInterval}, func(ctx context.Context) (string, bool, error) {
 		result, done, err := e.fetchResult(ctx, promptID)
 		if err != nil {
-			return "", err
+			return "", false, err
 		}
 		if done {
-			return result, nil
+			return result, true, nil
 		}
-
-		select {
-		case <-ctx.Done():
-			return "", fmt.Errorf("comfyui: wait for prompt %q: %w", promptID, ctx.Err())
-		case <-ticker.C:
-		}
-	}
+		return "", false, nil
+	})
 }
 
 func (e *Engine) fetchResult(ctx context.Context, promptID string) (string, bool, error) {
@@ -164,7 +159,7 @@ func (e *Engine) fetchResult(ctx context.Context, promptID string) (string, bool
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", false, fmt.Errorf("comfyui: history request failed with status %s: %s", resp.Status, strings.TrimSpace(string(body)))
+		return "", false, aigoerr.FromHTTPResponse(resp, body, "comfyui")
 	}
 
 	item, ok, err := decodeHistoryItem(body, promptID)
@@ -235,4 +230,13 @@ func buildViewURL(baseURL string, asset historyAsset) string {
 		values.Set("type", asset.Type)
 	}
 	return strings.TrimRight(baseURL, "/") + "/view?" + values.Encode()
+}
+
+// Capabilities implements engine.Describer.
+func (e *Engine) Capabilities() engine.Capability {
+	return engine.Capability{
+		MediaTypes:   []string{"image", "video"},
+		SupportsSync: !e.waitForCompletion,
+		SupportsPoll: e.waitForCompletion,
+	}
 }
