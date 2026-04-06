@@ -78,7 +78,7 @@ func GenerateImage() ToolDef {
 func GenerateVideo() ToolDef {
 	return ToolDef{
 		Name:        "generate_video",
-		Description: "Generate a video from a text prompt, optionally with a reference image. Returns a URL to the generated video.",
+		Description: "Generate a video from a text prompt, optionally with reference images or videos. Supports text-to-video, image-to-video, and video-to-video modes. Returns a URL to the generated video.",
 		Parameters: Schema{
 			Type: "object",
 			Properties: map[string]Schema{
@@ -94,9 +94,30 @@ func GenerateVideo() ToolDef {
 					Type:        "string",
 					Description: "Video dimensions (e.g., 1280x720, 1920x1080)",
 				},
+				"aspect_ratio": {
+					Type:        "string",
+					Description: "Video aspect ratio (e.g., 16:9, 9:16, 1:1, 4:3, 3:4)",
+				},
+				"resolution": {
+					Type:        "string",
+					Description: "Video resolution quality",
+					Enum:        []string{"480P", "720P", "1080P"},
+				},
 				"reference_image": {
 					Type:        "string",
-					Description: "URL of a reference image to guide video generation",
+					Description: "URL of a reference image for image-to-video generation",
+				},
+				"reference_video": {
+					Type:        "string",
+					Description: "URL of a reference video for video-to-video generation",
+				},
+				"audio": {
+					Type:        "boolean",
+					Description: "Enable audio generation when the provider supports it",
+				},
+				"watermark": {
+					Type:        "boolean",
+					Description: "Enable watermark when the provider supports it",
 				},
 			},
 			Required: []string{"prompt"},

@@ -90,6 +90,9 @@ type AgentTaskStructured struct {
 	VideoDuration  int
 	VideoSize      string
 	VideoWatermark *bool
+	VideoAspectRatio string
+	VideoResolution  string // "480P", "720P", "1080P"
+	VideoAudio       *bool
 }
 
 // Selection is the selector's routing decision.
@@ -326,6 +329,9 @@ func BuildGraph(task AgentTask) workflow.Graph {
 	vidDur := task.Duration
 	vidSize := task.Size
 	vidWM := task.Watermark
+	var vidAspectRatio string
+	var vidResolution string
+	var vidAudio *bool
 	if task.Structured != nil {
 		if task.Structured.ImageSize != "" {
 			imgSize = task.Structured.ImageSize
@@ -342,6 +348,15 @@ func BuildGraph(task AgentTask) workflow.Graph {
 		if task.Structured.VideoWatermark != nil {
 			vidWM = task.Structured.VideoWatermark
 		}
+		if task.Structured.VideoAspectRatio != "" {
+			vidAspectRatio = task.Structured.VideoAspectRatio
+		}
+		if task.Structured.VideoResolution != "" {
+			vidResolution = task.Structured.VideoResolution
+		}
+		if task.Structured.VideoAudio != nil {
+			vidAudio = task.Structured.VideoAudio
+		}
 	}
 
 	imageOptions := map[string]any{}
@@ -355,6 +370,15 @@ func BuildGraph(task AgentTask) workflow.Graph {
 	}
 	if vidDur > 0 {
 		videoOptions["duration"] = vidDur
+	}
+	if vidAspectRatio != "" {
+		videoOptions["aspect_ratio"] = vidAspectRatio
+	}
+	if vidResolution != "" {
+		videoOptions["resolution"] = vidResolution
+	}
+	if vidAudio != nil {
+		videoOptions["audio"] = *vidAudio
 	}
 	if imgWM != nil {
 		imageOptions["watermark"] = *imgWM
