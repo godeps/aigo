@@ -31,3 +31,10 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Local tooling
+.omc/
+.omx/
+
+# Compiled binaries
+/newapi_seedance_video
