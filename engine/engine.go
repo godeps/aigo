@@ -33,6 +33,7 @@ type Capability struct {
 	MediaTypes   []string // e.g. ["image", "video", "audio"]
 	Models       []string
 	Sizes        []string // e.g. ["1024x1024", "1280x720"]
+	Voices       []string // supported voice identifiers for TTS engines
 	MaxDuration  int      // max video/audio duration in seconds; 0 = not applicable
 	SupportsSync bool
 	SupportsPoll bool

@@ -18,6 +18,9 @@ import (
 	"github.com/godeps/aigo/workflow"
 )
 
+// SupportedVoices lists the built-in voice identifiers for qwen3-tts models.
+var SupportedVoices = []string{"Cherry", "Serena", "Ethan", "Chelsie"}
+
 // IsTTSModel 判断是否为 Qwen 语音合成模型（不含声音设计）。
 func IsTTSModel(model string) bool {
 	m := strings.TrimSpace(model)
@@ -84,7 +87,12 @@ func RunTTS(ctx context.Context, rt *runtime.RT, apiKey, model string, graph wor
 		return "", fmt.Errorf("aliyun: read qwen tts response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", aigoerr.FromHTTPResponse(resp, respBody, "aliyun")
+		err := aigoerr.FromHTTPResponse(resp, respBody, "aliyun")
+		// Enhance "Invalid voice" errors with the list of supported voices.
+		if resp.StatusCode == 400 && strings.Contains(string(respBody), "InvalidParameter") && strings.Contains(string(respBody), "voice") {
+			return "", fmt.Errorf("%w (supported voices: %s)", err, strings.Join(SupportedVoices, ", "))
+		}
+		return "", err
 	}
 
 	var decoded struct {

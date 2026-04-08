@@ -96,7 +96,12 @@ func RunMultimodalImage(ctx context.Context, rt *runtime.RT, apiKey, model strin
 		return "", fmt.Errorf("aliyun: read multimodal image response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", aigoerr.FromHTTPResponse(resp, respBody, "aliyun")
+		err := aigoerr.FromHTTPResponse(resp, respBody, "aliyun")
+		// Enhance "invalid size" errors with the list of supported sizes.
+		if resp.StatusCode == 400 && strings.Contains(string(respBody), "size") {
+			return "", fmt.Errorf("%w (supported image sizes: 1024x1024, 1024x1536, 1536x1024, 512x512)", err)
+		}
+		return "", err
 	}
 
 	var decoded struct {

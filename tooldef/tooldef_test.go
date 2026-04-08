@@ -2,6 +2,7 @@ package tooldef
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -86,6 +87,81 @@ func TestGenerateImage_SizeEnum(t *testing.T) {
 	}
 	if len(sizeProp.Enum) == 0 {
 		t.Fatal("size should have enum values")
+	}
+}
+
+func TestTextToSpeech_VoiceEnum(t *testing.T) {
+	t.Parallel()
+	tool := TextToSpeech()
+	voiceProp, ok := tool.Parameters.Properties["voice"]
+	if !ok {
+		t.Fatal("missing voice property")
+	}
+	if len(voiceProp.Enum) == 0 {
+		t.Fatal("voice should have enum values")
+	}
+	// Verify known voices are present.
+	voices := map[string]bool{}
+	for _, v := range voiceProp.Enum {
+		voices[v] = true
+	}
+	for _, want := range []string{"Cherry", "Serena", "Ethan", "Chelsie"} {
+		if !voices[want] {
+			t.Fatalf("voice enum missing %q", want)
+		}
+	}
+}
+
+func TestValidateParams_RequiredMissing(t *testing.T) {
+	t.Parallel()
+	tool := TextToSpeech()
+	err := ValidateParams(tool, map[string]interface{}{
+		"voice": "Cherry",
+	})
+	if err == nil {
+		t.Fatal("expected error for missing required 'text'")
+	}
+	if !strings.Contains(err.Error(), "\"text\"") {
+		t.Fatalf("error should mention 'text', got: %s", err)
+	}
+}
+
+func TestValidateParams_InvalidEnum(t *testing.T) {
+	t.Parallel()
+	tool := TextToSpeech()
+	err := ValidateParams(tool, map[string]interface{}{
+		"text":  "hello",
+		"voice": "alloy",
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid voice enum")
+	}
+	if !strings.Contains(err.Error(), "alloy") || !strings.Contains(err.Error(), "Cherry") {
+		t.Fatalf("error should mention invalid value and valid options, got: %s", err)
+	}
+}
+
+func TestValidateParams_ValidParams(t *testing.T) {
+	t.Parallel()
+	tool := TextToSpeech()
+	err := ValidateParams(tool, map[string]interface{}{
+		"text":  "hello world",
+		"voice": "Cherry",
+	})
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+}
+
+func TestValidateParams_OptionalEnumSkipped(t *testing.T) {
+	t.Parallel()
+	tool := GenerateImage()
+	// size is optional with enum; not providing it should be fine
+	err := ValidateParams(tool, map[string]interface{}{
+		"prompt": "a cat",
+	})
+	if err != nil {
+		t.Fatalf("expected no error for missing optional enum param, got: %v", err)
 	}
 }
 

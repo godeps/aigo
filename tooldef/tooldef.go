@@ -10,6 +10,11 @@
 //	// Register with your agent framework's tool system
 package tooldef
 
+import (
+	"fmt"
+	"strings"
+)
+
 // ToolDef describes a callable tool with its JSON Schema parameters.
 type ToolDef struct {
 	Name        string `json:"name"`
@@ -24,7 +29,50 @@ type Schema struct {
 	Properties  map[string]Schema `json:"properties,omitempty"`
 	Required    []string          `json:"required,omitempty"`
 	Enum        []string          `json:"enum,omitempty"`
+	Default     string            `json:"default,omitempty"`
 	Items       *Schema           `json:"items,omitempty"`
+}
+
+// ValidateParams checks parameter values against the tool's schema constraints (enums, required fields).
+// Returns an error describing the first invalid parameter found, or nil if all values are valid.
+func ValidateParams(def ToolDef, params map[string]interface{}) error {
+	// Check required fields.
+	for _, req := range def.Parameters.Required {
+		v, ok := params[req]
+		if !ok || v == nil {
+			return fmt.Errorf("parameter %q is required", req)
+		}
+		if s, ok := v.(string); ok && strings.TrimSpace(s) == "" {
+			return fmt.Errorf("parameter %q is required (got empty string)", req)
+		}
+	}
+
+	// Check enum constraints.
+	for name, prop := range def.Parameters.Properties {
+		if len(prop.Enum) == 0 {
+			continue
+		}
+		v, ok := params[name]
+		if !ok || v == nil {
+			continue // optional param not provided
+		}
+		s, ok := v.(string)
+		if !ok {
+			continue // non-string params skip enum check
+		}
+		valid := false
+		for _, e := range prop.Enum {
+			if s == e {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			return fmt.Errorf("parameter %q value %q is not valid, must be one of: %s",
+				name, s, strings.Join(prop.Enum, ", "))
+		}
+	}
+	return nil
 }
 
 // AllTools returns every pre-defined tool aigo can provide.
@@ -59,6 +107,7 @@ func GenerateImage() ToolDef {
 					Type:        "string",
 					Description: "Image dimensions (e.g., 1024x1024, 1024x1536)",
 					Enum:        []string{"1024x1024", "1024x1536", "1536x1024", "512x512"},
+					Default:     "1024x1024",
 				},
 				"width": {
 					Type:        "integer",
@@ -92,16 +141,20 @@ func GenerateVideo() ToolDef {
 				},
 				"size": {
 					Type:        "string",
-					Description: "Video dimensions (e.g., 1280x720, 1920x1080)",
+					Description: "Video dimensions. Use '*' as separator (not 'x')",
+					Enum:        []string{"1280*720", "960*960", "720*1280", "1920*1080", "1080*1920"},
+					Default:     "1280*720",
 				},
 				"aspect_ratio": {
 					Type:        "string",
-					Description: "Video aspect ratio (e.g., 16:9, 9:16, 1:1, 4:3, 3:4)",
+					Description: "Video aspect ratio",
+					Enum:        []string{"16:9", "9:16", "1:1", "4:3", "3:4"},
 				},
 				"resolution": {
 					Type:        "string",
 					Description: "Video resolution quality",
 					Enum:        []string{"480P", "720P", "1080P"},
+					Default:     "720P",
 				},
 				"reference_image": {
 					Type:        "string",
@@ -139,7 +192,8 @@ func TextToSpeech() ToolDef {
 				},
 				"voice": {
 					Type:        "string",
-					Description: "Voice identifier to use for synthesis",
+					Description: "Voice to use. Cherry: female Chinese, Serena: female Chinese/English, Ethan: male English, Chelsie: female English",
+					Enum:        []string{"Cherry", "Serena", "Ethan", "Chelsie"},
 				},
 				"language": {
 					Type:        "string",
@@ -147,7 +201,7 @@ func TextToSpeech() ToolDef {
 				},
 				"instructions": {
 					Type:        "string",
-					Description: "Style instructions for the speech (e.g., speak slowly, with emotion)",
+					Description: "Style instructions for the speech, e.g. 'speak slowly and clearly', 'with warm emotion', 'fast pace'. Controls speed, emotion, and delivery style",
 				},
 			},
 			Required: []string{"text", "voice"},
@@ -174,6 +228,8 @@ func DesignVoice() ToolDef {
 				"target_model": {
 					Type:        "string",
 					Description: "The TTS model this voice will be used with",
+					Enum:        []string{"qwen3-tts-flash", "qwen3-tts-instruct-flash"},
+					Default:     "qwen3-tts-flash",
 				},
 				"preferred_name": {
 					Type:        "string",
@@ -181,7 +237,8 @@ func DesignVoice() ToolDef {
 				},
 				"language": {
 					Type:        "string",
-					Description: "Language code for the voice",
+					Description: "Language of the voice",
+					Enum:        []string{"zh", "en", "ja", "ko"},
 				},
 			},
 			Required: []string{"voice_prompt", "preview_text", "target_model"},
@@ -209,6 +266,7 @@ func EditImage() ToolDef {
 					Type:        "string",
 					Description: "Output image dimensions",
 					Enum:        []string{"1024x1024", "1024x1536", "1536x1024"},
+					Default:     "1024x1024",
 				},
 			},
 			Required: []string{"prompt", "image_url"},

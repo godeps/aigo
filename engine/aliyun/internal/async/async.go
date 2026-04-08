@@ -108,7 +108,15 @@ func fetch(ctx context.Context, rt *runtime.RT, apiKey, taskID string, ex URLExt
 	case "PENDING", "RUNNING", "":
 		return "", false, nil
 	case "FAILED", "CANCELED", "UNKNOWN":
-		return "", true, fmt.Errorf("aliyun: task %s finished with status %s", taskID, status)
+		// Extract error details from task output if available.
+		errMsg := ""
+		if code, _ := output["code"].(string); code != "" {
+			errMsg += " code=" + code
+		}
+		if msg, _ := output["message"].(string); msg != "" {
+			errMsg += " message=" + msg
+		}
+		return "", true, fmt.Errorf("aliyun: task %s finished with status %s%s", taskID, status, errMsg)
 	case "SUCCEEDED":
 		for _, path := range ex.URLFields {
 			if url, ok := nestedString(output, path...); ok && url != "" {

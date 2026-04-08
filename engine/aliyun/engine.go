@@ -153,6 +153,7 @@ func (e *Engine) Capabilities() engine.Capability {
 		cap.MediaTypes = []string{"video"}
 	case ModelQwenTTSFlash, ModelQwenTTSInstructFlash:
 		cap.MediaTypes = []string{"audio"}
+		cap.Voices = []string{"Cherry", "Serena", "Ethan", "Chelsie"}
 	case ModelQwenVoiceDesign:
 		cap.MediaTypes = []string{"audio"}
 	}
