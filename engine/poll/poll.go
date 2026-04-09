@@ -13,6 +13,21 @@ type Fetcher func(ctx context.Context) (result string, done bool, err error)
 // OnProgress is called after each poll attempt (optional).
 type OnProgress func(attempt int, elapsed time.Duration)
 
+// progressCtxKey is the context key for carrying a progress callback.
+type progressCtxKey struct{}
+
+// WithOnProgress attaches a progress callback to the context.
+// When Poll is called without Config.OnProgress, it falls back to this.
+func WithOnProgress(ctx context.Context, fn OnProgress) context.Context {
+	return context.WithValue(ctx, progressCtxKey{}, fn)
+}
+
+// onProgressFromContext extracts the progress callback from context, if set.
+func onProgressFromContext(ctx context.Context) OnProgress {
+	fn, _ := ctx.Value(progressCtxKey{}).(OnProgress)
+	return fn
+}
+
 // Config controls polling behavior.
 type Config struct {
 	Interval    time.Duration // base polling interval
@@ -38,6 +53,12 @@ func Poll(ctx context.Context, cfg Config, fetch Fetcher) (string, error) {
 		maxInterval = 60 * time.Second
 	}
 
+	// Resolve progress callback: explicit config takes priority, then context fallback.
+	onProgress := cfg.OnProgress
+	if onProgress == nil {
+		onProgress = onProgressFromContext(ctx)
+	}
+
 	start := time.Now()
 	cur := interval
 	for attempt := 1; ; attempt++ {
@@ -51,8 +72,8 @@ func Poll(ctx context.Context, cfg Config, fetch Fetcher) (string, error) {
 		if cfg.MaxAttempts > 0 && attempt >= cfg.MaxAttempts {
 			return "", fmt.Errorf("poll: exceeded %d attempts", cfg.MaxAttempts)
 		}
-		if cfg.OnProgress != nil {
-			cfg.OnProgress(attempt, time.Since(start))
+		if onProgress != nil {
+			onProgress(attempt, time.Since(start))
 		}
 
 		timer := time.NewTimer(cur)

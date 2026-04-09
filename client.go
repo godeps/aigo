@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/godeps/aigo/engine"
+	"github.com/godeps/aigo/engine/poll"
 	"github.com/godeps/aigo/workflow"
 )
 
@@ -207,6 +208,11 @@ func (c *Client) Execute(ctx context.Context, engineName string, graph workflow.
 
 	if cfg.onProgress != nil {
 		cfg.onProgress(ProgressEvent{Phase: "submitted"})
+		// Inject progress callback into context so engines' internal poll.Poll
+		// calls can surface polling progress without changing engine signatures.
+		ctx = poll.WithOnProgress(ctx, func(attempt int, elapsed time.Duration) {
+			cfg.onProgress(ProgressEvent{Phase: "polling", Attempt: attempt, Elapsed: elapsed})
+		})
 	}
 
 	start := time.Now()
@@ -241,8 +247,8 @@ func (c *Client) ExecutePrompt(ctx context.Context, engineName string, prompt st
 }
 
 // ExecuteTask converts an agent task into a workflow graph and routes it to the target engine.
-func (c *Client) ExecuteTask(ctx context.Context, engineName string, task AgentTask) (Result, error) {
-	return c.Execute(ctx, engineName, BuildGraph(task))
+func (c *Client) ExecuteTask(ctx context.Context, engineName string, task AgentTask, opts ...ExecuteOption) (Result, error) {
+	return c.Execute(ctx, engineName, BuildGraph(task), opts...)
 }
 
 // ExecutePromptAuto lets a selector choose the engine for a prompt-driven request.
@@ -500,14 +506,14 @@ type FallbackResult struct {
 
 // ExecuteWithFallback tries each engine in order; the first success wins.
 // All engines that fail are recorded in FallbackResult.Skipped.
-func (c *Client) ExecuteWithFallback(ctx context.Context, engines []string, graph workflow.Graph) (FallbackResult, error) {
+func (c *Client) ExecuteWithFallback(ctx context.Context, engines []string, graph workflow.Graph, opts ...ExecuteOption) (FallbackResult, error) {
 	if len(engines) == 0 {
 		return FallbackResult{}, errors.New("aigo: empty engine list")
 	}
 
 	var skipped []FallbackError
 	for _, name := range engines {
-		result, err := c.Execute(ctx, name, graph)
+		result, err := c.Execute(ctx, name, graph, opts...)
 		if err == nil {
 			return FallbackResult{Engine: name, Output: result, Skipped: skipped}, nil
 		}
@@ -518,8 +524,8 @@ func (c *Client) ExecuteWithFallback(ctx context.Context, engines []string, grap
 }
 
 // ExecuteTaskWithFallback is the AgentTask variant of ExecuteWithFallback.
-func (c *Client) ExecuteTaskWithFallback(ctx context.Context, engines []string, task AgentTask) (FallbackResult, error) {
-	return c.ExecuteWithFallback(ctx, engines, BuildGraph(task))
+func (c *Client) ExecuteTaskWithFallback(ctx context.Context, engines []string, task AgentTask, opts ...ExecuteOption) (FallbackResult, error) {
+	return c.ExecuteWithFallback(ctx, engines, BuildGraph(task), opts...)
 }
 
 // AsyncResult delivers an asynchronous execution outcome.
