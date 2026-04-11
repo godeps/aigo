@@ -17,7 +17,7 @@ func BuildParameters(graph workflow.Graph, preferResolution bool) map[string]any
 		}
 	} else {
 		if size, ok := graphx.StringOption(graph, "size"); ok {
-			parameters["size"] = size
+			parameters["size"] = graphx.NormalizeSize(size)
 		} else if size, ok := graphx.WidthHeightSize(graph); ok {
 			parameters["size"] = size
 		}

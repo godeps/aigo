@@ -45,12 +45,17 @@ func BoolOption(graph workflow.Graph, keys ...string) (bool, bool) {
 
 func Size(graph workflow.Graph, fallback string) string {
 	if size, ok := StringOption(graph, "size"); ok {
-		return size
+		return NormalizeSize(size)
 	}
 	if size, ok := WidthHeightSize(graph); ok {
 		return size
 	}
 	return fallback
+}
+
+// NormalizeSize converts "WxH" (letter x) to "W*H" (asterisk) as required by the aliyun API.
+func NormalizeSize(s string) string {
+	return strings.Replace(s, "x", "*", 1)
 }
 
 func WidthHeightSize(graph workflow.Graph) (string, bool) {
@@ -73,7 +78,7 @@ func Resolution(graph workflow.Graph) (string, bool) {
 
 func DeriveResolution(graph workflow.Graph) (string, bool) {
 	if size, ok := StringOption(graph, "size"); ok {
-		switch size {
+		switch NormalizeSize(size) {
 		case "1280*720":
 			return "720P", true
 		case "1920*1080":

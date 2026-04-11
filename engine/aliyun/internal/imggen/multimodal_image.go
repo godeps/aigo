@@ -47,7 +47,7 @@ func RunMultimodalImage(ctx context.Context, rt *runtime.RT, apiKey, model strin
 
 	parameters := map[string]any{}
 	if size, ok := graphx.StringOption(graph, "size"); ok {
-		parameters["size"] = size
+		parameters["size"] = graphx.NormalizeSize(size)
 	}
 	if size, ok := graphx.WidthHeightSize(graph); ok {
 		parameters["size"] = size
