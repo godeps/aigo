@@ -83,6 +83,7 @@ func AllTools() []ToolDef {
 		TextToSpeech(),
 		DesignVoice(),
 		EditImage(),
+		EditVideo(),
 		TranscribeAudio(),
 	}
 }
@@ -277,6 +278,41 @@ func EditImage() ToolDef {
 				},
 			},
 			Required: []string{"prompt", "image_url"},
+		},
+	}
+}
+
+// EditVideo returns the tool definition for video editing.
+func EditVideo() ToolDef {
+	return ToolDef{
+		Name:        "edit_video",
+		Description: "Edit an existing video based on a text prompt, optionally with reference images. Returns a URL to the edited video.",
+		Parameters: Schema{
+			Type: "object",
+			Properties: map[string]Schema{
+				"prompt": {
+					Type:        "string",
+					Description: "Text description of the desired edit",
+				},
+				"video_url": {
+					Type:        "string",
+					Description: "URL of the source video to edit",
+				},
+				"reference_image": {
+					Type:        "string",
+					Description: "URL of a reference image for style guidance (optional)",
+				},
+				"size": {
+					Type:        "string",
+					Description: "Output video dimensions. Use '*' as separator",
+					Enum:        []string{"1280*720", "960*960", "720*1280", "1920*1080", "1080*1920"},
+				},
+				"duration": {
+					Type:        "integer",
+					Description: "Output video duration in seconds",
+				},
+			},
+			Required: []string{"prompt", "video_url"},
 		},
 	}
 }

@@ -179,6 +179,12 @@ var editModels = map[string]string{
 	ModelWanVideoEdit:      "video_edit",
 }
 
+// dualModels lists models that support both generation and editing.
+// They appear under their primary capability AND the edit capability.
+var dualModels = map[string]string{
+	ModelWanImage: "image_edit",
+}
+
 // ModelsByCapability returns all supported models grouped by capability key
 // (e.g. "image", "image_edit", "video", "tts"). This allows consumers to
 // auto-discover models without hardcoding.
@@ -197,6 +203,10 @@ func ModelsByCapability() map[string][]string {
 				key = "tts"
 			}
 			result[key] = append(result[key], model)
+			// Dual models also appear under their edit capability.
+			if editKey, ok := dualModels[model]; ok {
+				result[editKey] = append(result[editKey], model)
+			}
 		}
 	}
 	return result
