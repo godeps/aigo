@@ -274,9 +274,12 @@ result, err := client.Execute(ctx, "img", graph)
 | `ModelQwenImage` | qwen-image | 图片 |
 | `ModelWanImage` | wan2.7-image | 图片 |
 | `ModelZImageTurbo` | z-image-turbo | 图片 |
-| `ModelWanTextToVideo` | wan2.6-t2v | 视频 |
-| `ModelWanReferenceVideo` | wan2.6-r2v | 视频 |
+| `ModelWanTextToVideo` | wan2.7-t2v | 视频 |
+| `ModelWanImageToVideo` | wan2.7-i2v | 视频 |
+| `ModelWanReferenceVideo` | wan2.7-r2v | 视频 |
 | `ModelWanVideoEdit` | wan2.7-videoedit | 视频 |
+| `ModelKlingV3Video` | kling/kling-v3-video-generation | 视频 |
+| `ModelKlingV3OmniVideo` | kling/kling-v3-omni-video-generation | 视频 |
 | `ModelQwenTTSFlash` | qwen3-tts-flash | TTS |
 | `ModelQwenTTSInstructFlash` | qwen3-tts-instruct-flash | TTS |
 | `ModelQwenVoiceDesign` | qwen-voice-design | 声音设计 |
@@ -346,4 +349,4 @@ go run ./examples/agent_auto_router
 ## 说明
 
 - 阿里云返回的结果 URL 是临时 OSS 链接，拿到后应立即保存。
-- 截至 2026 年 4 月，阿里云公开文档里文生视频和参考生视频的模型名仍为 `wan2.6-t2v`、`wan2.6-r2v`，公开的 `wan2.7` 视频模型是 `wan2.7-videoedit`。
+- 截至 2026 年 4 月，wan2.7 系列（`wan2.7-t2v`、`wan2.7-i2v`、`wan2.7-r2v`、`wan2.7-image`、`wan2.7-videoedit`）为当前视频/图片模型。

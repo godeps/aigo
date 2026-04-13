@@ -274,9 +274,12 @@ result, err := client.Execute(ctx, "img", graph)
 | `ModelQwenImage` | qwen-image | Image |
 | `ModelWanImage` | wan2.7-image | Image |
 | `ModelZImageTurbo` | z-image-turbo | Image |
-| `ModelWanTextToVideo` | wan2.6-t2v | Video |
-| `ModelWanReferenceVideo` | wan2.6-r2v | Video |
+| `ModelWanTextToVideo` | wan2.7-t2v | Video |
+| `ModelWanImageToVideo` | wan2.7-i2v | Video |
+| `ModelWanReferenceVideo` | wan2.7-r2v | Video |
 | `ModelWanVideoEdit` | wan2.7-videoedit | Video |
+| `ModelKlingV3Video` | kling/kling-v3-video-generation | Video |
+| `ModelKlingV3OmniVideo` | kling/kling-v3-omni-video-generation | Video |
 | `ModelQwenTTSFlash` | qwen3-tts-flash | TTS |
 | `ModelQwenTTSInstructFlash` | qwen3-tts-instruct-flash | TTS |
 | `ModelQwenVoiceDesign` | qwen-voice-design | Voice Design |
@@ -346,4 +349,4 @@ go run ./examples/agent_auto_router
 ## Notes
 
 - Alibaba Cloud result URLs are temporary OSS links. Persist them immediately.
-- As of April 2026, Alibaba Cloud public docs still expose `wan2.6-t2v` and `wan2.6-r2v` for text/reference-to-video, while `wan2.7-videoedit` is the public video editing model.
+- As of April 2026, wan2.7 series (`wan2.7-t2v`, `wan2.7-i2v`, `wan2.7-r2v`, `wan2.7-image`, `wan2.7-videoedit`) are the current video/image models.

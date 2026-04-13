@@ -117,6 +117,21 @@ func ImageURLs(graph workflow.Graph) []string {
 	return urls
 }
 
+func VideoURLs(graph workflow.Graph) []string {
+	urls := make([]string, 0)
+	for _, id := range graph.SortedNodeIDs() {
+		node := graph[id]
+		url, ok := node.StringInput("url")
+		if !ok || url == "" {
+			continue
+		}
+		if strings.Contains(strings.ToLower(node.ClassType), "video") {
+			urls = append(urls, url)
+		}
+	}
+	return urls
+}
+
 func MediaURLs(graph workflow.Graph) []string {
 	urls := make([]string, 0)
 	for _, id := range graph.SortedNodeIDs() {

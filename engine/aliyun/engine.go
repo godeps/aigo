@@ -22,11 +22,17 @@ const (
 	defaultBaseURL = "https://dashscope.aliyuncs.com/api/v1"
 
 	ModelQwenImage         = "qwen-image"
+	ModelQwenImage2        = "qwen-image-2.0"
+	ModelQwenImageEditPlus = "qwen-image-edit-plus"
 	ModelWanImage          = "wan2.7-image"
 	ModelZImageTurbo       = "z-image-turbo"
-	ModelWanTextToVideo    = "wan2.6-t2v"
-	ModelWanReferenceVideo = "wan2.6-r2v"
+	ModelWanTextToVideo    = "wan2.7-t2v"
+	ModelWanImageToVideo   = "wan2.7-i2v"
+	ModelWanReferenceVideo = "wan2.7-r2v"
 	ModelWanVideoEdit      = "wan2.7-videoedit"
+
+	ModelKlingV3Video     = "kling/kling-v3-video-generation"
+	ModelKlingV3OmniVideo = "kling/kling-v3-omni-video-generation"
 
 	ModelQwenTTSFlash         = "qwen3-tts-flash"
 	ModelQwenTTSInstructFlash = "qwen3-tts-instruct-flash"
@@ -100,11 +106,16 @@ type modelEntry struct {
 
 var modelTable = map[string]modelEntry{
 	ModelQwenImage:            {imggen.RunQwenImage, engine.OutputURL},
+	ModelQwenImage2:           {imggen.RunMultimodalImage, engine.OutputURL},
+	ModelQwenImageEditPlus:    {imggen.RunMultimodalImage, engine.OutputURL},
 	ModelWanImage:             {imggen.RunMultimodalImage, engine.OutputURL},
 	ModelZImageTurbo:          {imggen.RunMultimodalImage, engine.OutputURL},
 	ModelWanTextToVideo:       {vidgen.RunTextToVideo, engine.OutputURL},
+	ModelWanImageToVideo:      {vidgen.RunReferenceToVideo, engine.OutputURL},
 	ModelWanReferenceVideo:    {vidgen.RunReferenceToVideo, engine.OutputURL},
 	ModelWanVideoEdit:         {vidgen.RunVideoEdit, engine.OutputURL},
+	ModelKlingV3Video:         {vidgen.RunKlingVideo, engine.OutputURL},
+	ModelKlingV3OmniVideo:     {vidgen.RunKlingVideo, engine.OutputURL},
 	ModelQwenTTSFlash:         {audiogen.RunTTS, engine.OutputURL},
 	ModelQwenTTSInstructFlash: {audiogen.RunTTS, engine.OutputURL},
 	ModelQwenVoiceDesign:      {audiogen.RunVoiceDesign, engine.OutputJSON},
@@ -147,9 +158,10 @@ func (e *Engine) Capabilities() engine.Capability {
 		SupportsSync: !e.rt.WaitForCompletion,
 	}
 	switch e.model {
-	case ModelQwenImage, ModelWanImage, ModelZImageTurbo:
+	case ModelQwenImage, ModelQwenImage2, ModelQwenImageEditPlus, ModelWanImage, ModelZImageTurbo:
 		cap.MediaTypes = []string{"image"}
-	case ModelWanTextToVideo, ModelWanReferenceVideo, ModelWanVideoEdit:
+	case ModelWanTextToVideo, ModelWanImageToVideo, ModelWanReferenceVideo, ModelWanVideoEdit,
+		ModelKlingV3Video, ModelKlingV3OmniVideo:
 		cap.MediaTypes = []string{"video"}
 	case ModelQwenTTSFlash, ModelQwenTTSInstructFlash:
 		cap.MediaTypes = []string{"audio"}
