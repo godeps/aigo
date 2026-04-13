@@ -160,6 +160,13 @@ func GenerateVideo() ToolDef {
 					Type:        "string",
 					Description: "URL of a reference image for image-to-video generation",
 				},
+				"reference_images": {
+					Type:        "array",
+					Description: "URLs of reference images for multi-image-to-video generation",
+					Items: &Schema{
+						Type: "string",
+					},
+				},
 				"reference_video": {
 					Type:        "string",
 					Description: "URL of a reference video for video-to-video generation",

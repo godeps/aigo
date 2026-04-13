@@ -90,6 +90,21 @@ func TestGenerateImage_SizeEnum(t *testing.T) {
 	}
 }
 
+func TestGenerateVideo_ReferenceImagesArray(t *testing.T) {
+	t.Parallel()
+	tool := GenerateVideo()
+	prop, ok := tool.Parameters.Properties["reference_images"]
+	if !ok {
+		t.Fatal("missing reference_images property")
+	}
+	if prop.Type != "array" {
+		t.Fatalf("reference_images type = %q, want array", prop.Type)
+	}
+	if prop.Items == nil || prop.Items.Type != "string" {
+		t.Fatalf("reference_images items = %#v, want string items", prop.Items)
+	}
+}
+
 func TestTextToSpeech_VoiceEnum(t *testing.T) {
 	t.Parallel()
 	tool := TextToSpeech()

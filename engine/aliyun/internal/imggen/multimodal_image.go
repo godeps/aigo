@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 
@@ -78,6 +79,9 @@ func RunMultimodalImage(ctx context.Context, rt *runtime.RT, apiKey, model strin
 		return "", fmt.Errorf("aliyun: marshal multimodal image request: %w", err)
 	}
 
+	log.Printf("[aliyun/multimodal-image] model=%s content_items=%d params=%v body_len=%d", model, len(content), parameters, len(body))
+	log.Printf("[aliyun/multimodal-image] request body: %s", string(body))
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, rt.BaseURL+"/services/aigc/multimodal-generation/generation", bytes.NewReader(body))
 	if err != nil {
 		return "", fmt.Errorf("aliyun: build multimodal image request: %w", err)
@@ -96,6 +100,7 @@ func RunMultimodalImage(ctx context.Context, rt *runtime.RT, apiKey, model strin
 		return "", fmt.Errorf("aliyun: read multimodal image response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		log.Printf("[aliyun/multimodal-image] model=%s HTTP %d response: %s", model, resp.StatusCode, string(respBody))
 		err := aigoerr.FromHTTPResponse(resp, respBody, "aliyun")
 		// Enhance "invalid size" errors with the list of supported sizes.
 		if resp.StatusCode == 400 && strings.Contains(string(respBody), "size") {
