@@ -211,3 +211,10 @@ func (e *Engine) Capabilities() engine.Capability {
 		SupportsSync: true,
 	}
 }
+
+// ModelsByCapability returns all known OpenAI models grouped by capability.
+func ModelsByCapability() map[string][]string {
+	return map[string][]string{
+		"image": {"dall-e-3", "dall-e-2"},
+	}
+}

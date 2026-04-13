@@ -143,6 +143,16 @@ func (e *Engine) Capabilities() engine.Capability {
 	}
 }
 
+// ModelsByCapability returns all known Ark (Volcengine) models grouped by capability.
+func ModelsByCapability() map[string][]string {
+	return map[string][]string{
+		"video": {
+			"doubao-seedance-2-0-260128",
+			"doubao-seedance-1-0-lite-250428",
+		},
+	}
+}
+
 func (e *Engine) buildPayload(g workflow.Graph) (map[string]any, error) {
 	payload := map[string]any{
 		"model": e.model,

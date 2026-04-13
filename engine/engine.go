@@ -55,3 +55,11 @@ type DryRunResult struct {
 type DryRunner interface {
 	DryRun(graph workflow.Graph) (DryRunResult, error)
 }
+
+// Discoverer is a package-level interface for providers that can enumerate
+// all known models grouped by capability (e.g. "image", "video", "tts").
+// Unlike Engine (per-instance), Discoverer is a static catalog of models
+// the provider SDK knows how to handle.
+type Discoverer interface {
+	ModelsByCapability() map[string][]string
+}

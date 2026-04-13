@@ -171,3 +171,33 @@ func (e *Engine) Capabilities() engine.Capability {
 	}
 	return cap
 }
+
+// editModels lists models that are editors, not generators.
+// Used by ModelsByCapability to classify them under "*_edit" keys.
+var editModels = map[string]string{
+	ModelQwenImageEditPlus: "image_edit",
+	ModelWanVideoEdit:      "video_edit",
+}
+
+// ModelsByCapability returns all supported models grouped by capability key
+// (e.g. "image", "image_edit", "video", "tts"). This allows consumers to
+// auto-discover models without hardcoding.
+func ModelsByCapability() map[string][]string {
+	result := map[string][]string{}
+	for model := range modelTable {
+		e := &Engine{model: model}
+		cap := e.Capabilities()
+		for _, mt := range cap.MediaTypes {
+			key := mt
+			if editKey, ok := editModels[model]; ok {
+				key = editKey
+			} else if mt == "audio" && model == ModelQwenVoiceDesign {
+				key = "voice_design"
+			} else if mt == "audio" {
+				key = "tts"
+			}
+			result[key] = append(result[key], model)
+		}
+	}
+	return result
+}
