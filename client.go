@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -612,5 +613,5 @@ func (c *Client) DryRun(engineName string, task AgentTask) (engine.DryRunResult,
 }
 
 func nodeID(v int) string {
-	return fmt.Sprintf("%d", v)
+	return strconv.Itoa(v)
 }

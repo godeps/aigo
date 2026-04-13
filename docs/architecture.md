@@ -87,5 +87,5 @@ HTTP client factory with sensible defaults (timeout, transport settings).
 
 - **Zero external dependencies**: Only Go stdlib. Keeps the dependency tree clean for embedding in larger systems.
 - **Graph as IR**: The ComfyUI-inspired graph format provides a universal language between agents and backends, even when the backend has no concept of nodes.
-- **Backward compatibility**: `Client.Execute` still returns `(string, error)`. Structured `Result` is used internally and in `ExecuteWithHint`.
+- **Structured output**: `Client.Execute` returns `Result` with `Value`, `Kind`, `Engine`, and `Elapsed` fields.
 - **Thin wrappers over shared code**: Engine-specific packages keep their exported API but delegate to `workflow/resolve` internally.

@@ -1,6 +1,9 @@
 package aigo
 
-import "context"
+import (
+	"context"
+	"fmt"
+)
 
 // PipelineStep transforms a previous result into the next task and target engine.
 type PipelineStep func(prev Result) (AgentTask, string)
@@ -40,16 +43,16 @@ func (c *Client) ExecutePipeline(ctx context.Context, p *Pipeline) ([]Result, er
 	// First step uses the pre-defined task.
 	r, err := c.ExecuteTask(ctx, p.steps[0].engine, p.steps[0].task)
 	if err != nil {
-		return results, err
+		return results, fmt.Errorf("pipeline step 0 (engine %q): %w", p.steps[0].engine, err)
 	}
 	results = append(results, r)
 
 	// Subsequent steps derive their task from the previous result.
-	for _, s := range p.steps[1:] {
+	for i, s := range p.steps[1:] {
 		task, engineName := s.step(r)
 		r, err = c.ExecuteTask(ctx, engineName, task)
 		if err != nil {
-			return results, err
+			return results, fmt.Errorf("pipeline step %d (engine %q): %w", i+1, engineName, err)
 		}
 		results = append(results, r)
 	}

@@ -118,21 +118,7 @@ func (e *Engine) apiURL(path string) string {
 
 // classifyOutput heuristically classifies a raw string result.
 func classifyOutput(s string) engine.OutputKind {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return engine.OutputUnknown
-	}
-	if strings.HasPrefix(s, "data:") {
-		return engine.OutputDataURI
-	}
-	lower := strings.ToLower(s)
-	if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
-		return engine.OutputURL
-	}
-	if len(s) > 0 && (s[0] == '{' || s[0] == '[') {
-		return engine.OutputJSON
-	}
-	return engine.OutputPlainText
+	return engine.ClassifyOutput(s)
 }
 
 // Execute 按 Route/Kind 调用对应 HTTP 接口。

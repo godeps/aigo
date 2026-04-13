@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"time"
 
 	"github.com/godeps/aigo/engine"
@@ -62,6 +63,17 @@ func (e *retryEngine) Execute(ctx context.Context, graph workflow.Graph) (engine
 		}
 		if ctx.Err() != nil {
 			return engine.Result{}, ctx.Err()
+		}
+		// Exponential backoff: 1s, 2s, 4s, ...
+		if attempt < e.maxRetries {
+			delay := time.Duration(math.Pow(2, float64(attempt))) * time.Second
+			timer := time.NewTimer(delay)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return engine.Result{}, ctx.Err()
+			case <-timer.C:
+			}
 		}
 	}
 	return engine.Result{}, lastErr

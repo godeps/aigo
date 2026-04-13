@@ -266,23 +266,6 @@ func TestInterpretOutputKind(t *testing.T) {
 	}
 }
 
-func TestExecuteWithHint(t *testing.T) {
-	t.Parallel()
-	c := NewClient()
-	if err := c.RegisterEngine("s", stubEngine{result: "https://cdn.example.com/x"}); err != nil {
-		t.Fatal(err)
-	}
-	h, err := c.ExecuteWithHint(context.Background(), "s", workflow.Graph{
-		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "t"}},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if h.Kind != OutputURL || h.Raw != "https://cdn.example.com/x" {
-		t.Fatalf("%+v", h)
-	}
-}
-
 func TestExecuteWithFallback_FirstSuccess(t *testing.T) {
 	t.Parallel()
 

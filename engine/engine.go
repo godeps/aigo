@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"strings"
 
 	"github.com/godeps/aigo/workflow"
 )
@@ -54,6 +55,25 @@ type DryRunResult struct {
 // DryRunner is an optional interface for engines that support dry-run estimation.
 type DryRunner interface {
 	DryRun(graph workflow.Graph) (DryRunResult, error)
+}
+
+// ClassifyOutput heuristically classifies a raw output string.
+func ClassifyOutput(s string) OutputKind {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return OutputUnknown
+	}
+	if strings.HasPrefix(s, "data:") {
+		return OutputDataURI
+	}
+	lower := strings.ToLower(s)
+	if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
+		return OutputURL
+	}
+	if len(s) > 0 && (s[0] == '{' || s[0] == '[') {
+		return OutputJSON
+	}
+	return OutputPlainText
 }
 
 // Discoverer is a package-level interface for providers that can enumerate

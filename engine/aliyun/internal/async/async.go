@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/godeps/aigo/engine/aigoerr"
 	"github.com/godeps/aigo/engine/aliyun/internal/runtime"
@@ -61,7 +62,11 @@ func Submit(ctx context.Context, rt *runtime.RT, apiKey, path string, payload ma
 }
 
 func wait(ctx context.Context, rt *runtime.RT, apiKey, taskID string, ex URLExtractor) (string, error) {
-	return poll.Poll(ctx, poll.Config{Interval: rt.PollInterval}, func(ctx context.Context) (string, bool, error) {
+	return poll.Poll(ctx, poll.Config{
+		Interval:    rt.PollInterval,
+		Backoff:     1.5,
+		MaxInterval: 60 * time.Second,
+	}, func(ctx context.Context) (string, bool, error) {
 		url, done, err := fetch(ctx, rt, apiKey, taskID, ex)
 		if err != nil {
 			return "", false, fmt.Errorf("aliyun: wait for task %q: %w", taskID, err)
