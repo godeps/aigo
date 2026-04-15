@@ -85,6 +85,7 @@ func AllTools() []ToolDef {
 		EditImage(),
 		EditVideo(),
 		TranscribeAudio(),
+		GenerateMusic(),
 	}
 }
 
@@ -313,6 +314,48 @@ func EditVideo() ToolDef {
 				},
 			},
 			Required: []string{"prompt", "video_url"},
+		},
+	}
+}
+
+// GenerateMusic returns the tool definition for AI music generation.
+func GenerateMusic() ToolDef {
+	return ToolDef{
+		Name:        "generate_music",
+		Description: "Generate music from a text prompt describing style/mood, optionally with lyrics. Returns a URL or audio data.",
+		Parameters: Schema{
+			Type: "object",
+			Properties: map[string]Schema{
+				"prompt": {
+					Type:        "string",
+					Description: "Music style and mood description (e.g., 'indie folk, melancholy, introspective')",
+				},
+				"lyrics": {
+					Type:        "string",
+					Description: "Song lyrics with section markers like [verse], [chorus], [bridge]",
+				},
+				"is_instrumental": {
+					Type:        "boolean",
+					Description: "Generate instrumental music without vocals",
+				},
+				"output_format": {
+					Type:        "string",
+					Description: "Output format for the generated audio",
+					Enum:        []string{"url", "hex"},
+					Default:     "url",
+				},
+				"sample_rate": {
+					Type:        "integer",
+					Description: "Audio sample rate in Hz (e.g., 44100)",
+				},
+				"format": {
+					Type:        "string",
+					Description: "Audio encoding format",
+					Enum:        []string{"mp3", "wav", "flac"},
+					Default:     "mp3",
+				},
+			},
+			Required: []string{"prompt"},
 		},
 	}
 }

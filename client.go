@@ -43,6 +43,17 @@ type TTSOptions struct {
 	OptimizeInstructions *bool
 }
 
+// MusicOptions groups music generation parameters.
+type MusicOptions struct {
+	Lyrics         string
+	IsInstrumental *bool
+	LyricsOptimizer *bool
+	OutputFormat   string // "url" or "hex"
+	SampleRate     int
+	Bitrate        int
+	Format         string // "mp3", "wav", "flac"
+}
+
 // VoiceDesignOptions groups voice design parameters.
 type VoiceDesignOptions struct {
 	VoicePrompt    string
@@ -80,6 +91,7 @@ type AgentTask struct {
 
 	TTS         *TTSOptions
 	VoiceDesign *VoiceDesignOptions
+	Music       *MusicOptions
 
 	// Structured groups image/video options separately for finer control.
 	Structured *AgentTaskStructured
@@ -447,6 +459,38 @@ func BuildGraph(task AgentTask) workflow.Graph {
 			graph[nodeID(nextID)] = workflow.Node{
 				ClassType: "AudioOptions",
 				Inputs:    audioOpts,
+			}
+			nextID++
+		}
+	}
+
+	if task.Music != nil {
+		musicOpts := map[string]any{}
+		if task.Music.Lyrics != "" {
+			musicOpts["lyrics"] = task.Music.Lyrics
+		}
+		if task.Music.IsInstrumental != nil {
+			musicOpts["is_instrumental"] = *task.Music.IsInstrumental
+		}
+		if task.Music.LyricsOptimizer != nil {
+			musicOpts["lyrics_optimizer"] = *task.Music.LyricsOptimizer
+		}
+		if task.Music.OutputFormat != "" {
+			musicOpts["output_format"] = task.Music.OutputFormat
+		}
+		if task.Music.SampleRate > 0 {
+			musicOpts["sample_rate"] = task.Music.SampleRate
+		}
+		if task.Music.Bitrate > 0 {
+			musicOpts["bitrate"] = task.Music.Bitrate
+		}
+		if task.Music.Format != "" {
+			musicOpts["format"] = task.Music.Format
+		}
+		if len(musicOpts) > 0 {
+			graph[nodeID(nextID)] = workflow.Node{
+				ClassType: "MusicOptions",
+				Inputs:    musicOpts,
 			}
 			nextID++
 		}
