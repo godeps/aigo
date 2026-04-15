@@ -1,6 +1,7 @@
 package resolve
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -134,6 +135,45 @@ func Float64Option(g workflow.Graph, keys ...string) (float64, bool) {
 		}
 	}
 	return 0, false
+}
+
+// ExtractPrompt extracts a text prompt from the workflow graph.
+// It first checks CLIPTextEncode nodes (with link resolution), then falls back
+// to common option keys: "prompt", "text", "value".
+func ExtractPrompt(g workflow.Graph) (string, error) {
+	for _, ref := range g.FindByClassType("CLIPTextEncode") {
+		prompt, ok, err := ResolveNodeString(g, ref.ID, map[string]bool{})
+		if err != nil {
+			return "", fmt.Errorf("resolve prompt from node %q: %w", ref.ID, err)
+		}
+		if ok && strings.TrimSpace(prompt) != "" {
+			return prompt, nil
+		}
+	}
+	for _, key := range []string{"prompt", "text", "value"} {
+		if value, ok := StringOption(g, key); ok && strings.TrimSpace(value) != "" {
+			return value, nil
+		}
+	}
+	return "", nil
+}
+
+// MergeJSONOption searches for JSON-string inputs in the graph under the given
+// keys and merges them into dst.
+func MergeJSONOption(g workflow.Graph, dst map[string]any, keys ...string) {
+	for _, key := range keys {
+		raw, ok := StringOption(g, key)
+		if !ok {
+			continue
+		}
+		var extra map[string]any
+		if err := json.Unmarshal([]byte(raw), &extra); err != nil {
+			continue
+		}
+		for k, v := range extra {
+			dst[k] = v
+		}
+	}
 }
 
 func NormalizeOpenAIImageSize(width, height int) string {

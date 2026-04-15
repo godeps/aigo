@@ -116,11 +116,6 @@ func (e *Engine) apiURL(path string) string {
 	return rt.Join(e.origin, path)
 }
 
-// classifyOutput heuristically classifies a raw string result.
-func classifyOutput(s string) engine.OutputKind {
-	return engine.ClassifyOutput(s)
-}
-
 // Execute 按 Route/Kind 调用对应 HTTP 接口。
 func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, error) {
 	if err := g.Validate(); err != nil {
@@ -138,9 +133,6 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 		apiKey = os.Getenv("NEWAPI_API_KEY")
 	}
 	if apiKey == "" {
-		apiKey = os.Getenv("NEWAPI_KEY")
-	}
-	if apiKey == "" {
 		return engine.Result{}, ErrMissingAPIKey
 	}
 
@@ -148,7 +140,7 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 	if err != nil {
 		return engine.Result{}, err
 	}
-	return engine.Result{Value: raw, Kind: classifyOutput(raw)}, nil
+	return engine.Result{Value: raw, Kind: engine.ClassifyOutput(raw)}, nil
 }
 
 func wrapGraphErr(err error) error {

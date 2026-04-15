@@ -37,6 +37,9 @@ const (
 	ModelQwenTTSFlash         = "qwen3-tts-flash"
 	ModelQwenTTSInstructFlash = "qwen3-tts-instruct-flash"
 	ModelQwenVoiceDesign      = "qwen-voice-design"
+
+	ModelQwenASRFlash          = "qwen3-asr-flash"
+	ModelQwenASRFlashFiletrans = "qwen3-asr-flash-filetrans"
 )
 
 // 与 internal/ierr 中哨兵为同一指针，便于 errors.Is。
@@ -45,6 +48,7 @@ var (
 	ErrMissingReference   = ierr.ErrMissingReference
 	ErrMissingVoice       = ierr.ErrMissingVoice
 	ErrMissingVoiceDesign = ierr.ErrMissingVoiceDesign
+	ErrMissingAudioURL    = ierr.ErrMissingAudioURL
 	ErrMissingAPIKey      = ierr.ErrMissingAPIKey
 	ErrUnsupportedModel   = ierr.ErrUnsupportedModel
 )
@@ -119,6 +123,8 @@ var modelTable = map[string]modelEntry{
 	ModelQwenTTSFlash:         {audiogen.RunTTS, engine.OutputURL},
 	ModelQwenTTSInstructFlash: {audiogen.RunTTS, engine.OutputURL},
 	ModelQwenVoiceDesign:      {audiogen.RunVoiceDesign, engine.OutputJSON},
+	ModelQwenASRFlash:          {audiogen.RunQwenASR, engine.OutputPlainText},
+	ModelQwenASRFlashFiletrans: {audiogen.RunQwenASRFiletrans, engine.OutputPlainText},
 }
 
 // Execute compiles the workflow graph into the configured Bailian model request.
@@ -168,6 +174,8 @@ func (e *Engine) Capabilities() engine.Capability {
 		cap.Voices = []string{"Cherry", "Serena", "Ethan", "Chelsie"}
 	case ModelQwenVoiceDesign:
 		cap.MediaTypes = []string{"audio"}
+	case ModelQwenASRFlash, ModelQwenASRFlashFiletrans:
+		cap.MediaTypes = []string{"audio"}
 	}
 	return cap
 }
@@ -185,6 +193,21 @@ var dualModels = map[string]string{
 	ModelWanImage: "image_edit",
 }
 
+// asrModels lists models that are speech recognition, not synthesis.
+// Used by ModelsByCapability to classify them under "asr" key.
+var asrModels = map[string]bool{
+	ModelQwenASRFlash:          true,
+	ModelQwenASRFlashFiletrans: true,
+}
+
+// ConfigSchema returns the configuration fields required by the Aliyun engine.
+func ConfigSchema() []engine.ConfigField {
+	return []engine.ConfigField{
+		{Key: "apiKey", Label: "API Key", Type: "secret", Required: true, EnvVar: "DASHSCOPE_API_KEY", Description: "DashScope API key"},
+		{Key: "baseUrl", Label: "Base URL", Type: "url", EnvVar: "DASHSCOPE_BASE_URL", Description: "Custom API base URL (optional)"},
+	}
+}
+
 // ModelsByCapability returns all supported models grouped by capability key
 // (e.g. "image", "image_edit", "video", "tts"). This allows consumers to
 // auto-discover models without hardcoding.
@@ -197,6 +220,8 @@ func ModelsByCapability() map[string][]string {
 			key := mt
 			if editKey, ok := editModels[model]; ok {
 				key = editKey
+			} else if asrModels[model] {
+				key = "asr"
 			} else if mt == "audio" && model == ModelQwenVoiceDesign {
 				key = "voice_design"
 			} else if mt == "audio" {

@@ -212,6 +212,14 @@ func (e *Engine) Capabilities() engine.Capability {
 	}
 }
 
+// ConfigSchema returns the configuration fields required by the OpenAI engine.
+func ConfigSchema() []engine.ConfigField {
+	return []engine.ConfigField{
+		{Key: "apiKey", Label: "API Key", Type: "secret", Required: true, EnvVar: "OPENAI_API_KEY", Description: "OpenAI API key"},
+		{Key: "baseUrl", Label: "Base URL", Type: "url", EnvVar: "OPENAI_BASE_URL", Description: "Custom API base URL (optional)"},
+	}
+}
+
 // ModelsByCapability returns all known OpenAI models grouped by capability.
 func ModelsByCapability() map[string][]string {
 	return map[string][]string{

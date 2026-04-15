@@ -83,3 +83,16 @@ func ClassifyOutput(s string) OutputKind {
 type Discoverer interface {
 	ModelsByCapability() map[string][]string
 }
+
+// ConfigField describes a single configuration parameter for an engine provider.
+// Engine packages expose a package-level ConfigSchema() []ConfigField function
+// so that UIs can dynamically render configuration forms.
+type ConfigField struct {
+	Key         string `json:"key"`                   // field identifier, e.g. "apiKey", "appId"
+	Label       string `json:"label"`                 // human-readable label, e.g. "API Key"
+	Type        string `json:"type"`                  // "string", "secret", "url"
+	Required    bool   `json:"required"`
+	EnvVar      string `json:"envVar,omitempty"`       // fallback environment variable name
+	Description string `json:"description,omitempty"`
+	Default     string `json:"default,omitempty"`
+}

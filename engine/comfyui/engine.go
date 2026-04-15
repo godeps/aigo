@@ -240,3 +240,10 @@ func (e *Engine) Capabilities() engine.Capability {
 		SupportsPoll: e.waitForCompletion,
 	}
 }
+
+// ConfigSchema returns the configuration fields required by the ComfyUI engine.
+func ConfigSchema() []engine.ConfigField {
+	return []engine.ConfigField{
+		{Key: "baseUrl", Label: "Base URL", Type: "url", Required: true, Description: "ComfyUI server URL (e.g. http://localhost:8188)"},
+	}
+}

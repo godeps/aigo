@@ -1,5 +1,7 @@
 package newapi
 
+import "github.com/godeps/aigo/engine"
+
 // knownModel describes a model the SDK knows how to handle via a specific route.
 type knownModel struct {
 	route Route
@@ -33,6 +35,18 @@ var knownModels = map[string]knownModel{
 	// OpenAI TTS
 	"tts-1":    {route: RouteOpenAISpeech, kind: KindSpeech, cap: "tts"},
 	"tts-1-hd": {route: RouteOpenAISpeech, kind: KindSpeech, cap: "tts"},
+
+	// OpenAI ASR (Whisper)
+	"whisper-1":        {route: RouteOpenAITranscriptions, kind: KindSpeech, cap: "asr"},
+	"whisper-large-v3": {route: RouteOpenAITranscriptions, kind: KindSpeech, cap: "asr"},
+}
+
+// ConfigSchema returns the configuration fields required by the NewAPI engine.
+func ConfigSchema() []engine.ConfigField {
+	return []engine.ConfigField{
+		{Key: "apiKey", Label: "API Key", Type: "secret", Required: true, EnvVar: "NEWAPI_API_KEY", Description: "NewAPI API key"},
+		{Key: "baseUrl", Label: "Base URL", Type: "url", EnvVar: "NEWAPI_BASE_URL", Description: "Custom API base URL (optional)"},
+	}
 }
 
 // ModelsByCapability returns all known newapi models grouped by capability.

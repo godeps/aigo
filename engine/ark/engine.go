@@ -1,7 +1,6 @@
 package ark
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -80,7 +79,15 @@ func New(cfg Config) *Engine {
 	}
 }
 
-// Execute creates a video generation task and optionally polls until completion.
+// imageModels lists models that use the /images/generations endpoint.
+var imageModels = map[string]bool{
+	ModelSeedream3_0: true,
+	ModelSeedream2_1: true,
+}
+
+// Execute creates a media generation task.
+// Image models use the synchronous /images/generations endpoint.
+// Video models use the async /contents/generations/tasks endpoint with polling.
 func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, error) {
 	if err := g.Validate(); err != nil {
 		return engine.Result{}, fmt.Errorf("ark: validate graph: %w", err)
@@ -97,6 +104,16 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 		return engine.Result{}, ErrMissingAPIKey
 	}
 
+	// Route image models to synchronous endpoint.
+	if imageModels[e.model] {
+		url, err := runImageGeneration(ctx, e, apiKey, g)
+		if err != nil {
+			return engine.Result{}, err
+		}
+		return engine.Result{Value: url, Kind: engine.ClassifyOutput(url)}, nil
+	}
+
+	// Video models: async content generation.
 	payload, err := e.buildPayload(g)
 	if err != nil {
 		return engine.Result{}, err
@@ -134,6 +151,13 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 
 // Capabilities implements engine.Describer.
 func (e *Engine) Capabilities() engine.Capability {
+	if imageModels[e.model] {
+		return engine.Capability{
+			MediaTypes:   []string{"image"},
+			Models:       []string{e.model},
+			SupportsSync: true,
+		}
+	}
 	return engine.Capability{
 		MediaTypes:   []string{"video"},
 		Models:       []string{e.model},
@@ -143,12 +167,24 @@ func (e *Engine) Capabilities() engine.Capability {
 	}
 }
 
+// ConfigSchema returns the configuration fields required by the Ark engine.
+func ConfigSchema() []engine.ConfigField {
+	return []engine.ConfigField{
+		{Key: "apiKey", Label: "API Key", Type: "secret", Required: true, EnvVar: "ARK_API_KEY", Description: "Volcengine Ark API key"},
+		{Key: "baseUrl", Label: "Base URL", Type: "url", EnvVar: "ARK_BASE_URL", Description: "Custom API base URL (optional)", Default: defaultBaseURL},
+	}
+}
+
 // ModelsByCapability returns all known Ark (Volcengine) models grouped by capability.
 func ModelsByCapability() map[string][]string {
 	return map[string][]string{
 		"video": {
 			"doubao-seedance-2-0-260128",
 			"doubao-seedance-1-0-lite-250428",
+		},
+		"image": {
+			ModelSeedream3_0,
+			ModelSeedream2_1,
 		},
 	}
 }
@@ -247,25 +283,7 @@ func (e *Engine) poll(ctx context.Context, apiKey, taskID string) (string, error
 }
 
 func (e *Engine) doRequest(ctx context.Context, method, url, apiKey string, body []byte) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, method, url, bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("ark: build request: %w", err)
-	}
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := e.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("ark: http %s: %w", method, err)
-	}
-	defer resp.Body.Close()
-	out, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("ark: read body: %w", err)
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, aigoerr.FromHTTPResponse(resp, out, "ark")
-	}
-	return out, nil
+	return httpx.DoJSON(ctx, e.httpClient, method, url, apiKey, body, "ark")
 }
 
 type taskResponse struct {

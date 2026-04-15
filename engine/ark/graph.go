@@ -1,25 +1,14 @@
 package ark
 
 import (
-	"encoding/json"
-	"strings"
-
 	"github.com/godeps/aigo/workflow"
+	"github.com/godeps/aigo/workflow/resolve"
 )
 
 // extractPrompt extracts the text prompt from the workflow graph.
 func extractPrompt(g workflow.Graph) string {
-	for _, ref := range g.FindByClassType("CLIPTextEncode") {
-		if v, ok := ref.Node.StringInput("text"); ok && strings.TrimSpace(v) != "" {
-			return v
-		}
-	}
-	for _, key := range []string{"prompt", "text"} {
-		if v, ok := stringOption(g, key); ok {
-			return v
-		}
-	}
-	return ""
+	p, _ := resolve.ExtractPrompt(g)
+	return p
 }
 
 // appendImages adds image_url content entries from LoadImage nodes.
@@ -90,78 +79,28 @@ func extractDuration(g workflow.Graph) int {
 			return v
 		}
 	}
-	if v, ok := intOption(g, "duration"); ok {
+	if v, ok := resolve.IntOption(g, "duration"); ok {
 		return v
 	}
 	return 0
 }
 
-// stringOption searches for a string value across all graph nodes.
+// stringOption delegates to resolve.StringOption.
 func stringOption(g workflow.Graph, keys ...string) (string, bool) {
-	for _, id := range g.SortedNodeIDs() {
-		node := g[id]
-		for _, key := range keys {
-			if v, ok := node.StringInput(key); ok && strings.TrimSpace(v) != "" {
-				return strings.TrimSpace(v), true
-			}
-		}
-	}
-	return "", false
+	return resolve.StringOption(g, keys...)
 }
 
-// intOption searches for an integer value across all graph nodes.
+// intOption delegates to resolve.IntOption.
 func intOption(g workflow.Graph, keys ...string) (int, bool) {
-	for _, id := range g.SortedNodeIDs() {
-		node := g[id]
-		for _, key := range keys {
-			if v, ok := node.IntInput(key); ok {
-				return v, true
-			}
-		}
-	}
-	return 0, false
+	return resolve.IntOption(g, keys...)
 }
 
-// boolOption searches for a boolean value across all graph nodes.
+// boolOption delegates to resolve.BoolOption.
 func boolOption(g workflow.Graph, keys ...string) (bool, bool) {
-	for _, id := range g.SortedNodeIDs() {
-		node := g[id]
-		for _, key := range keys {
-			raw, ok := node.Input(key)
-			if !ok {
-				continue
-			}
-			switch v := raw.(type) {
-			case bool:
-				return v, true
-			case float64:
-				return v != 0, true
-			case string:
-				switch strings.ToLower(strings.TrimSpace(v)) {
-				case "true", "1", "yes":
-					return true, true
-				case "false", "0", "no":
-					return false, true
-				}
-			}
-		}
-	}
-	return false, false
+	return resolve.BoolOption(g, keys...)
 }
 
-// mergeJSONOption merges JSON object strings from graph inputs into dst.
+// mergeJSONOption delegates to resolve.MergeJSONOption.
 func mergeJSONOption(g workflow.Graph, dst map[string]any, keys ...string) {
-	for _, key := range keys {
-		raw, ok := stringOption(g, key)
-		if !ok {
-			continue
-		}
-		var extra map[string]any
-		if err := json.Unmarshal([]byte(raw), &extra); err != nil {
-			continue
-		}
-		for k, v := range extra {
-			dst[k] = v
-		}
-	}
+	resolve.MergeJSONOption(g, dst, keys...)
 }
