@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -25,6 +26,7 @@ const defaultPollInterval = 2 * time.Second
 type Config struct {
 	BaseURL           string
 	ClientID          string
+	APIKey            string
 	HTTPClient        *http.Client
 	WaitForCompletion bool
 	PollInterval      time.Duration
@@ -34,6 +36,7 @@ type Config struct {
 type Engine struct {
 	baseURL           string
 	clientID          string
+	apiKey            string
 	httpClient        *http.Client
 	waitForCompletion bool
 	pollInterval      time.Duration
@@ -48,9 +51,15 @@ func New(cfg Config) *Engine {
 		pollInterval = defaultPollInterval
 	}
 
+	apiKey := cfg.APIKey
+	if apiKey == "" {
+		apiKey = os.Getenv("COMFY_CLOUD_API_KEY")
+	}
+
 	return &Engine{
 		baseURL:           strings.TrimRight(cfg.BaseURL, "/"),
 		clientID:          cfg.ClientID,
+		apiKey:            apiKey,
 		httpClient:        httpClient,
 		waitForCompletion: cfg.WaitForCompletion,
 		pollInterval:      pollInterval,
@@ -84,6 +93,7 @@ func (e *Engine) Execute(ctx context.Context, graph workflow.Graph) (engine.Resu
 		return engine.Result{}, fmt.Errorf("comfyui: build prompt request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	e.setAuth(req)
 
 	resp, err := e.httpClient.Do(req)
 	if err != nil {
@@ -142,6 +152,7 @@ func (e *Engine) fetchResult(ctx context.Context, promptID string) (string, bool
 	if err != nil {
 		return "", false, fmt.Errorf("comfyui: build history request: %w", err)
 	}
+	e.setAuth(req)
 
 	resp, err := e.httpClient.Do(req)
 	if err != nil {
@@ -232,6 +243,12 @@ func buildViewURL(baseURL string, asset historyAsset) string {
 	return strings.TrimRight(baseURL, "/") + "/view?" + values.Encode()
 }
 
+func (e *Engine) setAuth(req *http.Request) {
+	if e.apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+e.apiKey)
+	}
+}
+
 // Capabilities implements engine.Describer.
 func (e *Engine) Capabilities() engine.Capability {
 	return engine.Capability{
@@ -245,5 +262,6 @@ func (e *Engine) Capabilities() engine.Capability {
 func ConfigSchema() []engine.ConfigField {
 	return []engine.ConfigField{
 		{Key: "baseUrl", Label: "Base URL", Type: "url", Required: true, Description: "ComfyUI server URL (e.g. http://localhost:8188)"},
+		{Key: "apiKey", Label: "API Key", Type: "string", Required: false, EnvVar: "COMFY_CLOUD_API_KEY", Description: "Comfy Cloud API key for authentication"},
 	}
 }

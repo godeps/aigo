@@ -50,6 +50,37 @@ func TestExecuteReturnsPromptID(t *testing.T) {
 	}
 }
 
+func TestExecute_WithAPIKey(t *testing.T) {
+	t.Parallel()
+
+	var gotAuth string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/prompt" {
+			gotAuth = r.Header.Get("Authorization")
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"prompt_id":"prompt-789"}`))
+			return
+		}
+		t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	e := New(Config{
+		BaseURL:  server.URL,
+		APIKey:   "test-api-key",
+	})
+
+	_, err := e.Execute(context.Background(), workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "hello"}},
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if gotAuth != "Bearer test-api-key" {
+		t.Fatalf("Authorization header = %q, want %q", gotAuth, "Bearer test-api-key")
+	}
+}
+
 func TestExecuteWaitsForHistory(t *testing.T) {
 	t.Parallel()
 
