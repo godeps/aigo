@@ -10,7 +10,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -32,10 +31,7 @@ const (
 	defaultPollInterval = 5 * time.Second
 )
 
-var (
-	ErrMissingAPIKey = errors.New("midjourney: missing API key (set Config.APIKey or MIDJOURNEY_API_KEY)")
-	ErrMissingPrompt = errors.New("midjourney: missing prompt in workflow graph")
-)
+var ErrMissingPrompt = fmt.Errorf("midjourney: missing prompt in workflow graph")
 
 // Config configures the MidJourney proxy engine.
 type Config struct {
@@ -45,6 +41,7 @@ type Config struct {
 	HTTPClient        *http.Client
 	WaitForCompletion bool
 	PollInterval      time.Duration
+	OnProgress        epoll.OnProgress
 }
 
 // Engine implements engine.Engine for MidJourney via a proxy API.
@@ -55,6 +52,7 @@ type Engine struct {
 	httpClient   *http.Client
 	waitImage    bool
 	pollInterval time.Duration
+	onProgress   epoll.OnProgress
 }
 
 // New creates a MidJourney engine instance.
@@ -86,19 +84,13 @@ func New(cfg Config) *Engine {
 		httpClient:   hc,
 		waitImage:    cfg.WaitForCompletion,
 		pollInterval: poll,
+		onProgress:   cfg.OnProgress,
 	}
 }
 
 // resolveAPIKey returns the configured API key, falling back to the environment.
 func (e *Engine) resolveAPIKey() (string, error) {
-	apiKey := e.apiKey
-	if apiKey == "" {
-		apiKey = os.Getenv("MIDJOURNEY_API_KEY")
-	}
-	if apiKey == "" {
-		return "", ErrMissingAPIKey
-	}
-	return apiKey, nil
+	return engine.ResolveKey(e.apiKey, "GOAPI_KEY")
 }
 
 // Execute generates an image via the MidJourney proxy API.
@@ -162,7 +154,7 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 
 // poll checks the task status until it finishes or fails.
 func (e *Engine) poll(ctx context.Context, apiKey, taskID string) (string, error) {
-	return epoll.Poll(ctx, epoll.Config{Interval: e.pollInterval}, func(ctx context.Context) (string, bool, error) {
+	return epoll.Poll(ctx, epoll.Config{Interval: e.pollInterval, OnProgress: e.onProgress}, func(ctx context.Context) (string, bool, error) {
 		fetchPayload, err := json.Marshal(map[string]string{"task_id": taskID})
 		if err != nil {
 			return "", false, fmt.Errorf("midjourney: marshal fetch: %w", err)

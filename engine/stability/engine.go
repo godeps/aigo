@@ -37,7 +37,6 @@ const (
 )
 
 var (
-	ErrMissingAPIKey = errors.New("stability: missing API key (set Config.APIKey or STABILITY_API_KEY)")
 	ErrMissingPrompt = errors.New("stability: missing prompt in workflow graph")
 )
 
@@ -88,12 +87,9 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 		return engine.Result{}, fmt.Errorf("stability: validate graph: %w", err)
 	}
 
-	apiKey := e.apiKey
-	if apiKey == "" {
-		apiKey = os.Getenv("STABILITY_API_KEY")
-	}
-	if apiKey == "" {
-		return engine.Result{}, ErrMissingAPIKey
+	apiKey, err := engine.ResolveKey(e.apiKey, "STABILITY_API_KEY")
+	if err != nil {
+		return engine.Result{}, err
 	}
 
 	prompt, err := resolve.ExtractPrompt(g)

@@ -35,7 +35,6 @@ const (
 )
 
 var (
-	ErrMissingAPIKey  = errors.New("suno: missing API key (set Config.APIKey or SUNO_API_KEY)")
 	ErrMissingBaseURL = errors.New("suno: missing base URL (set Config.BaseURL or SUNO_BASE_URL)")
 	ErrMissingPrompt  = errors.New("suno: missing prompt in workflow graph")
 )
@@ -48,6 +47,7 @@ type Config struct {
 	HTTPClient        *http.Client
 	WaitForCompletion bool
 	PollInterval      time.Duration
+	OnProgress        epoll.OnProgress
 }
 
 // Engine implements engine.Engine for Suno.
@@ -58,6 +58,7 @@ type Engine struct {
 	httpClient   *http.Client
 	waitMusic    bool
 	pollInterval time.Duration
+	onProgress   epoll.OnProgress
 }
 
 // New creates a Suno engine instance.
@@ -86,6 +87,7 @@ func New(cfg Config) *Engine {
 		httpClient:   hc,
 		waitMusic:    cfg.WaitForCompletion,
 		pollInterval: poll,
+		onProgress:   cfg.OnProgress,
 	}
 }
 
@@ -98,12 +100,9 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 		return engine.Result{}, ErrMissingBaseURL
 	}
 
-	apiKey := e.apiKey
-	if apiKey == "" {
-		apiKey = os.Getenv("SUNO_API_KEY")
-	}
-	if apiKey == "" {
-		return engine.Result{}, ErrMissingAPIKey
+	apiKey, err := engine.ResolveKey(e.apiKey, "SUNO_API_KEY")
+	if err != nil {
+		return engine.Result{}, err
 	}
 
 	prompt, err := resolve.ExtractPrompt(g)
@@ -173,7 +172,7 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 }
 
 func (e *Engine) poll(ctx context.Context, apiKey, clipID string) (string, error) {
-	return epoll.Poll(ctx, epoll.Config{Interval: e.pollInterval}, func(ctx context.Context) (string, bool, error) {
+	return epoll.Poll(ctx, epoll.Config{Interval: e.pollInterval, OnProgress: e.onProgress}, func(ctx context.Context) (string, bool, error) {
 		url := fmt.Sprintf("%s/api/feed/%s", e.baseURL, clipID)
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		if err != nil {
@@ -227,12 +226,9 @@ func (e *Engine) Resume(ctx context.Context, remoteID string) (engine.Result, er
 	if e.baseURL == "" {
 		return engine.Result{}, ErrMissingBaseURL
 	}
-	apiKey := e.apiKey
-	if apiKey == "" {
-		apiKey = os.Getenv("SUNO_API_KEY")
-	}
-	if apiKey == "" {
-		return engine.Result{}, ErrMissingAPIKey
+	apiKey, err := engine.ResolveKey(e.apiKey, "SUNO_API_KEY")
+	if err != nil {
+		return engine.Result{}, err
 	}
 	url, err := e.poll(ctx, apiKey, remoteID)
 	if err != nil {

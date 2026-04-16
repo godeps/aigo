@@ -34,7 +34,6 @@ const (
 )
 
 var (
-	ErrMissingAPIKey = errors.New("ideogram: missing API key (set Config.APIKey or IDEOGRAM_API_KEY)")
 	ErrMissingPrompt = errors.New("ideogram: missing prompt in workflow graph")
 )
 
@@ -85,12 +84,9 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 		return engine.Result{}, fmt.Errorf("ideogram: validate graph: %w", err)
 	}
 
-	apiKey := e.apiKey
-	if apiKey == "" {
-		apiKey = os.Getenv("IDEOGRAM_API_KEY")
-	}
-	if apiKey == "" {
-		return engine.Result{}, ErrMissingAPIKey
+	apiKey, err := engine.ResolveKey(e.apiKey, "IDEOGRAM_API_KEY")
+	if err != nil {
+		return engine.Result{}, err
 	}
 
 	prompt, err := resolve.ExtractPrompt(g)

@@ -8,7 +8,6 @@ package runninghub
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -27,10 +26,7 @@ const (
 	defaultPollInterval = 5 * time.Second
 )
 
-var (
-	ErrMissingAPIKey  = errors.New("runninghub: missing API key (set Config.APIKey or RH_API_KEY)")
-	ErrMissingEndpoint = errors.New("runninghub: missing endpoint")
-)
+var ErrMissingEndpoint = fmt.Errorf("runninghub: missing endpoint")
 
 // Config configures the RunningHub engine.
 type Config struct {
@@ -41,6 +37,7 @@ type Config struct {
 	HTTPClient        *http.Client
 	WaitForCompletion bool
 	PollInterval      time.Duration
+	OnProgress        epoll.OnProgress
 }
 
 // Engine implements engine.Engine for RunningHub.
@@ -52,6 +49,7 @@ type Engine struct {
 	httpClient   *http.Client
 	waitResult   bool
 	pollInterval time.Duration
+	onProgress   epoll.OnProgress
 }
 
 // New creates a RunningHub engine instance.
@@ -79,6 +77,7 @@ func New(cfg Config) *Engine {
 		httpClient:   hc,
 		waitResult:   cfg.WaitForCompletion,
 		pollInterval: poll,
+		onProgress:   cfg.OnProgress,
 	}
 }
 
@@ -187,7 +186,7 @@ func (e *Engine) buildPayload(g workflow.Graph) (map[string]any, error) {
 func (e *Engine) poll(ctx context.Context, apiKey, taskID string) (string, error) {
 	queryBody, _ := json.Marshal(map[string]any{"taskId": taskID})
 
-	return epoll.Poll(ctx, epoll.Config{Interval: e.pollInterval}, func(ctx context.Context) (string, bool, error) {
+	return epoll.Poll(ctx, epoll.Config{Interval: e.pollInterval, OnProgress: e.onProgress}, func(ctx context.Context) (string, bool, error) {
 		respBody, err := httpx.DoJSON(ctx, e.httpClient, http.MethodPost, e.baseURL+"/query", apiKey, queryBody, "runninghub")
 		if err != nil {
 			return "", false, err
@@ -232,14 +231,7 @@ func (e *Engine) poll(ctx context.Context, apiKey, taskID string) (string, error
 }
 
 func (e *Engine) resolveAPIKey() (string, error) {
-	ak := e.apiKey
-	if ak == "" {
-		ak = os.Getenv("RH_API_KEY")
-	}
-	if ak == "" {
-		return "", ErrMissingAPIKey
-	}
-	return ak, nil
+	return engine.ResolveKey(e.apiKey, "RH_API_KEY")
 }
 
 // Resume implements engine.Resumer — resumes polling a previously submitted task.

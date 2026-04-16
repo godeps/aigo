@@ -11,7 +11,6 @@ package hailuo
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -40,10 +39,7 @@ const (
 	ModelT2V01Director = "T2V-01-Director"
 )
 
-var (
-	ErrMissingAPIKey = errors.New("hailuo: missing API key (set Config.APIKey or HAILUO_API_KEY)")
-	ErrMissingPrompt = errors.New("hailuo: missing prompt in workflow graph")
-)
+var ErrMissingPrompt = fmt.Errorf("hailuo: missing prompt in workflow graph")
 
 // Config configures the Hailuo video engine.
 type Config struct {
@@ -53,6 +49,7 @@ type Config struct {
 	HTTPClient        *http.Client
 	WaitForCompletion bool
 	PollInterval      time.Duration
+	OnProgress        epoll.OnProgress
 }
 
 // Engine implements engine.Engine for Hailuo video generation.
@@ -63,6 +60,7 @@ type Engine struct {
 	httpClient   *http.Client
 	waitResult   bool
 	pollInterval time.Duration
+	onProgress   epoll.OnProgress
 }
 
 // New creates a Hailuo video engine instance.
@@ -94,6 +92,7 @@ func New(cfg Config) *Engine {
 		httpClient:   hc,
 		waitResult:   cfg.WaitForCompletion,
 		pollInterval: poll,
+		onProgress:   cfg.OnProgress,
 	}
 }
 
@@ -170,21 +169,11 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 }
 
 func (e *Engine) resolveAPIKey() (string, error) {
-	ak := e.apiKey
-	if ak == "" {
-		ak = os.Getenv("HAILUO_API_KEY")
-	}
-	if ak == "" {
-		ak = os.Getenv("MINIMAX_API_KEY")
-	}
-	if ak == "" {
-		return "", ErrMissingAPIKey
-	}
-	return ak, nil
+	return engine.ResolveKey(e.apiKey, "HAILUO_API_KEY", "MINIMAX_API_KEY")
 }
 
 func (e *Engine) poll(ctx context.Context, apiKey, taskID string) (string, error) {
-	return epoll.Poll(ctx, epoll.Config{Interval: e.pollInterval}, func(ctx context.Context) (string, bool, error) {
+	return epoll.Poll(ctx, epoll.Config{Interval: e.pollInterval, OnProgress: e.onProgress}, func(ctx context.Context) (string, bool, error) {
 		url := e.baseURL + "/v1/query/video_generation?task_id=" + taskID
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		if err != nil {

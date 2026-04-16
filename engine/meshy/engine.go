@@ -9,7 +9,6 @@ package meshy
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -31,10 +30,7 @@ const (
 	defaultEndpoint     = "text-to-3d"
 )
 
-var (
-	ErrMissingAPIKey = errors.New("meshy: missing API key (set Config.APIKey or MESHY_API_KEY)")
-	ErrMissingPrompt = errors.New("meshy: missing prompt in workflow graph")
-)
+var ErrMissingPrompt = fmt.Errorf("meshy: missing prompt in workflow graph")
 
 // Config configures the Meshy engine.
 type Config struct {
@@ -44,6 +40,7 @@ type Config struct {
 	HTTPClient        *http.Client
 	WaitForCompletion bool
 	PollInterval      time.Duration
+	OnProgress        epoll.OnProgress
 }
 
 // Engine implements engine.Engine for Meshy.
@@ -54,6 +51,7 @@ type Engine struct {
 	httpClient   *http.Client
 	waitResult   bool
 	pollInterval time.Duration
+	onProgress   epoll.OnProgress
 }
 
 // New creates a Meshy engine instance.
@@ -85,19 +83,13 @@ func New(cfg Config) *Engine {
 		httpClient:   hc,
 		waitResult:   cfg.WaitForCompletion,
 		pollInterval: poll,
+		onProgress:   cfg.OnProgress,
 	}
 }
 
 // resolveAPIKey returns the configured API key, falling back to the environment.
 func (e *Engine) resolveAPIKey() (string, error) {
-	apiKey := e.apiKey
-	if apiKey == "" {
-		apiKey = os.Getenv("MESHY_API_KEY")
-	}
-	if apiKey == "" {
-		return "", ErrMissingAPIKey
-	}
-	return apiKey, nil
+	return engine.ResolveKey(e.apiKey, "MESHY_API_KEY")
 }
 
 // Execute generates a 3D model via the Meshy API.
@@ -192,7 +184,7 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 }
 
 func (e *Engine) poll(ctx context.Context, apiKey, endpoint, taskID string) (string, error) {
-	return epoll.Poll(ctx, epoll.Config{Interval: e.pollInterval}, func(ctx context.Context) (string, bool, error) {
+	return epoll.Poll(ctx, epoll.Config{Interval: e.pollInterval, OnProgress: e.onProgress}, func(ctx context.Context) (string, bool, error) {
 		url := e.baseURL + "/openapi/v2/" + endpoint + "/" + taskID
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		if err != nil {

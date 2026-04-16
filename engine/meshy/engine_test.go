@@ -215,9 +215,6 @@ func TestMissingAPIKey(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for missing API key")
 	}
-	if err != ErrMissingAPIKey {
-		t.Fatalf("error = %v, want ErrMissingAPIKey", err)
-	}
 }
 
 func TestConfigSchema(t *testing.T) {

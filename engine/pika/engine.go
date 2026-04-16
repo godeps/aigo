@@ -36,7 +36,6 @@ const (
 )
 
 var (
-	ErrMissingAPIKey = errors.New("pika: missing API key (set Config.APIKey or PIKA_API_KEY)")
 	ErrMissingPrompt = errors.New("pika: missing prompt in workflow graph")
 )
 
@@ -48,6 +47,7 @@ type Config struct {
 	HTTPClient        *http.Client
 	WaitForCompletion bool
 	PollInterval      time.Duration
+	OnProgress        epoll.OnProgress
 }
 
 // Engine implements engine.Engine for Pika.
@@ -58,6 +58,7 @@ type Engine struct {
 	httpClient   *http.Client
 	waitVideo    bool
 	pollInterval time.Duration
+	onProgress   epoll.OnProgress
 }
 
 // New creates a Pika engine instance.
@@ -89,6 +90,7 @@ func New(cfg Config) *Engine {
 		httpClient:   hc,
 		waitVideo:    cfg.WaitForCompletion,
 		pollInterval: poll,
+		onProgress:   cfg.OnProgress,
 	}
 }
 
@@ -98,12 +100,9 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 		return engine.Result{}, fmt.Errorf("pika: validate graph: %w", err)
 	}
 
-	apiKey := e.apiKey
-	if apiKey == "" {
-		apiKey = os.Getenv("PIKA_API_KEY")
-	}
-	if apiKey == "" {
-		return engine.Result{}, ErrMissingAPIKey
+	apiKey, err := engine.ResolveKey(e.apiKey, "PIKA_API_KEY")
+	if err != nil {
+		return engine.Result{}, err
 	}
 
 	prompt, err := resolve.ExtractPrompt(g)
@@ -170,7 +169,7 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 }
 
 func (e *Engine) poll(ctx context.Context, apiKey, taskID string) (string, error) {
-	return epoll.Poll(ctx, epoll.Config{Interval: e.pollInterval}, func(ctx context.Context) (string, bool, error) {
+	return epoll.Poll(ctx, epoll.Config{Interval: e.pollInterval, OnProgress: e.onProgress}, func(ctx context.Context) (string, bool, error) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, e.baseURL+"/v1/generate/"+taskID, nil)
 		if err != nil {
 			return "", false, fmt.Errorf("pika: build poll: %w", err)
@@ -221,12 +220,9 @@ func (e *Engine) poll(ctx context.Context, apiKey, taskID string) (string, error
 
 // Resume implements engine.Resumer — resumes polling a previously submitted task.
 func (e *Engine) Resume(ctx context.Context, remoteID string) (engine.Result, error) {
-	apiKey := e.apiKey
-	if apiKey == "" {
-		apiKey = os.Getenv("PIKA_API_KEY")
-	}
-	if apiKey == "" {
-		return engine.Result{}, ErrMissingAPIKey
+	apiKey, err := engine.ResolveKey(e.apiKey, "PIKA_API_KEY")
+	if err != nil {
+		return engine.Result{}, err
 	}
 	url, err := e.poll(ctx, apiKey, remoteID)
 	if err != nil {

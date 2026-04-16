@@ -15,7 +15,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -47,11 +46,7 @@ const (
 	TemplateKlingImg2Vid  = "180f33c6748041b48593030156d2a71d"
 )
 
-var (
-	ErrMissingAccessKey = errors.New("liblib: missing AccessKey (set Config.AccessKey or LIBLIB_ACCESS_KEY)")
-	ErrMissingSecretKey = errors.New("liblib: missing SecretKey (set Config.SecretKey or LIBLIB_SECRET_KEY)")
-	ErrMissingPrompt    = errors.New("liblib: missing prompt in workflow graph")
-)
+var ErrMissingPrompt = fmt.Errorf("liblib: missing prompt in workflow graph")
 
 // Config configures the LibLib engine.
 type Config struct {
@@ -63,6 +58,7 @@ type Config struct {
 	HTTPClient        *http.Client
 	WaitForCompletion bool
 	PollInterval      time.Duration // default: 5s
+	OnProgress        epoll.OnProgress
 }
 
 // Engine implements engine.Engine for LibLib.
@@ -75,6 +71,7 @@ type Engine struct {
 	httpClient   *http.Client
 	waitResult   bool
 	pollInterval time.Duration
+	onProgress   epoll.OnProgress
 }
 
 // New creates a LibLib engine instance.
@@ -108,6 +105,7 @@ func New(cfg Config) *Engine {
 		httpClient:   hc,
 		waitResult:   cfg.WaitForCompletion,
 		pollInterval: poll,
+		onProgress:   cfg.OnProgress,
 	}
 }
 
@@ -258,21 +256,7 @@ type apiResponse struct {
 }
 
 func (e *Engine) resolveKeys() (string, string, error) {
-	ak := e.accessKey
-	if ak == "" {
-		ak = os.Getenv("LIBLIB_ACCESS_KEY")
-	}
-	if ak == "" {
-		return "", "", ErrMissingAccessKey
-	}
-	sk := e.secretKey
-	if sk == "" {
-		sk = os.Getenv("LIBLIB_SECRET_KEY")
-	}
-	if sk == "" {
-		return "", "", ErrMissingSecretKey
-	}
-	return ak, sk, nil
+	return engine.ResolveKeyPair(e.accessKey, e.secretKey, []string{"LIBLIB_ACCESS_KEY"}, []string{"LIBLIB_SECRET_KEY"})
 }
 
 // signURL builds a signed URL with HMAC-SHA1 authentication.
@@ -325,7 +309,7 @@ func (e *Engine) doSignedRequest(ctx context.Context, ak, sk, uri string, body [
 func (e *Engine) poll(ctx context.Context, ak, sk, generateUUID string) (string, error) {
 	pollBody, _ := json.Marshal(map[string]string{"generateUuid": generateUUID})
 
-	return epoll.Poll(ctx, epoll.Config{Interval: e.pollInterval}, func(ctx context.Context) (string, bool, error) {
+	return epoll.Poll(ctx, epoll.Config{Interval: e.pollInterval, OnProgress: e.onProgress}, func(ctx context.Context) (string, bool, error) {
 		respBody, err := e.doSignedRequest(ctx, ak, sk, "/api/generate/webui/status", pollBody)
 		if err != nil {
 			return "", false, err

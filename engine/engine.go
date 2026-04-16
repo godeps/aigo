@@ -20,8 +20,24 @@ const (
 
 // Result is the structured output of Engine.Execute.
 type Result struct {
-	Value string
-	Kind  OutputKind
+	Value   string
+	Kind    OutputKind
+	Results []ResultItem // multiple results for batch generation; may be nil for single-result engines
+}
+
+// ResultItem represents a single output in a multi-result response.
+type ResultItem struct {
+	Value    string            // output URL, data URI, or text
+	Kind     OutputKind        // classification of Value
+	Metadata map[string]string // engine-specific metadata (e.g. "seed", "index")
+}
+
+// WebhookConfig is a common webhook configuration for engines that support
+// completion notifications via webhook.
+type WebhookConfig struct {
+	URL     string            // webhook endpoint
+	Secret  string            // optional signing secret for verification
+	Headers map[string]string // optional additional headers
 }
 
 // Engine executes a workflow graph against a concrete backend.

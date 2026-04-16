@@ -36,9 +36,8 @@ const (
 )
 
 var (
-	ErrMissingAPIKey = errors.New("elevenlabs: missing API key (set Config.APIKey or ELEVENLABS_API_KEY)")
-	ErrMissingText   = errors.New("elevenlabs: missing text for TTS (set prompt)")
-	ErrMissingVoice  = errors.New("elevenlabs: missing voice ID")
+	ErrMissingText  = errors.New("elevenlabs: missing text for TTS (set prompt)")
+	ErrMissingVoice = errors.New("elevenlabs: missing voice ID")
 )
 
 // Config configures the ElevenLabs engine.
@@ -91,12 +90,9 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 		return engine.Result{}, fmt.Errorf("elevenlabs: validate graph: %w", err)
 	}
 
-	apiKey := e.apiKey
-	if apiKey == "" {
-		apiKey = os.Getenv("ELEVENLABS_API_KEY")
-	}
-	if apiKey == "" {
-		return engine.Result{}, ErrMissingAPIKey
+	apiKey, err := engine.ResolveKey(e.apiKey, "ELEVENLABS_API_KEY")
+	if err != nil {
+		return engine.Result{}, err
 	}
 
 	text, err := resolve.ExtractPrompt(g)

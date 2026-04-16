@@ -43,7 +43,6 @@ const (
 )
 
 var (
-	ErrMissingAPIKey = errors.New("fal: missing API key (set Config.APIKey or FAL_KEY)")
 	ErrMissingModel  = errors.New("fal: missing model")
 	ErrMissingPrompt = errors.New("fal: missing prompt in workflow graph")
 )
@@ -56,6 +55,7 @@ type Config struct {
 	HTTPClient        *http.Client
 	WaitForCompletion bool
 	PollInterval      time.Duration
+	OnProgress        epoll.OnProgress
 }
 
 // Engine implements engine.Engine for Fal.ai.
@@ -66,6 +66,7 @@ type Engine struct {
 	httpClient   *http.Client
 	waitResult   bool
 	pollInterval time.Duration
+	onProgress   epoll.OnProgress
 }
 
 // New creates a Fal.ai engine instance.
@@ -92,6 +93,7 @@ func New(cfg Config) *Engine {
 		httpClient:   hc,
 		waitResult:   cfg.WaitForCompletion,
 		pollInterval: poll,
+		onProgress:   cfg.OnProgress,
 	}
 }
 
@@ -104,12 +106,9 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 		return engine.Result{}, ErrMissingModel
 	}
 
-	apiKey := e.apiKey
-	if apiKey == "" {
-		apiKey = os.Getenv("FAL_KEY")
-	}
-	if apiKey == "" {
-		return engine.Result{}, ErrMissingAPIKey
+	apiKey, err := engine.ResolveKey(e.apiKey, "FAL_KEY")
+	if err != nil {
+		return engine.Result{}, err
 	}
 
 	prompt, err := resolve.ExtractPrompt(g)
@@ -181,7 +180,7 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 
 func (e *Engine) poll(ctx context.Context, apiKey, reqID string) (engine.Result, error) {
 	// First poll status until complete.
-	_, err := epoll.Poll(ctx, epoll.Config{Interval: e.pollInterval}, func(ctx context.Context) (string, bool, error) {
+	_, err := epoll.Poll(ctx, epoll.Config{Interval: e.pollInterval, OnProgress: e.onProgress}, func(ctx context.Context) (string, bool, error) {
 		statusURL := fmt.Sprintf("%s/%s/requests/%s/status", e.queueURL, e.model, reqID)
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, statusURL, nil)
 		if err != nil {
@@ -286,12 +285,9 @@ func (e *Engine) doRequest(ctx context.Context, method, url, apiKey string, body
 
 // Resume implements engine.Resumer — resumes polling a previously submitted task.
 func (e *Engine) Resume(ctx context.Context, remoteID string) (engine.Result, error) {
-	apiKey := e.apiKey
-	if apiKey == "" {
-		apiKey = os.Getenv("FAL_KEY")
-	}
-	if apiKey == "" {
-		return engine.Result{}, ErrMissingAPIKey
+	apiKey, err := engine.ResolveKey(e.apiKey, "FAL_KEY")
+	if err != nil {
+		return engine.Result{}, err
 	}
 	return e.poll(ctx, apiKey, remoteID)
 }

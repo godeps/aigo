@@ -31,7 +31,6 @@ const (
 )
 
 var (
-	ErrMissingAPIKey = errors.New("replicate: missing API key (set Config.APIKey or REPLICATE_API_TOKEN)")
 	ErrMissingModel  = errors.New("replicate: missing model version")
 	ErrMissingPrompt = errors.New("replicate: missing prompt in workflow graph")
 )
@@ -44,6 +43,7 @@ type Config struct {
 	HTTPClient        *http.Client
 	WaitForCompletion bool
 	PollInterval      time.Duration
+	OnProgress        epoll.OnProgress
 }
 
 // Engine implements engine.Engine for Replicate.
@@ -54,6 +54,7 @@ type Engine struct {
 	httpClient   *http.Client
 	waitResult   bool
 	pollInterval time.Duration
+	onProgress   epoll.OnProgress
 }
 
 // New creates a Replicate engine instance.
@@ -80,6 +81,7 @@ func New(cfg Config) *Engine {
 		httpClient:   hc,
 		waitResult:   cfg.WaitForCompletion,
 		pollInterval: poll,
+		onProgress:   cfg.OnProgress,
 	}
 }
 
@@ -92,12 +94,9 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 		return engine.Result{}, ErrMissingModel
 	}
 
-	apiKey := e.apiKey
-	if apiKey == "" {
-		apiKey = os.Getenv("REPLICATE_API_TOKEN")
-	}
-	if apiKey == "" {
-		return engine.Result{}, ErrMissingAPIKey
+	apiKey, err := engine.ResolveKey(e.apiKey, "REPLICATE_API_TOKEN")
+	if err != nil {
+		return engine.Result{}, err
 	}
 
 	prompt, err := resolve.ExtractPrompt(g)
@@ -173,7 +172,7 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 }
 
 func (e *Engine) poll(ctx context.Context, apiKey, predID string) (engine.Result, error) {
-	val, err := epoll.Poll(ctx, epoll.Config{Interval: e.pollInterval}, func(ctx context.Context) (string, bool, error) {
+	val, err := epoll.Poll(ctx, epoll.Config{Interval: e.pollInterval, OnProgress: e.onProgress}, func(ctx context.Context) (string, bool, error) {
 		url := e.baseURL + "/v1/predictions/" + predID
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		if err != nil {
@@ -250,12 +249,9 @@ func extractOutput(output any) (engine.Result, error) {
 
 // Resume implements engine.Resumer — resumes polling a previously submitted task.
 func (e *Engine) Resume(ctx context.Context, remoteID string) (engine.Result, error) {
-	apiKey := e.apiKey
-	if apiKey == "" {
-		apiKey = os.Getenv("REPLICATE_API_TOKEN")
-	}
-	if apiKey == "" {
-		return engine.Result{}, ErrMissingAPIKey
+	apiKey, err := engine.ResolveKey(e.apiKey, "REPLICATE_API_TOKEN")
+	if err != nil {
+		return engine.Result{}, err
 	}
 	return e.poll(ctx, apiKey, remoteID)
 }

@@ -9,7 +9,6 @@ package kling
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -50,10 +49,7 @@ var videoModels = map[string]bool{
 	ModelKlingV1:       true,
 }
 
-var (
-	ErrMissingAPIKey = errors.New("kling: missing API key (set Config.APIKey or KLING_API_KEY)")
-	ErrMissingPrompt = errors.New("kling: missing prompt in workflow graph")
-)
+var ErrMissingPrompt = fmt.Errorf("kling: missing prompt in workflow graph")
 
 // Config configures the Kling engine.
 type Config struct {
@@ -64,6 +60,7 @@ type Config struct {
 	HTTPClient        *http.Client
 	WaitForCompletion bool
 	PollInterval      time.Duration
+	OnProgress        epoll.OnProgress
 }
 
 // Engine implements engine.Engine for Kling.
@@ -75,6 +72,7 @@ type Engine struct {
 	httpClient   *http.Client
 	waitResult   bool
 	pollInterval time.Duration
+	onProgress   epoll.OnProgress
 }
 
 // New creates a Kling engine instance.
@@ -112,20 +110,14 @@ func New(cfg Config) *Engine {
 		httpClient:   hc,
 		waitResult:   cfg.WaitForCompletion,
 		pollInterval: poll,
+		onProgress:   cfg.OnProgress,
 	}
 }
 
 // resolveAPIKey returns the configured API key, falling back to the
 // KLING_API_KEY environment variable.
 func (e *Engine) resolveAPIKey() (string, error) {
-	ak := e.apiKey
-	if ak == "" {
-		ak = os.Getenv("KLING_API_KEY")
-	}
-	if ak == "" {
-		return "", ErrMissingAPIKey
-	}
-	return ak, nil
+	return engine.ResolveKey(e.apiKey, "KLING_API_KEY")
 }
 
 // Execute generates a video or image via the Kling API.
@@ -271,7 +263,7 @@ func (e *Engine) poll(ctx context.Context, apiKey, taskID, mediaType string) (st
 		pollPath = "/v1/images/" + taskID
 	}
 
-	return epoll.Poll(ctx, epoll.Config{Interval: e.pollInterval}, func(ctx context.Context) (string, bool, error) {
+	return epoll.Poll(ctx, epoll.Config{Interval: e.pollInterval, OnProgress: e.onProgress}, func(ctx context.Context) (string, bool, error) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, e.baseURL+pollPath, nil)
 		if err != nil {
 			return "", false, fmt.Errorf("kling: build poll: %w", err)

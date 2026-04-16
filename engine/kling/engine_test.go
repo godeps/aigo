@@ -263,13 +263,13 @@ func TestMissingAPIKey(t *testing.T) {
 	}
 
 	_, err := e.Execute(context.Background(), graph)
-	if err != ErrMissingAPIKey {
-		t.Fatalf("error = %v, want ErrMissingAPIKey", err)
+	if err == nil {
+		t.Fatal("expected error for missing API key")
 	}
 
 	_, err = e.Resume(context.Background(), "some-id")
-	if err != ErrMissingAPIKey {
-		t.Fatalf("Resume error = %v, want ErrMissingAPIKey", err)
+	if err == nil {
+		t.Fatal("expected error for missing API key on Resume")
 	}
 }
 

@@ -7,7 +7,6 @@ package comfydeploy
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -27,10 +26,7 @@ const (
 	defaultPollInterval = 3 * time.Second
 )
 
-var (
-	ErrMissingAPIToken    = errors.New("comfydeploy: missing API token (set Config.APIToken or COMFYDEPLOY_API_TOKEN)")
-	ErrMissingDeploymentID = errors.New("comfydeploy: deployment ID is required")
-)
+var ErrMissingDeploymentID = fmt.Errorf("comfydeploy: deployment ID is required")
 
 // Config configures the ComfyDeploy engine.
 type Config struct {
@@ -41,6 +37,7 @@ type Config struct {
 	WaitForCompletion bool
 	PollInterval      time.Duration
 	Webhook           string // optional
+	OnProgress        epoll.OnProgress
 }
 
 // Engine implements engine.Engine for ComfyDeploy.
@@ -52,6 +49,7 @@ type Engine struct {
 	waitForCompletion bool
 	pollInterval time.Duration
 	webhook      string
+	onProgress   epoll.OnProgress
 }
 
 // New creates a ComfyDeploy engine instance.
@@ -79,6 +77,7 @@ func New(cfg Config) *Engine {
 		waitForCompletion: cfg.WaitForCompletion,
 		pollInterval:      poll,
 		webhook:           strings.TrimSpace(cfg.Webhook),
+		onProgress:        cfg.OnProgress,
 	}
 }
 
@@ -209,7 +208,7 @@ type pollResponse struct {
 }
 
 func (e *Engine) poll(ctx context.Context, apiToken, runID string) (string, error) {
-	return epoll.Poll(ctx, epoll.Config{Interval: e.pollInterval}, func(ctx context.Context) (string, bool, error) {
+	return epoll.Poll(ctx, epoll.Config{Interval: e.pollInterval, OnProgress: e.onProgress}, func(ctx context.Context) (string, bool, error) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, e.baseURL+"/run", nil)
 		if err != nil {
 			return "", false, fmt.Errorf("comfydeploy: build poll: %w", err)
@@ -277,14 +276,7 @@ func firstOutputURL(pr pollResponse) string {
 }
 
 func (e *Engine) resolveAPIToken() (string, error) {
-	tok := e.apiToken
-	if tok == "" {
-		tok = os.Getenv("COMFYDEPLOY_API_TOKEN")
-	}
-	if tok == "" {
-		return "", ErrMissingAPIToken
-	}
-	return tok, nil
+	return engine.ResolveKey(e.apiToken, "COMFYDEPLOY_API_TOKEN")
 }
 
 // Resume implements engine.Resumer — resumes polling a previously submitted run.

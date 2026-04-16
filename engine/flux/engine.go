@@ -39,7 +39,6 @@ const (
 )
 
 var (
-	ErrMissingAPIKey = errors.New("flux: missing API key (set Config.APIKey or BFL_API_KEY)")
 	ErrMissingPrompt = errors.New("flux: missing prompt in workflow graph")
 )
 
@@ -51,6 +50,7 @@ type Config struct {
 	HTTPClient        *http.Client
 	WaitForCompletion bool
 	PollInterval      time.Duration
+	OnProgress        epoll.OnProgress
 }
 
 // Engine implements engine.Engine for FLUX.
@@ -61,6 +61,7 @@ type Engine struct {
 	httpClient   *http.Client
 	waitImage    bool
 	pollInterval time.Duration
+	onProgress   epoll.OnProgress
 }
 
 // New creates a FLUX engine instance.
@@ -92,6 +93,7 @@ func New(cfg Config) *Engine {
 		httpClient:   hc,
 		waitImage:    cfg.WaitForCompletion,
 		pollInterval: poll,
+		onProgress:   cfg.OnProgress,
 	}
 }
 
@@ -101,12 +103,9 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 		return engine.Result{}, fmt.Errorf("flux: validate graph: %w", err)
 	}
 
-	apiKey := e.apiKey
-	if apiKey == "" {
-		apiKey = os.Getenv("BFL_API_KEY")
-	}
-	if apiKey == "" {
-		return engine.Result{}, ErrMissingAPIKey
+	apiKey, err := engine.ResolveKey(e.apiKey, "BFL_API_KEY")
+	if err != nil {
+		return engine.Result{}, err
 	}
 
 	prompt, err := resolve.ExtractPrompt(g)
@@ -165,7 +164,7 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 }
 
 func (e *Engine) poll(ctx context.Context, apiKey, taskID string) (string, error) {
-	return epoll.Poll(ctx, epoll.Config{Interval: e.pollInterval}, func(ctx context.Context) (string, bool, error) {
+	return epoll.Poll(ctx, epoll.Config{Interval: e.pollInterval, OnProgress: e.onProgress}, func(ctx context.Context) (string, bool, error) {
 		url := fmt.Sprintf("%s/v1/get_result?id=%s", e.baseURL, taskID)
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		if err != nil {
@@ -237,12 +236,9 @@ func (e *Engine) doRequest(ctx context.Context, method, url, apiKey string, body
 
 // Resume implements engine.Resumer — resumes polling a previously submitted task.
 func (e *Engine) Resume(ctx context.Context, remoteID string) (engine.Result, error) {
-	apiKey := e.apiKey
-	if apiKey == "" {
-		apiKey = os.Getenv("BFL_API_KEY")
-	}
-	if apiKey == "" {
-		return engine.Result{}, ErrMissingAPIKey
+	apiKey, err := engine.ResolveKey(e.apiKey, "BFL_API_KEY")
+	if err != nil {
+		return engine.Result{}, err
 	}
 	url, err := e.poll(ctx, apiKey, remoteID)
 	if err != nil {

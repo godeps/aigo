@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -30,9 +29,6 @@ const (
 	defaultPollInterval = 5 * time.Second
 )
 
-var (
-	ErrMissingAPIKey = errors.New("hedra: missing API key (set Config.APIKey or HEDRA_API_KEY)")
-)
 
 // Config configures the Hedra engine.
 type Config struct {
@@ -41,6 +37,7 @@ type Config struct {
 	HTTPClient        *http.Client
 	WaitForCompletion bool
 	PollInterval      time.Duration
+	OnProgress        epoll.OnProgress
 }
 
 // Engine implements engine.Engine for Hedra character video generation.
@@ -50,6 +47,7 @@ type Engine struct {
 	httpClient   *http.Client
 	waitVideo    bool
 	pollInterval time.Duration
+	onProgress   epoll.OnProgress
 }
 
 // New creates a Hedra engine instance.
@@ -75,19 +73,13 @@ func New(cfg Config) *Engine {
 		httpClient:   hc,
 		waitVideo:    cfg.WaitForCompletion,
 		pollInterval: poll,
+		onProgress:   cfg.OnProgress,
 	}
 }
 
 // resolveAPIKey returns the configured or environment API key.
 func (e *Engine) resolveAPIKey() (string, error) {
-	apiKey := e.apiKey
-	if apiKey == "" {
-		apiKey = os.Getenv("HEDRA_API_KEY")
-	}
-	if apiKey == "" {
-		return "", ErrMissingAPIKey
-	}
-	return apiKey, nil
+	return engine.ResolveKey(e.apiKey, "HEDRA_API_KEY")
 }
 
 // Execute generates a character video via the Hedra API.
@@ -183,7 +175,7 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 }
 
 func (e *Engine) poll(ctx context.Context, apiKey, projectID string) (string, error) {
-	return epoll.Poll(ctx, epoll.Config{Interval: e.pollInterval}, func(ctx context.Context) (string, bool, error) {
+	return epoll.Poll(ctx, epoll.Config{Interval: e.pollInterval, OnProgress: e.onProgress}, func(ctx context.Context) (string, bool, error) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, e.baseURL+"/v1/projects/"+projectID, nil)
 		if err != nil {
 			return "", false, fmt.Errorf("hedra: build poll: %w", err)

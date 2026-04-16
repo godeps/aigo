@@ -9,7 +9,6 @@ package jimeng
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -40,10 +39,7 @@ const (
 	ModelJimeng20Pro = "jimeng-2.0-pro"
 )
 
-var (
-	ErrMissingAPIKey = errors.New("jimeng: missing API key (set Config.APIKey or JIMENG_API_KEY)")
-	ErrMissingPrompt = errors.New("jimeng: missing prompt in workflow graph")
-)
+var ErrMissingPrompt = fmt.Errorf("jimeng: missing prompt in workflow graph")
 
 // Config configures the Jimeng engine.
 type Config struct {
@@ -54,6 +50,7 @@ type Config struct {
 	HTTPClient        *http.Client
 	WaitForCompletion bool
 	PollInterval      time.Duration
+	OnProgress        epoll.OnProgress
 }
 
 // Engine implements engine.Engine for Jimeng.
@@ -65,6 +62,7 @@ type Engine struct {
 	httpClient   *http.Client
 	waitResult   bool
 	pollInterval time.Duration
+	onProgress   epoll.OnProgress
 }
 
 // New creates a Jimeng engine instance.
@@ -97,19 +95,13 @@ func New(cfg Config) *Engine {
 		httpClient:   hc,
 		waitResult:   cfg.WaitForCompletion,
 		pollInterval: poll,
+		onProgress:   cfg.OnProgress,
 	}
 }
 
 // resolveAPIKey returns the configured API key, falling back to JIMENG_API_KEY.
 func (e *Engine) resolveAPIKey() (string, error) {
-	apiKey := e.apiKey
-	if apiKey == "" {
-		apiKey = os.Getenv("JIMENG_API_KEY")
-	}
-	if apiKey == "" {
-		return "", ErrMissingAPIKey
-	}
-	return apiKey, nil
+	return engine.ResolveKey(e.apiKey, "JIMENG_API_KEY")
 }
 
 // isVideoModel returns true if the current model targets video generation.
@@ -291,7 +283,7 @@ func (e *Engine) poll(ctx context.Context, apiKey, taskID string) (string, error
 	if ep == "" {
 		ep = videoPath
 	}
-	return epoll.Poll(ctx, epoll.Config{Interval: e.pollInterval}, func(ctx context.Context) (string, bool, error) {
+	return epoll.Poll(ctx, epoll.Config{Interval: e.pollInterval, OnProgress: e.onProgress}, func(ctx context.Context) (string, bool, error) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, e.baseURL+ep+"/"+taskID, nil)
 		if err != nil {
 			return "", false, fmt.Errorf("jimeng: build poll: %w", err)

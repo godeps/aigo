@@ -51,7 +51,6 @@ var imageModels = map[string]bool{
 }
 
 var (
-	ErrMissingAPIKey = errors.New("luma: missing API key (set Config.APIKey or LUMA_API_KEY)")
 	ErrMissingPrompt = errors.New("luma: missing prompt in workflow graph")
 )
 
@@ -63,6 +62,7 @@ type Config struct {
 	HTTPClient        *http.Client
 	WaitForCompletion bool
 	PollInterval      time.Duration
+	OnProgress        epoll.OnProgress
 }
 
 // Engine implements engine.Engine for Luma.
@@ -73,6 +73,7 @@ type Engine struct {
 	httpClient   *http.Client
 	waitResult   bool
 	pollInterval time.Duration
+	onProgress   epoll.OnProgress
 }
 
 // New creates a Luma engine instance.
@@ -104,6 +105,7 @@ func New(cfg Config) *Engine {
 		httpClient:   hc,
 		waitResult:   cfg.WaitForCompletion,
 		pollInterval: poll,
+		onProgress:   cfg.OnProgress,
 	}
 }
 
@@ -113,12 +115,9 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 		return engine.Result{}, fmt.Errorf("luma: validate graph: %w", err)
 	}
 
-	apiKey := e.apiKey
-	if apiKey == "" {
-		apiKey = os.Getenv("LUMA_API_KEY")
-	}
-	if apiKey == "" {
-		return engine.Result{}, ErrMissingAPIKey
+	apiKey, err := engine.ResolveKey(e.apiKey, "LUMA_API_KEY")
+	if err != nil {
+		return engine.Result{}, err
 	}
 
 	prompt, err := resolve.ExtractPrompt(g)
@@ -235,7 +234,7 @@ func (e *Engine) handleAsyncResult(ctx context.Context, apiKey string, respBody 
 }
 
 func (e *Engine) poll(ctx context.Context, apiKey, genID string) (string, error) {
-	return epoll.Poll(ctx, epoll.Config{Interval: e.pollInterval}, func(ctx context.Context) (string, bool, error) {
+	return epoll.Poll(ctx, epoll.Config{Interval: e.pollInterval, OnProgress: e.onProgress}, func(ctx context.Context) (string, bool, error) {
 		url := e.baseURL + "/dream-machine/v1/generations/" + genID
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		if err != nil {
@@ -293,12 +292,9 @@ func (e *Engine) poll(ctx context.Context, apiKey, genID string) (string, error)
 
 // Resume implements engine.Resumer — resumes polling a previously submitted task.
 func (e *Engine) Resume(ctx context.Context, remoteID string) (engine.Result, error) {
-	apiKey := e.apiKey
-	if apiKey == "" {
-		apiKey = os.Getenv("LUMA_API_KEY")
-	}
-	if apiKey == "" {
-		return engine.Result{}, ErrMissingAPIKey
+	apiKey, err := engine.ResolveKey(e.apiKey, "LUMA_API_KEY")
+	if err != nil {
+		return engine.Result{}, err
 	}
 	url, err := e.poll(ctx, apiKey, remoteID)
 	if err != nil {
