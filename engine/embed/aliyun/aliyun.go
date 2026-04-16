@@ -12,9 +12,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"time"
 
+	"github.com/godeps/aigo/engine"
 	"github.com/godeps/aigo/engine/aigoerr"
 	"github.com/godeps/aigo/engine/embed"
 	"github.com/godeps/aigo/engine/httpx"
@@ -49,12 +49,9 @@ type Engine struct {
 
 // New creates a DashScope embedding engine.
 func New(cfg Config) (*Engine, error) {
-	apiKey := cfg.APIKey
-	if apiKey == "" {
-		apiKey = os.Getenv("DASHSCOPE_API_KEY")
-	}
-	if apiKey == "" {
-		return nil, fmt.Errorf("aliyun embed: DASHSCOPE_API_KEY not set")
+	apiKey, err := engine.ResolveKey(cfg.APIKey, "DASHSCOPE_API_KEY")
+	if err != nil {
+		return nil, fmt.Errorf("aliyun embed: %w", err)
 	}
 
 	baseURL := cfg.BaseURL

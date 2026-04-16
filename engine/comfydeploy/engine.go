@@ -301,6 +301,14 @@ func (e *Engine) Capabilities() engine.Capability {
 	}
 }
 
+// ModelsByCapability returns the models grouped by capability.
+func ModelsByCapability() map[string][]string {
+	return map[string][]string{
+		"image": {"comfydeploy"},
+		"video": {"comfydeploy"},
+	}
+}
+
 // ConfigSchema returns the configuration fields required by the ComfyDeploy engine.
 func ConfigSchema() []engine.ConfigField {
 	return []engine.ConfigField{

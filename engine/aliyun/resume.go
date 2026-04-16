@@ -2,7 +2,6 @@ package aliyun
 
 import (
 	"context"
-	"os"
 
 	"github.com/godeps/aigo/engine"
 	"github.com/godeps/aigo/engine/aliyun/internal/async"
@@ -25,12 +24,9 @@ func extractorForModel(model string) async.URLExtractor {
 
 // Resume implements engine.Resumer — resumes polling a previously submitted task.
 func (e *Engine) Resume(ctx context.Context, remoteID string) (engine.Result, error) {
-	apiKey := e.apiKey
-	if apiKey == "" {
-		apiKey = os.Getenv("DASHSCOPE_API_KEY")
-	}
-	if apiKey == "" {
-		return engine.Result{}, ErrMissingAPIKey
+	apiKey, err := engine.ResolveKey(e.apiKey, "DASHSCOPE_API_KEY")
+	if err != nil {
+		return engine.Result{}, err
 	}
 
 	ex := extractorForModel(e.model)

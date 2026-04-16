@@ -34,7 +34,6 @@ const (
 
 // Sentinel errors.
 var (
-	ErrMissingAPIKey    = errors.New("minimax: missing API key (set Config.APIKey or MINIMAX_API_KEY)")
 	ErrMissingPrompt    = errors.New("minimax: missing prompt in workflow graph")
 	ErrUnsupportedModel = errors.New("minimax: unsupported model")
 )
@@ -89,12 +88,9 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 		return engine.Result{}, fmt.Errorf("minimax: validate graph: %w", err)
 	}
 
-	apiKey := e.apiKey
-	if apiKey == "" {
-		apiKey = os.Getenv("MINIMAX_API_KEY")
-	}
-	if apiKey == "" {
-		return engine.Result{}, ErrMissingAPIKey
+	apiKey, err := engine.ResolveKey(e.apiKey, "MINIMAX_API_KEY")
+	if err != nil {
+		return engine.Result{}, err
 	}
 
 	if !allModels[e.model] {

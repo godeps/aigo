@@ -31,10 +31,7 @@ const (
 	ModelImagen3Generate001 = "imagen-3.0-generate-001"
 )
 
-var (
-	ErrMissingAPIKey = errors.New("google: missing API key (set Config.APIKey or GOOGLE_API_KEY)")
-	ErrMissingPrompt = errors.New("google: missing prompt in workflow graph")
-)
+var ErrMissingPrompt = errors.New("google: missing prompt in workflow graph")
 
 // Config configures the Google Imagen engine.
 type Config struct {
@@ -124,12 +121,9 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 		return engine.Result{}, fmt.Errorf("google: validate graph: %w", err)
 	}
 
-	apiKey := e.apiKey
-	if apiKey == "" {
-		apiKey = os.Getenv("GOOGLE_API_KEY")
-	}
-	if apiKey == "" {
-		return engine.Result{}, ErrMissingAPIKey
+	apiKey, err := engine.ResolveKey(e.apiKey, "GOOGLE_API_KEY")
+	if err != nil {
+		return engine.Result{}, err
 	}
 
 	prompt, err := resolve.ExtractPrompt(g)

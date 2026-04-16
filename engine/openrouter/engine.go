@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/godeps/aigo/engine"
@@ -34,7 +33,6 @@ const (
 
 // Sentinel errors.
 var (
-	ErrMissingAPIKey   = errors.New("openrouter: missing API key")
 	ErrMissingPrompt   = errors.New("openrouter: prompt not found in workflow graph")
 	ErrMissingAudioURL = errors.New("openrouter: audio URL not found in workflow graph")
 	ErrMissingVoice    = errors.New("openrouter: TTS voice not found in workflow graph")
@@ -110,12 +108,9 @@ func (e *Engine) Execute(ctx context.Context, graph workflow.Graph) (engine.Resu
 		return engine.Result{}, fmt.Errorf("openrouter: validate graph: %w", err)
 	}
 
-	apiKey := e.apiKey
-	if apiKey == "" {
-		apiKey = os.Getenv("OPENROUTER_API_KEY")
-	}
-	if apiKey == "" {
-		return engine.Result{}, ErrMissingAPIKey
+	apiKey, err := engine.ResolveKey(e.apiKey, "OPENROUTER_API_KEY")
+	if err != nil {
+		return engine.Result{}, err
 	}
 
 	// Detect ASR usage: if graph contains audio_url, use ASR handler for audio models.

@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
@@ -51,15 +50,10 @@ func New(cfg Config) *Engine {
 		pollInterval = defaultPollInterval
 	}
 
-	apiKey := cfg.APIKey
-	if apiKey == "" {
-		apiKey = os.Getenv("COMFY_CLOUD_API_KEY")
-	}
-
 	return &Engine{
 		baseURL:           strings.TrimRight(cfg.BaseURL, "/"),
 		clientID:          cfg.ClientID,
-		apiKey:            apiKey,
+		apiKey:            cfg.APIKey,
 		httpClient:        httpClient,
 		waitForCompletion: cfg.WaitForCompletion,
 		pollInterval:      pollInterval,
@@ -244,8 +238,8 @@ func buildViewURL(baseURL string, asset historyAsset) string {
 }
 
 func (e *Engine) setAuth(req *http.Request) {
-	if e.apiKey != "" {
-		req.Header.Set("Authorization", "Bearer "+e.apiKey)
+	if key, err := engine.ResolveKey(e.apiKey, "COMFY_CLOUD_API_KEY"); err == nil {
+		req.Header.Set("Authorization", "Bearer "+key)
 	}
 }
 
@@ -255,6 +249,14 @@ func (e *Engine) Capabilities() engine.Capability {
 		MediaTypes:   []string{"image", "video"},
 		SupportsSync: !e.waitForCompletion,
 		SupportsPoll: e.waitForCompletion,
+	}
+}
+
+// ModelsByCapability returns the models grouped by capability.
+func ModelsByCapability() map[string][]string {
+	return map[string][]string{
+		"image": {"comfyui"},
+		"video": {"comfyui"},
 	}
 }
 

@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/godeps/aigo/engine"
@@ -131,12 +130,9 @@ func (e *Engine) Execute(ctx context.Context, graph workflow.Graph) (engine.Resu
 		return engine.Result{}, err
 	}
 
-	apiKey := e.apiKey
-	if apiKey == "" {
-		apiKey = os.Getenv("OPENAI_API_KEY")
-	}
-	if apiKey == "" {
-		return engine.Result{}, errors.New("openai: missing API key")
+	apiKey, err := engine.ResolveKey(e.apiKey, "OPENAI_API_KEY")
+	if err != nil {
+		return engine.Result{}, err
 	}
 
 	payload := map[string]any{

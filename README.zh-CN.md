@@ -2,7 +2,7 @@
 
 [English README](./README.md)
 
-`aigo` 是一个面向 Agent 的 Go SDK，用于多模态媒体生成。Agent 输出轻量工作流图，SDK 把图路由到不同的执行引擎，并返回结构化结果（含错误分类、重试提示和进度回调）。零外部依赖，仅使用 Go 标准库。
+`aigo` 是一个面向 Agent 的 Go SDK，用于多模态媒体生成。Agent 输出轻量工作流图，SDK 把图路由到 30+ 执行引擎，并返回结构化结果（含错误分类、重试提示和进度回调）。
 
 ## 架构
 
@@ -12,22 +12,86 @@ Agent (LLM / 代码)
   ▼
 AgentTask ──► BuildGraph() ──► workflow.Graph (DAG)
                                     │
-                     ┌──────────────┼──────────────┐──────────────┐
-                     ▼              ▼              ▼              ▼
-               engine/aliyun  engine/openai  engine/newapi  engine/comfyui
-                     │              │              │              │
-                     ▼              ▼              ▼              ▼
-                百炼 API       DALL-E API     多路网关        ComfyUI WS
+              ┌─────────┬──────────┼──────────┬──────────┐
+              ▼          ▼          ▼          ▼          ▼
+        engine/kling  engine/luma  engine/fal  ...   engine/comfyui
+              │          │          │                     │
+              ▼          ▼          ▼                     ▼
+          可灵 API    Luma API   Fal API            ComfyUI WS
 ```
 
 ## 引擎
 
-| 引擎 | 后端 | 能力 |
-|------|------|-----|
-| `aliyun` | 阿里云百炼 / DashScope | 图片、视频、TTS、声音设计 |
-| `openai` | OpenAI DALL-E | 图片生成 |
-| `newapi` | 多路网关 | OpenAI 兼容、可灵、即梦、Sora、通义千问、Gemini |
-| `comfyui` | ComfyUI 服务 | WebSocket 全透传 |
+### 图片生成
+
+| 引擎 | 后端 | 环境变量 |
+|------|------|---------|
+| `aliyun` | 阿里云 DashScope（通义万相、Wan、Z-Image） | `DASHSCOPE_API_KEY` |
+| `openai` | OpenAI DALL-E 3 | `OPENAI_API_KEY` |
+| `google` | Google Imagen | `GOOGLE_API_KEY` |
+| `flux` | Black Forest Labs FLUX | `BFL_API_KEY` |
+| `stability` | Stability AI（SD3、Ultra、Core） | `STABILITY_API_KEY` |
+| `ideogram` | Ideogram | `IDEOGRAM_API_KEY` |
+| `recraft` | Recraft V3 | `RECRAFT_API_KEY` |
+| `midjourney` | Midjourney（GoAPI 代理） | `GOAPI_KEY` |
+| `jimeng` | 即梦（火山引擎） | `JIMENG_API_KEY` |
+| `liblib` | LibLibAI（HMAC-SHA1 签名） | `LIBLIB_ACCESS_KEY` / `LIBLIB_SECRET_KEY` |
+| `ark` | 火山引擎 Ark | `ARK_API_KEY` |
+
+### 视频生成
+
+| 引擎 | 后端 | 环境变量 |
+|------|------|---------|
+| `kling` | 可灵 AI（v1/v1.5/v2/v2.1） | `KLING_API_KEY` |
+| `hailuo` | 海螺 / MiniMax 视频 | `HAILUO_API_KEY` |
+| `luma` | Luma Dream Machine | `LUMA_API_KEY` |
+| `runway` | Runway Gen-3/Gen-4 | `RUNWAY_API_KEY` |
+| `pika` | Pika Labs | `PIKA_API_KEY` |
+| `hedra` | Hedra（数字人视频） | `HEDRA_API_KEY` |
+
+### 音频 / 音乐
+
+| 引擎 | 后端 | 环境变量 |
+|------|------|---------|
+| `elevenlabs` | ElevenLabs TTS | `ELEVENLABS_API_KEY` |
+| `minimax` | MiniMax TTS 与音乐 | `MINIMAX_API_KEY` |
+| `suno` | Suno 音乐生成 | `SUNO_API_KEY` |
+| `volcvoice` | 火山引擎语音 | `VOLC_SPEECH_ACCESS_TOKEN` |
+
+### 3D 生成
+
+| 引擎 | 后端 | 环境变量 |
+|------|------|---------|
+| `meshy` | Meshy（文本/图片转 3D） | `MESHY_API_KEY` |
+
+### 多模态理解
+
+| 引擎 | 后端 | 环境变量 |
+|------|------|---------|
+| `gemini` | Google Gemini（视觉+文本） | `GEMINI_API_KEY` |
+| `gpt4o` | OpenAI GPT-4o 视觉理解 | `OPENAI_API_KEY` |
+
+### 多后端 / 网关
+
+| 引擎 | 后端 | 环境变量 |
+|------|------|---------|
+| `newapi` | 多路网关（OpenAI、可灵、即梦、Sora、通义、Gemini） | `NEWAPI_API_KEY` |
+| `openrouter` | OpenRouter（多供应商路由） | `OPENROUTER_API_KEY` |
+| `fal` | Fal.ai（通用模型运行器） | `FAL_KEY` |
+| `replicate` | Replicate（通用模型运行器） | `REPLICATE_API_TOKEN` |
+| `comfydeploy` | ComfyDeploy（托管 ComfyUI） | `COMFYDEPLOY_API_TOKEN` |
+| `comfyui` | ComfyUI 服务（WebSocket） | `COMFY_CLOUD_API_KEY` |
+| `runninghub` | RunningHub（ComfyUI 云端） | `RH_API_KEY` |
+
+### 向量嵌入
+
+| 引擎 | 后端 | 环境变量 |
+|------|------|---------|
+| `embed/openai` | OpenAI Embeddings | `OPENAI_API_KEY` |
+| `embed/gemini` | Google Gemini Embeddings | `GEMINI_API_KEY` |
+| `embed/aliyun` | DashScope Embeddings（文本+多模态） | `DASHSCOPE_API_KEY` |
+| `embed/jina` | Jina Embeddings | `JINA_API_KEY` |
+| `embed/voyage` | Voyage AI Embeddings | `VOYAGE_API_KEY` |
 
 ## 安装
 
@@ -143,8 +207,31 @@ if errors.As(err, &ae) {
 ```go
 import "github.com/godeps/aigo/tooldef"
 
-tools := tooldef.AllTools() // generate_image, generate_video, text_to_speech, ...
-// 注册到你的框架的 function-calling 系统
+tools := tooldef.AllTools()
+// generate_image, generate_video, generate_3d, text_to_speech,
+// design_voice, edit_image, edit_video, transcribe_audio, generate_music
+```
+
+### 引擎注册表
+
+集中式引擎注册、查找和基于能力的发现：
+
+```go
+import "github.com/godeps/aigo/engine"
+
+reg := engine.NewRegistry()
+reg.Register("kling", engine.Entry{
+    Name:   "kling",
+    Engine: klingEngine,
+    ConfigSchemaFunc:   kling.ConfigSchema,
+    ModelsByCapability: kling.ModelsByCapability,
+})
+
+// 查找所有能生成视频的引擎
+videoEngines := reg.FindByCapability("video")
+
+// 获取所有模型，按引擎和能力分组
+allModels := reg.AllModels()
 ```
 
 ### 引擎能力发现
@@ -170,6 +257,34 @@ result, err := client.Execute(ctx, "video", graph, aigo.WithProgress(func(e aigo
     fmt.Printf("[%s] elapsed=%s\n", e.Phase, e.Elapsed)
     // Phase: "submitted", "completed"
 }))
+```
+
+### 结果缓存
+
+缓存结果以避免重复 API 调用：
+
+```go
+import "github.com/godeps/aigo/engine"
+
+cached := engine.WithCache(myEngine, 10*time.Minute, 100) // TTL + 最大条目
+// 相同的工作流图返回缓存结果
+```
+
+### HTTP 重试与限流
+
+内置 HTTP 传输层，实现弹性 API 调用：
+
+```go
+import "github.com/godeps/aigo/engine/httpx"
+
+// 429/5xx 自动重试，指数退避
+retryClient := httpx.NewRetryClient(httpx.RetryOptions{
+    MaxRetries: 3,
+    BaseDelay:  time.Second,
+})
+
+// 令牌桶限流
+rateLimitedClient := httpx.NewRateLimitedClient(10, 20, 30*time.Second) // 10 RPS，突发 20
 ```
 
 ### 中间件
@@ -265,63 +380,16 @@ graph := workflow.Graph{
 result, err := client.Execute(ctx, "img", graph)
 ```
 
-## 阿里云百炼模型
-
-`engine/aliyun` 支持：
-
-| 常量 | 模型 | 类型 |
-|------|------|------|
-| `ModelQwenImage` | qwen-image | 图片 |
-| `ModelWanImage` | wan2.7-image | 图片 |
-| `ModelZImageTurbo` | z-image-turbo | 图片 |
-| `ModelWanTextToVideo` | wan2.7-t2v | 视频 |
-| `ModelWanImageToVideo` | wan2.7-i2v | 视频 |
-| `ModelWanReferenceVideo` | wan2.7-r2v | 视频 |
-| `ModelWanVideoEdit` | wan2.7-videoedit | 视频 |
-| `ModelKlingV3Video` | kling/kling-v3-video-generation | 视频 |
-| `ModelKlingV3OmniVideo` | kling/kling-v3-omni-video-generation | 视频 |
-| `ModelQwenTTSFlash` | qwen3-tts-flash | TTS |
-| `ModelQwenTTSInstructFlash` | qwen3-tts-instruct-flash | TTS |
-| `ModelQwenVoiceDesign` | qwen-voice-design | 声音设计 |
-
-环境变量：
-
-```bash
-export DASHSCOPE_API_KEY=your_key
-```
-
-## New API 多路网关
-
-`engine/newapi` 通过单一网关支持多个路由族：
-
-| 路由 | 协议 |
-|------|------|
-| `RouteOpenAIImagesGenerations` | POST /v1/images/generations |
-| `RouteOpenAIImagesEdits` | POST /v1/images/edits |
-| `RouteOpenAIVideoGenerations` | POST+GET /v1/video/generations |
-| `RouteOpenAISpeech` | POST /v1/audio/speech |
-| `RouteKlingText2Video` | 可灵文生视频 |
-| `RouteKlingImage2Video` | 可灵图生视频 |
-| `RouteJimengVideo` | 即梦（火山引擎）视频 |
-| `RouteSoraVideos` | OpenAI Sora 视频 |
-| `RouteQwenImagesGenerations` | 通义千问图片生成 |
-| `RouteGeminiGenerateContent` | Gemini 原生 generateContent |
-
-环境变量：
-
-```bash
-export NEWAPI_BASE_URL=https://your-gateway.example.com
-export NEWAPI_API_KEY=your_key
-```
-
 ## 内部包
 
 | 包 | 用途 |
 |----|------|
-| `workflow/resolve` | 共享图解析（节点字符串提取、选项辅助函数、链接跟随） |
-| `engine/poll` | 统一轮询（指数退避、最大重试次数、进度回调） |
-| `engine/httpx` | HTTP 客户端默认值与辅助函数 |
+| `workflow` | 工作流图类型与校验 |
+| `workflow/resolve` | 图解析（提示词提取、选项辅助函数、链接跟随） |
+| `engine/poll` | 统一轮询（退避、进度回调、状态映射） |
+| `engine/httpx` | HTTP 客户端默认值、重试传输层、限流、文件上传 |
 | `engine/aigoerr` | 结构化错误分类，用于 Agent 重试逻辑 |
+| `engine/embed` | 向量嵌入引擎（OpenAI、Gemini、Jina、Voyage、Aliyun） |
 | `tooldef` | JSON Schema 工具定义，适配各类 Agent 框架 |
 
 ## 示例
@@ -349,4 +417,5 @@ go run ./examples/agent_auto_router
 ## 说明
 
 - 阿里云返回的结果 URL 是临时 OSS 链接，拿到后应立即保存。
-- 截至 2026 年 4 月，wan2.7 系列（`wan2.7-t2v`、`wan2.7-i2v`、`wan2.7-r2v`、`wan2.7-image`、`wan2.7-videoedit`）为当前视频/图片模型。
+- 所有异步引擎支持 `WaitForCompletion` 模式用于同步调用，以及 `Resume()` 用于重连运行中的任务。
+- 所有引擎通过 `engine.ResolveKey` 统一 API Key 解析 — 支持结构体字段或环境变量配置。

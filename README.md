@@ -2,7 +2,7 @@
 
 [中文说明](./README.zh-CN.md)
 
-`aigo` is an agent-native Go SDK for multimodal media generation. Describe work as a lightweight workflow graph, route it to different execution engines, and get structured results with error classification, retry hints, and progress callbacks. Zero external dependencies — only Go stdlib.
+`aigo` is an agent-native Go SDK for multimodal media generation. Describe work as a lightweight workflow graph, route it to 30+ execution engines, and get structured results with error classification, retry hints, and progress callbacks.
 
 ## Architecture
 
@@ -12,22 +12,86 @@ Agent (LLM / code)
   ▼
 AgentTask ──► BuildGraph() ──► workflow.Graph (DAG)
                                     │
-                     ┌──────────────┼──────────────┐──────────────┐
-                     ▼              ▼              ▼              ▼
-               engine/aliyun  engine/openai  engine/newapi  engine/comfyui
-                     │              │              │              │
-                     ▼              ▼              ▼              ▼
-               Bailian API    DALL-E API    Multi-gateway    ComfyUI WS
+              ┌─────────┬──────────┼──────────┬──────────┐
+              ▼          ▼          ▼          ▼          ▼
+        engine/kling  engine/luma  engine/fal  ...   engine/comfyui
+              │          │          │                     │
+              ▼          ▼          ▼                     ▼
+         Kling API   Luma API   Fal API             ComfyUI WS
 ```
 
 ## Engines
 
-| Engine | Backend | Capabilities |
-|--------|---------|-------------|
-| `aliyun` | Alibaba Cloud Bailian / DashScope | Image, video, TTS, voice design |
-| `openai` | OpenAI DALL-E | Image generation |
-| `newapi` | Multi-route gateway | OpenAI-compat, Kling, Jimeng, Sora, Qwen, Gemini |
-| `comfyui` | ComfyUI server | Full passthrough via WebSocket |
+### Image Generation
+
+| Engine | Backend | Env Var |
+|--------|---------|---------|
+| `aliyun` | Alibaba Cloud DashScope (Qwen, Wan, Z-Image) | `DASHSCOPE_API_KEY` |
+| `openai` | OpenAI DALL-E 3 | `OPENAI_API_KEY` |
+| `google` | Google Imagen | `GOOGLE_API_KEY` |
+| `flux` | Black Forest Labs FLUX | `BFL_API_KEY` |
+| `stability` | Stability AI (SD3, Ultra, Core) | `STABILITY_API_KEY` |
+| `ideogram` | Ideogram | `IDEOGRAM_API_KEY` |
+| `recraft` | Recraft V3 | `RECRAFT_API_KEY` |
+| `midjourney` | Midjourney (via GoAPI) | `GOAPI_KEY` |
+| `jimeng` | Jimeng (Volcengine) | `JIMENG_API_KEY` |
+| `liblib` | LibLibAI (HMAC-SHA1 auth) | `LIBLIB_ACCESS_KEY` / `LIBLIB_SECRET_KEY` |
+| `ark` | Volcengine Ark | `ARK_API_KEY` |
+
+### Video Generation
+
+| Engine | Backend | Env Var |
+|--------|---------|---------|
+| `kling` | Kling AI (v1/v1.5/v2/v2.1) | `KLING_API_KEY` |
+| `hailuo` | Hailuo / MiniMax Video | `HAILUO_API_KEY` |
+| `luma` | Luma Dream Machine | `LUMA_API_KEY` |
+| `runway` | Runway Gen-3/Gen-4 | `RUNWAY_API_KEY` |
+| `pika` | Pika Labs | `PIKA_API_KEY` |
+| `hedra` | Hedra (talking head video) | `HEDRA_API_KEY` |
+
+### Audio / Music
+
+| Engine | Backend | Env Var |
+|--------|---------|---------|
+| `elevenlabs` | ElevenLabs TTS | `ELEVENLABS_API_KEY` |
+| `minimax` | MiniMax TTS & Music | `MINIMAX_API_KEY` |
+| `suno` | Suno Music Generation | `SUNO_API_KEY` |
+| `volcvoice` | Volcengine Speech | `VOLC_SPEECH_ACCESS_TOKEN` |
+
+### 3D Generation
+
+| Engine | Backend | Env Var |
+|--------|---------|---------|
+| `meshy` | Meshy (text/image to 3D) | `MESHY_API_KEY` |
+
+### Multi-Modal Understanding
+
+| Engine | Backend | Env Var |
+|--------|---------|---------|
+| `gemini` | Google Gemini (vision + text) | `GEMINI_API_KEY` |
+| `gpt4o` | OpenAI GPT-4o Vision | `OPENAI_API_KEY` |
+
+### Multi-Backend / Gateway
+
+| Engine | Backend | Env Var |
+|--------|---------|---------|
+| `newapi` | Multi-route gateway (OpenAI, Kling, Jimeng, Sora, Qwen, Gemini) | `NEWAPI_API_KEY` |
+| `openrouter` | OpenRouter (multi-provider routing) | `OPENROUTER_API_KEY` |
+| `fal` | Fal.ai (generic model runner) | `FAL_KEY` |
+| `replicate` | Replicate (generic model runner) | `REPLICATE_API_TOKEN` |
+| `comfydeploy` | ComfyDeploy (hosted ComfyUI) | `COMFYDEPLOY_API_TOKEN` |
+| `comfyui` | ComfyUI server (WebSocket) | `COMFY_CLOUD_API_KEY` |
+| `runninghub` | RunningHub (ComfyUI cloud) | `RH_API_KEY` |
+
+### Embedding
+
+| Engine | Backend | Env Var |
+|--------|---------|---------|
+| `embed/openai` | OpenAI Embeddings | `OPENAI_API_KEY` |
+| `embed/gemini` | Google Gemini Embeddings | `GEMINI_API_KEY` |
+| `embed/aliyun` | DashScope Embeddings (text + multimodal) | `DASHSCOPE_API_KEY` |
+| `embed/jina` | Jina Embeddings | `JINA_API_KEY` |
+| `embed/voyage` | Voyage AI Embeddings | `VOYAGE_API_KEY` |
 
 ## Install
 
@@ -143,8 +207,31 @@ Register aigo tools with any agent framework (OpenAI, Anthropic, LangChain, Verc
 ```go
 import "github.com/godeps/aigo/tooldef"
 
-tools := tooldef.AllTools() // generate_image, generate_video, text_to_speech, ...
-// Register with your framework's function-calling system
+tools := tooldef.AllTools()
+// generate_image, generate_video, generate_3d, text_to_speech,
+// design_voice, edit_image, edit_video, transcribe_audio, generate_music
+```
+
+### Engine registry
+
+Centralized engine registration, lookup, and capability-based discovery:
+
+```go
+import "github.com/godeps/aigo/engine"
+
+reg := engine.NewRegistry()
+reg.Register("kling", engine.Entry{
+    Name:   "kling",
+    Engine: klingEngine,
+    ConfigSchemaFunc:   kling.ConfigSchema,
+    ModelsByCapability: kling.ModelsByCapability,
+})
+
+// Find all engines that can generate video
+videoEngines := reg.FindByCapability("video")
+
+// Get all models grouped by engine and capability
+allModels := reg.AllModels()
 ```
 
 ### Engine capability discovery
@@ -170,6 +257,34 @@ result, err := client.Execute(ctx, "video", graph, aigo.WithProgress(func(e aigo
     fmt.Printf("[%s] elapsed=%s\n", e.Phase, e.Elapsed)
     // Phase: "submitted", "completed"
 }))
+```
+
+### Result caching
+
+Cache results to avoid redundant API calls:
+
+```go
+import "github.com/godeps/aigo/engine"
+
+cached := engine.WithCache(myEngine, 10*time.Minute, 100) // TTL + max entries
+// Identical workflow graphs return cached results
+```
+
+### HTTP retry & rate limiting
+
+Built-in HTTP transports for resilient API calls:
+
+```go
+import "github.com/godeps/aigo/engine/httpx"
+
+// Auto-retry on 429/5xx with exponential backoff
+retryClient := httpx.NewRetryClient(httpx.RetryOptions{
+    MaxRetries: 3,
+    BaseDelay:  time.Second,
+})
+
+// Token bucket rate limiting
+rateLimitedClient := httpx.NewRateLimitedClient(10, 20, 30*time.Second) // 10 RPS, burst 20
 ```
 
 ### Middleware
@@ -265,63 +380,16 @@ graph := workflow.Graph{
 result, err := client.Execute(ctx, "img", graph)
 ```
 
-## Alibaba Cloud Models
-
-`engine/aliyun` supports:
-
-| Constant | Model | Type |
-|----------|-------|------|
-| `ModelQwenImage` | qwen-image | Image |
-| `ModelWanImage` | wan2.7-image | Image |
-| `ModelZImageTurbo` | z-image-turbo | Image |
-| `ModelWanTextToVideo` | wan2.7-t2v | Video |
-| `ModelWanImageToVideo` | wan2.7-i2v | Video |
-| `ModelWanReferenceVideo` | wan2.7-r2v | Video |
-| `ModelWanVideoEdit` | wan2.7-videoedit | Video |
-| `ModelKlingV3Video` | kling/kling-v3-video-generation | Video |
-| `ModelKlingV3OmniVideo` | kling/kling-v3-omni-video-generation | Video |
-| `ModelQwenTTSFlash` | qwen3-tts-flash | TTS |
-| `ModelQwenTTSInstructFlash` | qwen3-tts-instruct-flash | TTS |
-| `ModelQwenVoiceDesign` | qwen-voice-design | Voice Design |
-
-Environment variable:
-
-```bash
-export DASHSCOPE_API_KEY=your_key
-```
-
-## New API Gateway
-
-`engine/newapi` supports multiple route families via a single gateway:
-
-| Route | Protocol |
-|-------|----------|
-| `RouteOpenAIImagesGenerations` | POST /v1/images/generations |
-| `RouteOpenAIImagesEdits` | POST /v1/images/edits |
-| `RouteOpenAIVideoGenerations` | POST+GET /v1/video/generations |
-| `RouteOpenAISpeech` | POST /v1/audio/speech |
-| `RouteKlingText2Video` | Kling text-to-video |
-| `RouteKlingImage2Video` | Kling image-to-video |
-| `RouteJimengVideo` | Jimeng (Volcengine) video |
-| `RouteSoraVideos` | OpenAI Sora video |
-| `RouteQwenImagesGenerations` | Qwen image generation |
-| `RouteGeminiGenerateContent` | Gemini native generateContent |
-
-Environment variables:
-
-```bash
-export NEWAPI_BASE_URL=https://your-gateway.example.com
-export NEWAPI_API_KEY=your_key
-```
-
 ## Internal Packages
 
 | Package | Purpose |
 |---------|---------|
-| `workflow/resolve` | Shared graph resolution (node string extraction, option helpers, link following) |
-| `engine/poll` | Unified polling with exponential backoff, max attempts, and progress callbacks |
-| `engine/httpx` | HTTP client defaults and helpers |
+| `workflow` | Workflow graph types and validation |
+| `workflow/resolve` | Graph resolution (prompt extraction, option helpers, link following) |
+| `engine/poll` | Unified polling with backoff, progress callbacks, and status mapping |
+| `engine/httpx` | HTTP client defaults, retry transport, rate limiting, file upload |
 | `engine/aigoerr` | Structured error classification for agent retry logic |
+| `engine/embed` | Embedding engine implementations (OpenAI, Gemini, Jina, Voyage, Aliyun) |
 | `tooldef` | JSON Schema tool definitions for agent frameworks |
 
 ## Examples
@@ -349,4 +417,5 @@ go run ./examples/agent_auto_router
 ## Notes
 
 - Alibaba Cloud result URLs are temporary OSS links. Persist them immediately.
-- As of April 2026, wan2.7 series (`wan2.7-t2v`, `wan2.7-i2v`, `wan2.7-r2v`, `wan2.7-image`, `wan2.7-videoedit`) are the current video/image models.
+- All async engines support `WaitForCompletion` mode for synchronous use and `Resume()` for reconnecting to running tasks.
+- All engines use unified API key resolution via `engine.ResolveKey` — configure via struct field or environment variable.

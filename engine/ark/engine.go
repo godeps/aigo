@@ -25,7 +25,6 @@ const (
 )
 
 var (
-	ErrMissingAPIKey  = errors.New("ark: missing API key (set Config.APIKey or ARK_API_KEY)")
 	ErrMissingBaseURL = errors.New("ark: BaseURL is empty")
 	ErrMissingModel   = errors.New("ark: Model is empty")
 	ErrMissingContent = errors.New("ark: no content provided (need at least a text prompt or image)")
@@ -96,12 +95,9 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 		return engine.Result{}, ErrMissingModel
 	}
 
-	apiKey := e.apiKey
-	if apiKey == "" {
-		apiKey = os.Getenv("ARK_API_KEY")
-	}
-	if apiKey == "" {
-		return engine.Result{}, ErrMissingAPIKey
+	apiKey, err := engine.ResolveKey(e.apiKey, "ARK_API_KEY")
+	if err != nil {
+		return engine.Result{}, err
 	}
 
 	// Route image models to synchronous endpoint.
@@ -151,12 +147,9 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 
 // Resume implements engine.Resumer — resumes polling a previously submitted task.
 func (e *Engine) Resume(ctx context.Context, remoteID string) (engine.Result, error) {
-	apiKey := e.apiKey
-	if apiKey == "" {
-		apiKey = os.Getenv("ARK_API_KEY")
-	}
-	if apiKey == "" {
-		return engine.Result{}, ErrMissingAPIKey
+	apiKey, err := engine.ResolveKey(e.apiKey, "ARK_API_KEY")
+	if err != nil {
+		return engine.Result{}, err
 	}
 	url, err := e.poll(ctx, apiKey, remoteID)
 	if err != nil {

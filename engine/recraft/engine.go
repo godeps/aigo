@@ -37,7 +37,6 @@ const (
 )
 
 var (
-	ErrMissingAPIKey = errors.New("recraft: missing API key (set Config.APIKey or RECRAFT_API_KEY)")
 	ErrMissingPrompt = errors.New("recraft: missing prompt in workflow graph")
 )
 
@@ -93,12 +92,9 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 		return engine.Result{}, fmt.Errorf("recraft: validate graph: %w", err)
 	}
 
-	apiKey := e.apiKey
-	if apiKey == "" {
-		apiKey = os.Getenv("RECRAFT_API_KEY")
-	}
-	if apiKey == "" {
-		return engine.Result{}, ErrMissingAPIKey
+	apiKey, err := engine.ResolveKey(e.apiKey, "RECRAFT_API_KEY")
+	if err != nil {
+		return engine.Result{}, err
 	}
 
 	prompt, err := resolve.ExtractPrompt(g)

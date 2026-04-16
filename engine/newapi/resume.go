@@ -3,7 +3,6 @@ package newapi
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/godeps/aigo/engine"
 )
@@ -16,19 +15,13 @@ func (e *Engine) Resume(ctx context.Context, remoteID string) (engine.Result, er
 		return engine.Result{}, ErrMissingBaseURL
 	}
 
-	apiKey := e.apiKey
-	if apiKey == "" {
-		apiKey = os.Getenv("NEWAPI_API_KEY")
-	}
-	if apiKey == "" {
-		return engine.Result{}, ErrMissingAPIKey
+	apiKey, err := engine.ResolveKey(e.apiKey, "NEWAPI_API_KEY")
+	if err != nil {
+		return engine.Result{}, err
 	}
 
 	r := e.effectiveRoute()
-	var (
-		url string
-		err error
-	)
+	var url string
 
 	switch r {
 	case RouteOpenAIVideoGenerations:

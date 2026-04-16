@@ -48,11 +48,10 @@ const (
 )
 
 var (
-	ErrMissingAppID       = errors.New("volcvoice: missing AppID (set Config.AppID or VOLC_SPEECH_APPID)")
-	ErrMissingAccessToken = errors.New("volcvoice: missing AccessToken (set Config.AccessToken or VOLC_SPEECH_ACCESS_TOKEN)")
-	ErrMissingText        = errors.New("volcvoice: missing text for TTS (set prompt)")
-	ErrMissingAudioURL    = errors.New("volcvoice: missing audio_url for ASR")
-	ErrMissingVoice       = errors.New("volcvoice: missing voice (set voice option)")
+	ErrMissingAppID    = errors.New("volcvoice: missing AppID (set Config.AppID or VOLC_SPEECH_APPID)")
+	ErrMissingText     = errors.New("volcvoice: missing text for TTS (set prompt)")
+	ErrMissingAudioURL = errors.New("volcvoice: missing audio_url for ASR")
+	ErrMissingVoice    = errors.New("volcvoice: missing voice (set voice option)")
 )
 
 // ttsModels lists models that use the TTS endpoint.
@@ -125,12 +124,9 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 		return engine.Result{}, ErrMissingAppID
 	}
 
-	accessToken := e.accessToken
-	if accessToken == "" {
-		accessToken = os.Getenv("VOLC_SPEECH_ACCESS_TOKEN")
-	}
-	if accessToken == "" {
-		return engine.Result{}, ErrMissingAccessToken
+	accessToken, err := engine.ResolveKey(e.accessToken, "VOLC_SPEECH_ACCESS_TOKEN")
+	if err != nil {
+		return engine.Result{}, err
 	}
 
 	if ttsModels[e.model] {

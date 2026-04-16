@@ -80,6 +80,7 @@ func AllTools() []ToolDef {
 	return []ToolDef{
 		GenerateImage(),
 		GenerateVideo(),
+		Generate3D(),
 		TextToSpeech(),
 		DesignVoice(),
 		EditImage(),
@@ -118,6 +119,52 @@ func GenerateImage() ToolDef {
 				"height": {
 					Type:        "integer",
 					Description: "Image height in pixels",
+				},
+			},
+			Required: []string{"prompt"},
+		},
+	}
+}
+
+// Generate3D returns the tool definition for 3D model generation.
+func Generate3D() ToolDef {
+	return ToolDef{
+		Name:        "generate_3d",
+		Description: "Generate a 3D model from a text prompt or reference image. Returns a URL to the generated model file (GLB, FBX, OBJ, or USDZ).",
+		Parameters: Schema{
+			Type: "object",
+			Properties: map[string]Schema{
+				"prompt": {
+					Type:        "string",
+					Description: "Text description of the 3D model to generate",
+				},
+				"image_url": {
+					Type:        "string",
+					Description: "URL of a reference image for image-to-3D generation",
+				},
+				"mode": {
+					Type:        "string",
+					Description: "Generation quality mode",
+					Enum:        []string{"preview", "refine"},
+					Default:     "preview",
+				},
+				"art_style": {
+					Type:        "string",
+					Description: "Art style for the generated model",
+					Enum:        []string{"realistic", "cartoon", "low-poly", "sculpture", "pbr"},
+				},
+				"negative_prompt": {
+					Type:        "string",
+					Description: "What to avoid in the generated model",
+				},
+				"topology": {
+					Type:        "string",
+					Description: "Mesh topology preference",
+					Enum:        []string{"quad", "triangle"},
+				},
+				"target_polycount": {
+					Type:        "integer",
+					Description: "Target polygon count for the mesh",
 				},
 			},
 			Required: []string{"prompt"},

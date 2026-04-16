@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"time"
 
+	"github.com/godeps/aigo/engine"
 	"github.com/godeps/aigo/engine/aigoerr"
 	"github.com/godeps/aigo/engine/embed"
 	"github.com/godeps/aigo/engine/httpx"
@@ -36,12 +36,9 @@ type MultimodalEngine struct {
 // NewMultimodal creates a DashScope multimodal embedding engine.
 // It reuses the same Config as the text engine (same APIKey / HTTPClient).
 func NewMultimodal(cfg Config) (*MultimodalEngine, error) {
-	apiKey := cfg.APIKey
-	if apiKey == "" {
-		apiKey = os.Getenv("DASHSCOPE_API_KEY")
-	}
-	if apiKey == "" {
-		return nil, fmt.Errorf("aliyun multimodal embed: DASHSCOPE_API_KEY not set")
+	apiKey, err := engine.ResolveKey(cfg.APIKey, "DASHSCOPE_API_KEY")
+	if err != nil {
+		return nil, fmt.Errorf("aliyun multimodal embed: %w", err)
 	}
 
 	baseURL := cfg.BaseURL

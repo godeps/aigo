@@ -128,12 +128,9 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 		return engine.Result{}, fmt.Errorf("newapi: Model is empty")
 	}
 
-	apiKey := e.apiKey
-	if apiKey == "" {
-		apiKey = os.Getenv("NEWAPI_API_KEY")
-	}
-	if apiKey == "" {
-		return engine.Result{}, ErrMissingAPIKey
+	apiKey, err := engine.ResolveKey(e.apiKey, "NEWAPI_API_KEY")
+	if err != nil {
+		return engine.Result{}, err
 	}
 
 	raw, err := e.dispatch(ctx, apiKey, g)

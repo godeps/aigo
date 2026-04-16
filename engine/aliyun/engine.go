@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -49,7 +48,6 @@ var (
 	ErrMissingVoice       = ierr.ErrMissingVoice
 	ErrMissingVoiceDesign = ierr.ErrMissingVoiceDesign
 	ErrMissingAudioURL    = ierr.ErrMissingAudioURL
-	ErrMissingAPIKey      = ierr.ErrMissingAPIKey
 	ErrUnsupportedModel   = ierr.ErrUnsupportedModel
 )
 
@@ -133,12 +131,9 @@ func (e *Engine) Execute(ctx context.Context, graph workflow.Graph) (engine.Resu
 		return engine.Result{}, fmt.Errorf("aliyun: validate graph: %w", err)
 	}
 
-	apiKey := e.apiKey
-	if apiKey == "" {
-		apiKey = os.Getenv("DASHSCOPE_API_KEY")
-	}
-	if apiKey == "" {
-		return engine.Result{}, ErrMissingAPIKey
+	apiKey, err := engine.ResolveKey(e.apiKey, "DASHSCOPE_API_KEY")
+	if err != nil {
+		return engine.Result{}, err
 	}
 
 	entry, ok := modelTable[e.model]

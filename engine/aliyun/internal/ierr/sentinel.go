@@ -9,6 +9,5 @@ var (
 	ErrMissingVoice       = errors.New("aliyun: TTS voice not found in workflow graph")
 	ErrMissingVoiceDesign = errors.New("aliyun: voice design fields missing (voice_prompt, preview_text, target_model)")
 	ErrMissingAudioURL    = errors.New("aliyun: audio URL not found in workflow graph")
-	ErrMissingAPIKey      = errors.New("aliyun: missing API key")
 	ErrUnsupportedModel   = errors.New("aliyun: unsupported model")
 )
