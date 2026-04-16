@@ -20,6 +20,7 @@ type ToolDef struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Parameters  Schema `json:"parameters"`
+	Category    string `json:"category,omitempty"` // media type category: "image", "video", "audio", "3d", "music", "voice"
 }
 
 // Schema is a minimal JSON Schema representation.
@@ -90,11 +91,31 @@ func AllTools() []ToolDef {
 	}
 }
 
+// ToolsFor returns tools matching the given category (e.g., "image", "video", "audio", "3d", "music").
+// Multiple categories can be passed; tools matching any of them are included.
+func ToolsFor(categories ...string) []ToolDef {
+	if len(categories) == 0 {
+		return nil
+	}
+	want := make(map[string]bool, len(categories))
+	for _, c := range categories {
+		want[c] = true
+	}
+	var result []ToolDef
+	for _, t := range AllTools() {
+		if want[t.Category] {
+			result = append(result, t)
+		}
+	}
+	return result
+}
+
 // GenerateImage returns the tool definition for image generation.
 func GenerateImage() ToolDef {
 	return ToolDef{
 		Name:        "generate_image",
 		Description: "Generate an image from a text prompt using AI. Returns a URL or data URI of the generated image.",
+		Category:    "image",
 		Parameters: Schema{
 			Type: "object",
 			Properties: map[string]Schema{
@@ -131,6 +152,7 @@ func Generate3D() ToolDef {
 	return ToolDef{
 		Name:        "generate_3d",
 		Description: "Generate a 3D model from a text prompt or reference image. Returns a URL to the generated model file (GLB, FBX, OBJ, or USDZ).",
+		Category:    "3d",
 		Parameters: Schema{
 			Type: "object",
 			Properties: map[string]Schema{
@@ -177,6 +199,7 @@ func GenerateVideo() ToolDef {
 	return ToolDef{
 		Name:        "generate_video",
 		Description: "Generate a video from a text prompt, optionally with reference images or videos. Supports text-to-video, image-to-video, and video-to-video modes. Returns a URL to the generated video.",
+		Category:    "video",
 		Parameters: Schema{
 			Type: "object",
 			Properties: map[string]Schema{
@@ -239,6 +262,7 @@ func TextToSpeech() ToolDef {
 	return ToolDef{
 		Name:        "text_to_speech",
 		Description: "Convert text to speech audio. Returns a URL or data URI of the audio.",
+		Category:    "audio",
 		Parameters: Schema{
 			Type: "object",
 			Properties: map[string]Schema{
@@ -270,6 +294,7 @@ func DesignVoice() ToolDef {
 	return ToolDef{
 		Name:        "design_voice",
 		Description: "Create a custom AI voice from a text description. Returns JSON with voice ID and optional preview audio.",
+		Category:    "voice",
 		Parameters: Schema{
 			Type: "object",
 			Properties: map[string]Schema{
@@ -307,6 +332,7 @@ func EditImage() ToolDef {
 	return ToolDef{
 		Name:        "edit_image",
 		Description: "Edit an existing image based on a text prompt. Returns a URL or data URI of the edited image.",
+		Category:    "image",
 		Parameters: Schema{
 			Type: "object",
 			Properties: map[string]Schema{
@@ -335,6 +361,7 @@ func EditVideo() ToolDef {
 	return ToolDef{
 		Name:        "edit_video",
 		Description: "Edit an existing video based on a text prompt, optionally with reference images. Returns a URL to the edited video.",
+		Category:    "video",
 		Parameters: Schema{
 			Type: "object",
 			Properties: map[string]Schema{
@@ -370,6 +397,7 @@ func GenerateMusic() ToolDef {
 	return ToolDef{
 		Name:        "generate_music",
 		Description: "Generate music from a text prompt describing style/mood, optionally with lyrics. Returns a URL or audio data.",
+		Category:    "music",
 		Parameters: Schema{
 			Type: "object",
 			Properties: map[string]Schema{
@@ -412,6 +440,7 @@ func TranscribeAudio() ToolDef {
 	return ToolDef{
 		Name:        "transcribe_audio",
 		Description: "Transcribe audio to text using speech recognition. Returns the transcription text or JSON.",
+		Category:    "audio",
 		Parameters: Schema{
 			Type: "object",
 			Properties: map[string]Schema{

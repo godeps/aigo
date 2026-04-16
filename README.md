@@ -248,6 +248,44 @@ cap, _ := client.EngineCapabilities("aliyun-img")
 videoEngines := client.AvailableFor("video")
 ```
 
+### Engine controls
+
+Dynamically enable, disable, or conditionally register engines:
+
+```go
+// Disable an engine without removing it
+client.DisableEngine("runway")
+
+// Re-enable it later
+client.EnableEngine("runway")
+
+// Remove an engine entirely
+client.UnregisterEngine("old-engine")
+
+// Register only if the API key is available
+client.RegisterEngineIfKey("kling", klingEngine, "KLING_API_KEY")
+
+// Check if an engine is active
+if client.IsEnabled("kling") { ... }
+```
+
+### Selective tool definitions
+
+Filter tool definitions by media type for your agent framework:
+
+```go
+import "github.com/godeps/aigo/tooldef"
+
+// All tools
+tools := tooldef.AllTools() // 9 tools
+
+// Only image tools (generate_image, edit_image)
+imageTools := tooldef.ToolsFor("image")
+
+// Multiple categories
+mediaTools := tooldef.ToolsFor("video", "audio", "music")
+```
+
 ### Progress reporting
 
 Monitor long-running tasks:

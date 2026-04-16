@@ -557,6 +557,146 @@ func TestClientSubmit_NoStore(t *testing.T) {
 	}
 }
 
+func TestClientUnregisterEngine(t *testing.T) {
+	t.Parallel()
+	client := NewClient()
+	_ = client.RegisterEngine("a", stubEngine{result: "ok"})
+
+	if err := client.UnregisterEngine("a"); err != nil {
+		t.Fatalf("UnregisterEngine: %v", err)
+	}
+
+	_, err := client.Execute(context.Background(), "a", workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "t"}},
+	})
+	if !errors.Is(err, ErrEngineNotFound) {
+		t.Fatalf("expected ErrEngineNotFound, got %v", err)
+	}
+}
+
+func TestClientUnregisterEngine_NotFound(t *testing.T) {
+	t.Parallel()
+	client := NewClient()
+	err := client.UnregisterEngine("missing")
+	if !errors.Is(err, ErrEngineNotFound) {
+		t.Fatalf("expected ErrEngineNotFound, got %v", err)
+	}
+}
+
+func TestClientDisableEnableEngine(t *testing.T) {
+	t.Parallel()
+	client := NewClient()
+	_ = client.RegisterEngine("e1", stubEngine{result: "ok"})
+
+	// Disable.
+	if err := client.DisableEngine("e1"); err != nil {
+		t.Fatalf("DisableEngine: %v", err)
+	}
+	if client.IsEnabled("e1") {
+		t.Fatal("expected e1 to be disabled")
+	}
+
+	// Execute should fail.
+	_, err := client.Execute(context.Background(), "e1", workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "t"}},
+	})
+	if !errors.Is(err, ErrEngineDisabled) {
+		t.Fatalf("expected ErrEngineDisabled, got %v", err)
+	}
+
+	// EngineNames should exclude disabled.
+	names := client.EngineNames()
+	if len(names) != 0 {
+		t.Fatalf("expected empty names, got %v", names)
+	}
+
+	// Re-enable.
+	if err := client.EnableEngine("e1"); err != nil {
+		t.Fatalf("EnableEngine: %v", err)
+	}
+	if !client.IsEnabled("e1") {
+		t.Fatal("expected e1 to be enabled")
+	}
+
+	// Execute should work again.
+	r, err := client.Execute(context.Background(), "e1", workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "t"}},
+	})
+	if err != nil {
+		t.Fatalf("Execute after enable: %v", err)
+	}
+	if r.Value != "ok" {
+		t.Fatalf("Value = %q", r.Value)
+	}
+}
+
+func TestClientDisableEngine_NotFound(t *testing.T) {
+	t.Parallel()
+	client := NewClient()
+	err := client.DisableEngine("missing")
+	if !errors.Is(err, ErrEngineNotFound) {
+		t.Fatalf("expected ErrEngineNotFound, got %v", err)
+	}
+}
+
+func TestClientDisable_ExcludedFromEngineInfos(t *testing.T) {
+	t.Parallel()
+	client := NewClient()
+	_ = client.RegisterEngine("a", stubEngine{result: "ok"})
+	_ = client.RegisterEngine("b", stubEngine{result: "ok"})
+	_ = client.DisableEngine("a")
+
+	infos := client.EngineInfos()
+	if len(infos) != 1 || infos[0].Name != "b" {
+		t.Fatalf("expected only b, got %v", infos)
+	}
+}
+
+func TestClientDisable_ExcludedFromAvailableFor(t *testing.T) {
+	t.Parallel()
+	client := NewClient()
+	_ = client.RegisterEngine("img", stubDescriberEngine{
+		result: "ok",
+		cap:    engine.Capability{MediaTypes: []string{"image"}},
+	})
+	_ = client.DisableEngine("img")
+
+	avail := client.AvailableFor("image")
+	if len(avail) != 0 {
+		t.Fatalf("expected empty, got %v", avail)
+	}
+}
+
+func TestClientRegisterEngineIfKey(t *testing.T) {
+	// Cannot use t.Parallel() with t.Setenv.
+	t.Setenv("TEST_AIGO_KEY_EXISTS", "sk-test-123")
+
+	client := NewClient()
+
+	// Should register — env var exists.
+	ok, err := client.RegisterEngineIfKey("e1", stubEngine{result: "ok"}, "TEST_AIGO_KEY_EXISTS")
+	if err != nil {
+		t.Fatalf("RegisterEngineIfKey: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected registration")
+	}
+
+	// Should skip — env var doesn't exist.
+	ok, err = client.RegisterEngineIfKey("e2", stubEngine{result: "ok"}, "TEST_AIGO_KEY_MISSING_XYZ")
+	if err != nil {
+		t.Fatalf("RegisterEngineIfKey: %v", err)
+	}
+	if ok {
+		t.Fatal("expected skip")
+	}
+
+	names := client.EngineNames()
+	if len(names) != 1 || names[0] != "e1" {
+		t.Fatalf("names = %v", names)
+	}
+}
+
 func TestClientResume_EngineNotResumer(t *testing.T) {
 	t.Parallel()
 	client, store := newTestClient(t)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"strconv"
 	"sync"
@@ -19,6 +20,7 @@ var (
 	ErrEngineExists    = errors.New("aigo: engine already registered")
 	ErrEngineNotFound  = errors.New("aigo: engine not found")
 	ErrEngineNameEmpty = errors.New("aigo: engine name is empty")
+	ErrEngineDisabled  = errors.New("aigo: engine is disabled")
 )
 
 // ReferenceType identifies the kind of remote asset to attach to an agent task.
@@ -148,6 +150,7 @@ type Middleware func(name string, next engine.Engine) engine.Engine
 type Client struct {
 	mu         sync.RWMutex
 	engines    map[string]engine.Engine
+	disabled   map[string]bool // engines that are registered but temporarily disabled
 	middleware []Middleware
 	store      TaskStore
 }
@@ -201,6 +204,70 @@ func (c *Client) RegisterEngine(name string, e engine.Engine) error {
 	return nil
 }
 
+// UnregisterEngine removes a previously registered engine.
+// Returns ErrEngineNotFound if the name is not registered.
+func (c *Client) UnregisterEngine(name string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if _, ok := c.engines[name]; !ok {
+		return fmt.Errorf("%w: %s", ErrEngineNotFound, name)
+	}
+	delete(c.engines, name)
+	delete(c.disabled, name)
+	return nil
+}
+
+// DisableEngine temporarily disables a registered engine without removing it.
+// Disabled engines are excluded from Execute, EngineNames, EngineInfos, and AvailableFor.
+// Returns ErrEngineNotFound if the name is not registered.
+func (c *Client) DisableEngine(name string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if _, ok := c.engines[name]; !ok {
+		return fmt.Errorf("%w: %s", ErrEngineNotFound, name)
+	}
+	if c.disabled == nil {
+		c.disabled = make(map[string]bool)
+	}
+	c.disabled[name] = true
+	return nil
+}
+
+// EnableEngine re-enables a previously disabled engine.
+// Returns ErrEngineNotFound if the name is not registered.
+func (c *Client) EnableEngine(name string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if _, ok := c.engines[name]; !ok {
+		return fmt.Errorf("%w: %s", ErrEngineNotFound, name)
+	}
+	delete(c.disabled, name)
+	return nil
+}
+
+// IsEnabled reports whether a registered engine is currently enabled.
+func (c *Client) IsEnabled(name string) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	_, registered := c.engines[name]
+	return registered && !c.disabled[name]
+}
+
+// RegisterEngineIfKey registers an engine only if the required API key is available.
+// It checks the environment variables in order; if any is set, the engine is registered.
+// Returns true if the engine was registered, false if skipped (no key found).
+func (c *Client) RegisterEngineIfKey(name string, e engine.Engine, envVars ...string) (bool, error) {
+	for _, env := range envVars {
+		if os.Getenv(env) != "" {
+			return true, c.RegisterEngine(name, e)
+		}
+	}
+	return false, nil
+}
+
 // Use appends middleware that wraps every engine on each Execute call.
 // Middleware is applied in the order added (first added = outermost wrapper).
 func (c *Client) Use(mw ...Middleware) {
@@ -230,12 +297,17 @@ func WithProgress(fn func(ProgressEvent)) ExecuteOption {
 }
 
 // Execute dispatches the graph to the named engine.
+// Returns ErrEngineNotFound if the engine is not registered, or ErrEngineDisabled if it is disabled.
 func (c *Client) Execute(ctx context.Context, engineName string, graph workflow.Graph, opts ...ExecuteOption) (Result, error) {
 	c.mu.RLock()
 	e, ok := c.engines[engineName]
+	isDisabled := c.disabled[engineName]
 	c.mu.RUnlock()
 	if !ok {
 		return Result{}, fmt.Errorf("%w: %s", ErrEngineNotFound, engineName)
+	}
+	if isDisabled {
+		return Result{}, fmt.Errorf("%w: %s", ErrEngineDisabled, engineName)
 	}
 
 	if err := graph.Validate(); err != nil {
@@ -391,27 +463,33 @@ func (c *Client) ExecuteTaskAutoWithFallback(ctx context.Context, selector Selec
 	}, nil
 }
 
-// EngineNames returns registered engine names in deterministic order.
+// EngineNames returns enabled engine names in deterministic order.
+// Disabled engines are excluded.
 func (c *Client) EngineNames() []string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
 	names := make([]string, 0, len(c.engines))
 	for name := range c.engines {
-		names = append(names, name)
+		if !c.disabled[name] {
+			names = append(names, name)
+		}
 	}
 	sort.Strings(names)
 	return names
 }
 
-// EngineInfos returns capability metadata for all registered engines, sorted by name.
-// Engines that do not implement Describer get an empty Capability.
+// EngineInfos returns capability metadata for all enabled engines, sorted by name.
+// Disabled engines are excluded. Engines that do not implement Describer get an empty Capability.
 func (c *Client) EngineInfos() []EngineInfo {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
 	infos := make([]EngineInfo, 0, len(c.engines))
 	for name, e := range c.engines {
+		if c.disabled[name] {
+			continue
+		}
 		info := EngineInfo{Name: name}
 		if d, ok := e.(engine.Describer); ok {
 			info.Capability = d.Capabilities()
@@ -720,14 +798,17 @@ func (c *Client) EngineCapabilities(name string) (engine.Capability, error) {
 	return engine.Capability{}, nil
 }
 
-// AvailableFor returns registered engine names whose capabilities include the given media type.
-// Engines that do not implement Describer are included (assumed capable).
+// AvailableFor returns enabled engine names whose capabilities include the given media type.
+// Disabled engines are excluded. Engines that do not implement Describer are included (assumed capable).
 func (c *Client) AvailableFor(mediaType string) []string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
 	var result []string
 	for name, e := range c.engines {
+		if c.disabled[name] {
+			continue
+		}
 		d, ok := e.(engine.Describer)
 		if !ok {
 			result = append(result, name)

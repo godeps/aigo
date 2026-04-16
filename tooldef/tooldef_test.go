@@ -180,6 +180,70 @@ func TestValidateParams_OptionalEnumSkipped(t *testing.T) {
 	}
 }
 
+func TestToolsFor_Image(t *testing.T) {
+	t.Parallel()
+	tools := ToolsFor("image")
+	names := map[string]bool{}
+	for _, t := range tools {
+		names[t.Name] = true
+	}
+	if !names["generate_image"] || !names["edit_image"] {
+		t.Fatalf("expected generate_image and edit_image, got %v", names)
+	}
+	if names["generate_video"] {
+		t.Fatal("video tool should not be in image filter")
+	}
+}
+
+func TestToolsFor_Video(t *testing.T) {
+	t.Parallel()
+	tools := ToolsFor("video")
+	names := map[string]bool{}
+	for _, t := range tools {
+		names[t.Name] = true
+	}
+	if !names["generate_video"] || !names["edit_video"] {
+		t.Fatalf("expected generate_video and edit_video, got %v", names)
+	}
+}
+
+func TestToolsFor_Multiple(t *testing.T) {
+	t.Parallel()
+	tools := ToolsFor("audio", "music")
+	names := map[string]bool{}
+	for _, t := range tools {
+		names[t.Name] = true
+	}
+	if !names["text_to_speech"] || !names["transcribe_audio"] || !names["generate_music"] {
+		t.Fatalf("expected audio+music tools, got %v", names)
+	}
+}
+
+func TestToolsFor_Empty(t *testing.T) {
+	t.Parallel()
+	tools := ToolsFor()
+	if len(tools) != 0 {
+		t.Fatalf("expected empty, got %d", len(tools))
+	}
+}
+
+func TestToolsFor_NoMatch(t *testing.T) {
+	t.Parallel()
+	tools := ToolsFor("nonexistent")
+	if len(tools) != 0 {
+		t.Fatalf("expected empty, got %d", len(tools))
+	}
+}
+
+func TestAllTools_CategorySet(t *testing.T) {
+	t.Parallel()
+	for _, tool := range AllTools() {
+		if tool.Category == "" {
+			t.Fatalf("tool %q has no category", tool.Name)
+		}
+	}
+}
+
 func TestDesignVoice_RequiredFields(t *testing.T) {
 	t.Parallel()
 	tool := DesignVoice()

@@ -248,6 +248,44 @@ cap, _ := client.EngineCapabilities("aliyun-img")
 videoEngines := client.AvailableFor("video")
 ```
 
+### 引擎控制
+
+动态启用、禁用或条件注册引擎：
+
+```go
+// 禁用引擎（不移除）
+client.DisableEngine("runway")
+
+// 稍后重新启用
+client.EnableEngine("runway")
+
+// 完全移除引擎
+client.UnregisterEngine("old-engine")
+
+// 仅在 API Key 存在时注册
+client.RegisterEngineIfKey("kling", klingEngine, "KLING_API_KEY")
+
+// 检查引擎是否启用
+if client.IsEnabled("kling") { ... }
+```
+
+### 工具定义过滤
+
+按媒体类型筛选工具定义，注册到 Agent 框架：
+
+```go
+import "github.com/godeps/aigo/tooldef"
+
+// 所有工具
+tools := tooldef.AllTools() // 9 个工具
+
+// 仅图片工具（generate_image, edit_image）
+imageTools := tooldef.ToolsFor("image")
+
+// 多个类别
+mediaTools := tooldef.ToolsFor("video", "audio", "music")
+```
+
 ### 进度上报
 
 监控长时间运行的任务：
