@@ -64,6 +64,7 @@ func main() {
 		Model:   defaultModel,
 		BaseURL: baseURL,
 		API:     apiStyle,
+		Filter:  &aigo.RuleFilter{}, // Pre-filter by media type, size, duration constraints.
 	}
 
 	task := aigo.AgentTask{
@@ -90,24 +91,75 @@ type OpenAISelector struct {
 	// API is "responses" (OpenAI native) or "chat" (OpenAI-compatible chat completions).
 	API        string
 	HTTPClient *http.Client
+	// Filter optionally pre-filters candidates by task constraints.
+	Filter     *aigo.RuleFilter
 }
 
+// SelectEngine implements aigo.Selector (plain engine names, no capabilities).
 func (s *OpenAISelector) SelectEngine(ctx context.Context, task aigo.AgentTask, engines []string) (aigo.Selection, error) {
+	// Convert flat names to EngineInfo without capabilities.
+	candidates := make([]aigo.EngineInfo, len(engines))
+	for i, name := range engines {
+		candidates[i] = aigo.EngineInfo{Name: name}
+	}
+	return s.SelectEngineFromCandidates(ctx, task, candidates)
+}
+
+// SelectEngineFromCandidates implements aigo.RichSelector — receives capability metadata.
+func (s *OpenAISelector) SelectEngineFromCandidates(ctx context.Context, task aigo.AgentTask, candidates []aigo.EngineInfo) (aigo.Selection, error) {
 	if s.APIKey == "" {
 		return aigo.Selection{}, fmt.Errorf("missing API key (set DASHSCOPE_API_KEY or OPENAI_API_KEY)")
 	}
 
+	// Apply rule-based pre-filtering if configured.
+	if s.Filter != nil {
+		candidates = s.Filter.Filter(task, candidates)
+	}
+	if len(candidates) == 0 {
+		return aigo.Selection{}, fmt.Errorf("no compatible engines after filtering")
+	}
+
+	// Build engine names and capability summary for the LLM.
+	engines := make([]string, len(candidates))
+	for i, c := range candidates {
+		engines[i] = c.Name
+	}
+	capSummary := buildCapabilitySummary(candidates)
+
 	switch strings.ToLower(strings.TrimSpace(s.API)) {
 	case "", "responses":
-		return s.selectViaResponses(ctx, task, engines)
+		return s.selectViaResponses(ctx, task, engines, capSummary)
 	case "chat":
-		return s.selectViaChatCompletions(ctx, task, engines)
+		return s.selectViaChatCompletions(ctx, task, engines, capSummary)
 	default:
 		return aigo.Selection{}, fmt.Errorf("unknown AIGO_ROUTER_API %q (use responses or chat)", s.API)
 	}
 }
 
-func (s *OpenAISelector) selectViaResponses(ctx context.Context, task aigo.AgentTask, engines []string) (aigo.Selection, error) {
+// buildCapabilitySummary formats engine capabilities as a concise text block for LLM context.
+func buildCapabilitySummary(candidates []aigo.EngineInfo) string {
+	var sb strings.Builder
+	for _, c := range candidates {
+		cap := c.Capability
+		sb.WriteString(fmt.Sprintf("- %s:", c.Name))
+		if len(cap.MediaTypes) > 0 {
+			sb.WriteString(fmt.Sprintf(" types=%s", strings.Join(cap.MediaTypes, "/")))
+		}
+		if len(cap.Models) > 0 {
+			sb.WriteString(fmt.Sprintf(" models=%s", strings.Join(cap.Models, ",")))
+		}
+		if cap.MaxDuration > 0 {
+			sb.WriteString(fmt.Sprintf(" max_duration=%ds", cap.MaxDuration))
+		}
+		if len(cap.Sizes) > 0 {
+			sb.WriteString(fmt.Sprintf(" sizes=%s", strings.Join(cap.Sizes, ",")))
+		}
+		sb.WriteByte('\n')
+	}
+	return sb.String()
+}
+
+func (s *OpenAISelector) selectViaResponses(ctx context.Context, task aigo.AgentTask, engines []string, capSummary string) (aigo.Selection, error) {
 	baseURL := strings.TrimRight(s.BaseURL, "/")
 	if baseURL == "" {
 		baseURL = "https://api.openai.com/v1"
@@ -136,7 +188,7 @@ func (s *OpenAISelector) selectViaResponses(ctx context.Context, task aigo.Agent
 				"content": []map[string]any{
 					{
 						"type": "input_text",
-						"text": "You route media-generation tasks to one engine from a provided allowlist. Choose exactly one engine. Prefer video engines when the task asks for animation, motion, clips, or duration. Prefer image engines otherwise.",
+						"text": "You route media-generation tasks to one engine from a provided allowlist. Choose exactly one engine. Use the engine capability summary to make the best match: consider media type, supported sizes, max duration, and available models. Prefer video engines when the task asks for animation, motion, clips, or duration. Prefer image engines otherwise.",
 					},
 				},
 			},
@@ -145,7 +197,7 @@ func (s *OpenAISelector) selectViaResponses(ctx context.Context, task aigo.Agent
 				"content": []map[string]any{
 					{
 						"type": "input_text",
-						"text": fmt.Sprintf("Available engines: %s\nTask JSON: %s", strings.Join(engines, ", "), string(promptBytes)),
+						"text": fmt.Sprintf("Available engines: %s\n\nEngine capabilities:\n%s\nTask JSON: %s", strings.Join(engines, ", "), capSummary, string(promptBytes)),
 					},
 				},
 			},
@@ -213,7 +265,7 @@ func (s *OpenAISelector) selectViaResponses(ctx context.Context, task aigo.Agent
 	return selection, nil
 }
 
-func (s *OpenAISelector) selectViaChatCompletions(ctx context.Context, task aigo.AgentTask, engines []string) (aigo.Selection, error) {
+func (s *OpenAISelector) selectViaChatCompletions(ctx context.Context, task aigo.AgentTask, engines []string, capSummary string) (aigo.Selection, error) {
 	baseURL := strings.TrimRight(s.BaseURL, "/")
 	if baseURL == "" {
 		baseURL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
@@ -236,12 +288,13 @@ func (s *OpenAISelector) selectViaChatCompletions(ctx context.Context, task aigo
 
 	system := "You route media-generation tasks to one engine from a provided allowlist. " +
 		"Choose exactly one engine name from the list. " +
+		"Use the engine capability summary to make the best match: consider media type, supported sizes, max duration, and available models. " +
 		"Prefer video engines when the task asks for animation, motion, clips, or duration. " +
 		"Prefer image engines otherwise. " +
 		"Reply with a single JSON object only, keys: engine (string), reason (string). " +
 		"The engine value must be exactly one of the allowed names."
 
-	user := fmt.Sprintf("Allowed engines: %s\nTask JSON: %s", strings.Join(engines, ", "), string(promptBytes))
+	user := fmt.Sprintf("Allowed engines: %s\n\nEngine capabilities:\n%s\nTask JSON: %s", strings.Join(engines, ", "), capSummary, string(promptBytes))
 
 	requestBody := map[string]any{
 		"model": model,

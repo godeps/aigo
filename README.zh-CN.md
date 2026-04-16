@@ -338,6 +338,50 @@ result, err := client.ExecuteTaskAuto(ctx, selector, aigo.AgentTask{
 // result.Output.Value — 生成结果
 ```
 
+### 能力感知路由（RichSelector）
+
+`RichSelector` 接收引擎能力元数据，让 LLM（或规则系统）做出更精准的选择：
+
+```go
+// 查询所有引擎的能力
+infos := client.EngineInfos()
+// []EngineInfo{{Name: "kling", Capability: {MediaTypes: ["video"], MaxDuration: 10, ...}}, ...}
+
+// RichSelector 自动接收能力信息，无需额外代码
+result, err := client.ExecuteTaskAuto(ctx, myRichSelector, task)
+```
+
+### 规则预过滤
+
+在 LLM 选择前，按媒体类型、尺寸、时长、音色过滤不兼容的引擎：
+
+```go
+filter := &aigo.RuleFilter{}
+candidates := filter.Filter(task, client.EngineInfos())
+// 仅保留满足任务约束的引擎
+```
+
+### 优先级选择器（无需 LLM）
+
+按优先级列表选择第一个兼容的引擎：
+
+```go
+selector := &aigo.PrioritySelector{
+    Priority: []string{"kling", "luma", "runway"},
+    Filter:   &aigo.RuleFilter{}, // 可选的约束过滤
+}
+result, err := client.ExecuteTaskAuto(ctx, selector, task)
+```
+
+### 自动推断媒体类型
+
+从任务字段自动检测所需的媒体类型：
+
+```go
+mediaType := aigo.InferMediaType(task)
+// Duration > 0 → "video"，TTS → "audio"，Music → "music"，默认 → "image"
+```
+
 ### 引擎故障转移
 
 按顺序尝试多个引擎，首个成功即返回：
@@ -347,6 +391,15 @@ result, err := client.ExecuteWithFallback(ctx, []string{"primary", "backup"}, gr
 // result.Engine       — 成功的引擎
 // result.Output.Value — 结果
 // result.Skipped      — 失败的引擎列表（含错误信息）
+```
+
+### 自动路由 + 故障转移
+
+选择器路由与自动降级组合使用：
+
+```go
+result, err := client.ExecuteTaskAutoWithFallback(ctx, selector, task)
+// 选择器选出最佳引擎；若失败，自动尝试其余候选引擎
 ```
 
 ### 异步执行

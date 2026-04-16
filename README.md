@@ -338,6 +338,50 @@ result, err := client.ExecuteTaskAuto(ctx, selector, aigo.AgentTask{
 // result.Output.Value — the generation result
 ```
 
+### Capability-aware routing (RichSelector)
+
+`RichSelector` receives engine capability metadata so the LLM (or rules) can make informed decisions:
+
+```go
+// Query all engine capabilities
+infos := client.EngineInfos()
+// []EngineInfo{{Name: "kling", Capability: {MediaTypes: ["video"], MaxDuration: 10, ...}}, ...}
+
+// RichSelector automatically receives capabilities — no extra code needed
+result, err := client.ExecuteTaskAuto(ctx, myRichSelector, task)
+```
+
+### Rule-based pre-filtering
+
+Filter incompatible engines before LLM selection — by media type, size, duration, and voice:
+
+```go
+filter := &aigo.RuleFilter{}
+candidates := filter.Filter(task, client.EngineInfos())
+// Only engines matching the task's constraints remain
+```
+
+### Priority selector (no LLM needed)
+
+Pick the first compatible engine from a priority-ordered list:
+
+```go
+selector := &aigo.PrioritySelector{
+    Priority: []string{"kling", "luma", "runway"},
+    Filter:   &aigo.RuleFilter{}, // optional constraint filtering
+}
+result, err := client.ExecuteTaskAuto(ctx, selector, task)
+```
+
+### Infer media type from task
+
+Automatically detect what kind of media a task needs:
+
+```go
+mediaType := aigo.InferMediaType(task)
+// "video" if Duration > 0, "audio" if TTS set, "music" if Music set, "image" otherwise
+```
+
 ### Fallback across engines
 
 Try multiple engines in order; first success wins:
@@ -347,6 +391,15 @@ result, err := client.ExecuteWithFallback(ctx, []string{"primary", "backup"}, gr
 // result.Engine       — which engine succeeded
 // result.Output.Value — the result
 // result.Skipped      — engines that failed (with errors)
+```
+
+### Auto-routing with fallback
+
+Combine selector-based routing with automatic failover:
+
+```go
+result, err := client.ExecuteTaskAutoWithFallback(ctx, selector, task)
+// Selector picks the best engine; if it fails, tries remaining candidates
 ```
 
 ### Async execution

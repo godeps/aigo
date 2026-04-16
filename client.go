@@ -127,6 +127,20 @@ type Selector interface {
 	SelectEngine(ctx context.Context, task AgentTask, engines []string) (Selection, error)
 }
 
+// EngineInfo describes a candidate engine's capabilities, provided to RichSelector for informed decisions.
+type EngineInfo struct {
+	Name       string            `json:"name"`
+	Capability engine.Capability `json:"capability"`
+}
+
+// RichSelector is an enhanced selector that receives engine capability metadata.
+// Implementations can use capability information to make better routing decisions.
+// A RichSelector is also a Selector — ExecuteTaskAuto auto-detects the interface.
+type RichSelector interface {
+	Selector
+	SelectEngineFromCandidates(ctx context.Context, task AgentTask, candidates []EngineInfo) (Selection, error)
+}
+
 // Middleware wraps an engine to add cross-cutting behavior (logging, timing, retry, etc.).
 type Middleware func(name string, next engine.Engine) engine.Engine
 
@@ -293,13 +307,22 @@ func (c *Client) ExecutePromptAuto(ctx context.Context, selector Selector, promp
 }
 
 // ExecuteTaskAuto lets a selector choose the engine for a structured agent task.
+// If the selector implements RichSelector, capability metadata is collected and passed automatically.
 func (c *Client) ExecuteTaskAuto(ctx context.Context, selector Selector, task AgentTask) (RoutedResult, error) {
 	if selector == nil {
 		return RoutedResult{}, errors.New("aigo: selector is nil")
 	}
 
-	engines := c.EngineNames()
-	selection, err := selector.SelectEngine(ctx, task, engines)
+	var selection Selection
+	var err error
+
+	if rs, ok := selector.(RichSelector); ok {
+		candidates := c.EngineInfos()
+		selection, err = rs.SelectEngineFromCandidates(ctx, task, candidates)
+	} else {
+		engines := c.EngineNames()
+		selection, err = selector.SelectEngine(ctx, task, engines)
+	}
 	if err != nil {
 		return RoutedResult{}, fmt.Errorf("aigo: select engine: %w", err)
 	}
@@ -319,6 +342,55 @@ func (c *Client) ExecuteTaskAuto(ctx context.Context, selector Selector, task Ag
 	}, nil
 }
 
+// ExecuteTaskAutoWithFallback selects an engine and retries with alternatives on failure.
+// If the selector is a RichSelector, all candidates receive capability metadata.
+func (c *Client) ExecuteTaskAutoWithFallback(ctx context.Context, selector Selector, task AgentTask) (RoutedResult, error) {
+	if selector == nil {
+		return RoutedResult{}, errors.New("aigo: selector is nil")
+	}
+
+	candidates := c.EngineInfos()
+	graph := BuildGraph(task)
+
+	// Collect a ranked list of engines from the selector.
+	var ranked []string
+	if rs, ok := selector.(RichSelector); ok {
+		sel, err := rs.SelectEngineFromCandidates(ctx, task, candidates)
+		if err != nil {
+			return RoutedResult{}, fmt.Errorf("aigo: select engine: %w", err)
+		}
+		ranked = append(ranked, sel.Engine)
+		// Add remaining candidates as fallbacks.
+		for _, c := range candidates {
+			if c.Name != sel.Engine {
+				ranked = append(ranked, c.Name)
+			}
+		}
+	} else {
+		engines := c.EngineNames()
+		sel, err := selector.SelectEngine(ctx, task, engines)
+		if err != nil {
+			return RoutedResult{}, fmt.Errorf("aigo: select engine: %w", err)
+		}
+		ranked = append(ranked, sel.Engine)
+		for _, name := range engines {
+			if name != sel.Engine {
+				ranked = append(ranked, name)
+			}
+		}
+	}
+
+	fr, err := c.ExecuteWithFallback(ctx, ranked, graph)
+	if err != nil {
+		return RoutedResult{}, err
+	}
+	return RoutedResult{
+		Engine: fr.Engine,
+		Output: fr.Output,
+		Reason: fmt.Sprintf("selected with fallback (skipped %d)", len(fr.Skipped)),
+	}, nil
+}
+
 // EngineNames returns registered engine names in deterministic order.
 func (c *Client) EngineNames() []string {
 	c.mu.RLock()
@@ -330,6 +402,24 @@ func (c *Client) EngineNames() []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+// EngineInfos returns capability metadata for all registered engines, sorted by name.
+// Engines that do not implement Describer get an empty Capability.
+func (c *Client) EngineInfos() []EngineInfo {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	infos := make([]EngineInfo, 0, len(c.engines))
+	for name, e := range c.engines {
+		info := EngineInfo{Name: name}
+		if d, ok := e.(engine.Describer); ok {
+			info.Capability = d.Capabilities()
+		}
+		infos = append(infos, info)
+	}
+	sort.Slice(infos, func(i, j int) bool { return infos[i].Name < infos[j].Name })
+	return infos
 }
 
 // BuildGraph compiles a high-level agent task into the SDK's workflow graph format.
