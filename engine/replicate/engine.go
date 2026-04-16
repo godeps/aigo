@@ -248,6 +248,18 @@ func extractOutput(output any) (engine.Result, error) {
 	return engine.Result{Value: string(b), Kind: engine.OutputJSON}, nil
 }
 
+// Resume implements engine.Resumer — resumes polling a previously submitted task.
+func (e *Engine) Resume(ctx context.Context, remoteID string) (engine.Result, error) {
+	apiKey := e.apiKey
+	if apiKey == "" {
+		apiKey = os.Getenv("REPLICATE_API_TOKEN")
+	}
+	if apiKey == "" {
+		return engine.Result{}, ErrMissingAPIKey
+	}
+	return e.poll(ctx, apiKey, remoteID)
+}
+
 // Capabilities implements engine.Describer.
 func (e *Engine) Capabilities() engine.Capability {
 	return engine.Capability{

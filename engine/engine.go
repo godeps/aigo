@@ -57,6 +57,12 @@ type DryRunner interface {
 	DryRun(graph workflow.Graph) (DryRunResult, error)
 }
 
+// Resumer is an optional interface for engines that support resuming
+// an already-submitted async task by its remote ID.
+type Resumer interface {
+	Resume(ctx context.Context, remoteID string) (Result, error)
+}
+
 // ClassifyOutput heuristically classifies a raw output string.
 func ClassifyOutput(s string) OutputKind {
 	s = strings.TrimSpace(s)

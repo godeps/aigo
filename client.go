@@ -135,13 +135,36 @@ type Client struct {
 	mu         sync.RWMutex
 	engines    map[string]engine.Engine
 	middleware []Middleware
+	store      TaskStore
+}
+
+// ClientOption configures the Client at construction time.
+type ClientOption func(*Client)
+
+// WithStore attaches a TaskStore for async task persistence and crash recovery.
+func WithStore(s TaskStore) ClientOption {
+	return func(c *Client) { c.store = s }
+}
+
+// WithDefaultStore attaches a FileTaskStore at .aigo/tasks.json (current working directory).
+// Returns an error if the store directory cannot be created.
+func WithDefaultStore() (ClientOption, error) {
+	s, err := DefaultFileTaskStore()
+	if err != nil {
+		return nil, err
+	}
+	return WithStore(s), nil
 }
 
 // NewClient creates a new SDK client.
-func NewClient() *Client {
-	return &Client{
+func NewClient(opts ...ClientOption) *Client {
+	c := &Client{
 		engines: make(map[string]engine.Engine),
 	}
+	for _, o := range opts {
+		o(c)
+	}
+	return c
 }
 
 // RegisterEngine registers an engine under a logical name.
@@ -658,4 +681,126 @@ func (c *Client) DryRun(engineName string, task AgentTask) (engine.DryRunResult,
 
 func nodeID(v int) string {
 	return strconv.Itoa(v)
+}
+
+// Submit executes the graph and persists the task for crash recovery.
+// If the engine completes synchronously, the result is stored as completed
+// and an empty task ID is returned. If the engine returns a remote task ID
+// (WaitForCompletion=false), the record is stored as pending and the
+// aigo-side task ID is returned for later Resume.
+func (c *Client) Submit(ctx context.Context, engineName string, graph workflow.Graph, opts ...ExecuteOption) (string, error) {
+	if c.store == nil {
+		return "", ErrStoreNotConfigured
+	}
+
+	result, err := c.Execute(ctx, engineName, graph, opts...)
+	if err != nil {
+		return "", err
+	}
+
+	now := time.Now()
+	rec := TaskRecord{
+		ID:         newTaskID(),
+		EngineName: engineName,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	}
+
+	if result.Kind == OutputPlainText {
+		// Engine returned a remote task ID (async, not yet completed).
+		rec.RemoteID = result.Value
+		rec.Status = TaskStatusPending
+	} else {
+		// Engine completed synchronously.
+		rec.Status = TaskStatusCompleted
+		rec.ResultVal = result.Value
+		rec.ResultKind = result.Kind
+	}
+
+	if err := c.store.Save(rec); err != nil {
+		return "", fmt.Errorf("aigo: persist task: %w", err)
+	}
+
+	if rec.Status == TaskStatusPending {
+		return rec.ID, nil
+	}
+	return "", nil
+}
+
+// Resume polls a previously submitted async task to completion.
+// The taskID is the aigo-side ID returned by Submit.
+func (c *Client) Resume(ctx context.Context, taskID string) (Result, error) {
+	if c.store == nil {
+		return Result{}, ErrStoreNotConfigured
+	}
+
+	rec, err := c.store.Load(taskID)
+	if err != nil {
+		return Result{}, err
+	}
+
+	if rec.Status == TaskStatusCompleted {
+		return Result{
+			Value:  rec.ResultVal,
+			Kind:   rec.ResultKind,
+			Engine: rec.EngineName,
+		}, nil
+	}
+	if rec.Status == TaskStatusFailed {
+		return Result{}, fmt.Errorf("aigo: task previously failed: %s", rec.ErrMsg)
+	}
+
+	c.mu.RLock()
+	e, ok := c.engines[rec.EngineName]
+	c.mu.RUnlock()
+	if !ok {
+		return Result{}, fmt.Errorf("%w: %s", ErrEngineNotFound, rec.EngineName)
+	}
+
+	resumer, ok := e.(engine.Resumer)
+	if !ok {
+		return Result{}, fmt.Errorf("%w: %s", ErrResumeNotSupported, rec.EngineName)
+	}
+
+	er, resumeErr := resumer.Resume(ctx, rec.RemoteID)
+
+	rec.UpdatedAt = time.Now()
+	if resumeErr != nil {
+		rec.Status = TaskStatusFailed
+		rec.ErrMsg = resumeErr.Error()
+		_ = c.store.Save(rec)
+		return Result{}, fmt.Errorf("aigo: resume engine %q: %w", rec.EngineName, resumeErr)
+	}
+
+	rec.Status = TaskStatusCompleted
+	rec.ResultVal = er.Value
+	rec.ResultKind = er.Kind
+	_ = c.store.Save(rec)
+
+	return Result{
+		Value:  er.Value,
+		Kind:   er.Kind,
+		Engine: rec.EngineName,
+	}, nil
+}
+
+// RecoverPending returns all tasks that are still pending (not completed or failed).
+// Callers should iterate and call Resume for each.
+func (c *Client) RecoverPending() ([]TaskRecord, error) {
+	if c.store == nil {
+		return nil, ErrStoreNotConfigured
+	}
+
+	all, err := c.store.All()
+	if err != nil {
+		return nil, err
+	}
+
+	var pending []TaskRecord
+	for _, r := range all {
+		if r.Status == TaskStatusPending {
+			pending = append(pending, r)
+		}
+	}
+	return pending, nil
 }

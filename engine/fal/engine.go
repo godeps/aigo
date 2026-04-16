@@ -284,6 +284,18 @@ func (e *Engine) doRequest(ctx context.Context, method, url, apiKey string, body
 	return out, nil
 }
 
+// Resume implements engine.Resumer — resumes polling a previously submitted task.
+func (e *Engine) Resume(ctx context.Context, remoteID string) (engine.Result, error) {
+	apiKey := e.apiKey
+	if apiKey == "" {
+		apiKey = os.Getenv("FAL_KEY")
+	}
+	if apiKey == "" {
+		return engine.Result{}, ErrMissingAPIKey
+	}
+	return e.poll(ctx, apiKey, remoteID)
+}
+
 // Capabilities implements engine.Describer.
 func (e *Engine) Capabilities() engine.Capability {
 	return engine.Capability{

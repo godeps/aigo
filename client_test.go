@@ -3,6 +3,7 @@ package aigo
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"testing"
 
 	"github.com/godeps/aigo/engine"
@@ -420,5 +421,163 @@ func TestClientExecutePromptAuto(t *testing.T) {
 	}
 	if selector.gotTask.Prompt != "draw a castle" {
 		t.Fatalf("selector prompt = %#v", selector.gotTask)
+	}
+}
+
+// --- Submit / Resume tests ---
+
+// stubResumerEngine returns a task ID on Execute, and a result URL on Resume.
+type stubResumerEngine struct {
+	submitValue string
+	resumeValue string
+	resumeKind  engine.OutputKind
+	err         error
+}
+
+func (s *stubResumerEngine) Execute(_ context.Context, _ workflow.Graph) (engine.Result, error) {
+	return engine.Result{Value: s.submitValue, Kind: engine.OutputPlainText}, s.err
+}
+
+func (s *stubResumerEngine) Resume(_ context.Context, _ string) (engine.Result, error) {
+	return engine.Result{Value: s.resumeValue, Kind: s.resumeKind}, s.err
+}
+
+func newTestClient(t *testing.T) (*Client, *FileTaskStore) {
+	t.Helper()
+	dir := t.TempDir()
+	store, err := NewFileTaskStore(filepath.Join(dir, "tasks.json"))
+	if err != nil {
+		t.Fatalf("NewFileTaskStore: %v", err)
+	}
+	client := NewClient(WithStore(store))
+	return client, store
+}
+
+func TestClientSubmitAndResume(t *testing.T) {
+	t.Parallel()
+	client, _ := newTestClient(t)
+
+	eng := &stubResumerEngine{
+		submitValue: "remote-task-123",
+		resumeValue: "https://cdn.example.com/video.mp4",
+		resumeKind:  engine.OutputURL,
+	}
+	if err := client.RegisterEngine("runway", eng); err != nil {
+		t.Fatalf("RegisterEngine: %v", err)
+	}
+
+	graph := workflow.Graph{"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "a cat"}}}
+	taskID, err := client.Submit(context.Background(), "runway", graph)
+	if err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	if taskID == "" {
+		t.Fatal("expected non-empty task ID for async submit")
+	}
+
+	result, err := client.Resume(context.Background(), taskID)
+	if err != nil {
+		t.Fatalf("Resume: %v", err)
+	}
+	if result.Value != "https://cdn.example.com/video.mp4" || result.Kind != OutputURL {
+		t.Errorf("Resume result = %+v", result)
+	}
+}
+
+func TestClientRecoverPending(t *testing.T) {
+	t.Parallel()
+	client, _ := newTestClient(t)
+
+	eng := &stubResumerEngine{submitValue: "remote-1"}
+	if err := client.RegisterEngine("flux", eng); err != nil {
+		t.Fatalf("RegisterEngine: %v", err)
+	}
+
+	graph := workflow.Graph{"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "test"}}}
+	_, err := client.Submit(context.Background(), "flux", graph)
+	if err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+
+	eng.submitValue = "remote-2"
+	_, err = client.Submit(context.Background(), "flux", graph)
+	if err != nil {
+		t.Fatalf("Submit 2: %v", err)
+	}
+
+	pending, err := client.RecoverPending()
+	if err != nil {
+		t.Fatalf("RecoverPending: %v", err)
+	}
+	if len(pending) != 2 {
+		t.Errorf("expected 2 pending, got %d", len(pending))
+	}
+}
+
+func TestClientResume_AlreadyCompleted(t *testing.T) {
+	t.Parallel()
+	client, store := newTestClient(t)
+
+	rec := TaskRecord{
+		ID:         "completed-001",
+		EngineName: "flux",
+		Status:     TaskStatusCompleted,
+		ResultVal:  "https://example.com/img.png",
+		ResultKind: OutputURL,
+	}
+	if err := store.Save(rec); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	result, err := client.Resume(context.Background(), "completed-001")
+	if err != nil {
+		t.Fatalf("Resume: %v", err)
+	}
+	if result.Value != "https://example.com/img.png" {
+		t.Errorf("expected cached result, got: %+v", result)
+	}
+}
+
+func TestClientResume_NoStore(t *testing.T) {
+	t.Parallel()
+	client := NewClient() // no store
+	_, err := client.Resume(context.Background(), "any-id")
+	if !errors.Is(err, ErrStoreNotConfigured) {
+		t.Errorf("expected ErrStoreNotConfigured, got: %v", err)
+	}
+}
+
+func TestClientSubmit_NoStore(t *testing.T) {
+	t.Parallel()
+	client := NewClient()
+	graph := workflow.Graph{"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "test"}}}
+	_, err := client.Submit(context.Background(), "any", graph)
+	if !errors.Is(err, ErrStoreNotConfigured) {
+		t.Errorf("expected ErrStoreNotConfigured, got: %v", err)
+	}
+}
+
+func TestClientResume_EngineNotResumer(t *testing.T) {
+	t.Parallel()
+	client, store := newTestClient(t)
+
+	// Register a plain stubEngine (no Resumer interface).
+	if err := client.RegisterEngine("plain", stubEngine{result: "ok"}); err != nil {
+		t.Fatalf("RegisterEngine: %v", err)
+	}
+
+	rec := TaskRecord{
+		ID:         "plain-001",
+		EngineName: "plain",
+		RemoteID:   "remote-abc",
+		Status:     TaskStatusPending,
+	}
+	if err := store.Save(rec); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	_, err := client.Resume(context.Background(), "plain-001")
+	if !errors.Is(err, ErrResumeNotSupported) {
+		t.Errorf("expected ErrResumeNotSupported, got: %v", err)
 	}
 }

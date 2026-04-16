@@ -291,6 +291,22 @@ func (e *Engine) poll(ctx context.Context, apiKey, genID string) (string, error)
 	})
 }
 
+// Resume implements engine.Resumer — resumes polling a previously submitted task.
+func (e *Engine) Resume(ctx context.Context, remoteID string) (engine.Result, error) {
+	apiKey := e.apiKey
+	if apiKey == "" {
+		apiKey = os.Getenv("LUMA_API_KEY")
+	}
+	if apiKey == "" {
+		return engine.Result{}, ErrMissingAPIKey
+	}
+	url, err := e.poll(ctx, apiKey, remoteID)
+	if err != nil {
+		return engine.Result{}, err
+	}
+	return engine.Result{Value: url, Kind: engine.OutputURL}, nil
+}
+
 // Capabilities implements engine.Describer.
 func (e *Engine) Capabilities() engine.Capability {
 	cap := engine.Capability{

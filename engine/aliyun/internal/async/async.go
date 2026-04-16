@@ -61,6 +61,11 @@ func Submit(ctx context.Context, rt *runtime.RT, apiKey, path string, payload ma
 	return wait(ctx, rt, apiKey, taskID, ex)
 }
 
+// Wait polls an already-submitted task to completion. Exported for engine.Resumer support.
+func Wait(ctx context.Context, rt *runtime.RT, apiKey, taskID string, ex URLExtractor) (string, error) {
+	return wait(ctx, rt, apiKey, taskID, ex)
+}
+
 func wait(ctx context.Context, rt *runtime.RT, apiKey, taskID string, ex URLExtractor) (string, error) {
 	return poll.Poll(ctx, poll.Config{
 		Interval:    rt.PollInterval,

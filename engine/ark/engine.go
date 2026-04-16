@@ -149,6 +149,22 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 	return engine.Result{Value: videoURL, Kind: engine.OutputURL}, nil
 }
 
+// Resume implements engine.Resumer — resumes polling a previously submitted task.
+func (e *Engine) Resume(ctx context.Context, remoteID string) (engine.Result, error) {
+	apiKey := e.apiKey
+	if apiKey == "" {
+		apiKey = os.Getenv("ARK_API_KEY")
+	}
+	if apiKey == "" {
+		return engine.Result{}, ErrMissingAPIKey
+	}
+	url, err := e.poll(ctx, apiKey, remoteID)
+	if err != nil {
+		return engine.Result{}, err
+	}
+	return engine.Result{Value: url, Kind: engine.OutputURL}, nil
+}
+
 // Capabilities implements engine.Describer.
 func (e *Engine) Capabilities() engine.Capability {
 	if imageModels[e.model] {
