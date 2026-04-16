@@ -47,9 +47,11 @@ type TaskStore interface {
 }
 
 // FileTaskStore implements TaskStore using a single JSON file.
+// It uses sync.Mutex for in-process safety and flock for cross-process safety.
 type FileTaskStore struct {
-	mu   sync.Mutex
-	path string
+	mu       sync.RWMutex
+	path     string
+	lockPath string
 }
 
 // NewFileTaskStore creates a file-backed task store at the given path.
@@ -58,7 +60,7 @@ func NewFileTaskStore(path string) (*FileTaskStore, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, fmt.Errorf("aigo: create task store dir: %w", err)
 	}
-	return &FileTaskStore{path: path}, nil
+	return &FileTaskStore{path: path, lockPath: path + ".lock"}, nil
 }
 
 // DefaultFileTaskStore creates a file-backed task store at .aigo/tasks.json
@@ -70,6 +72,12 @@ func DefaultFileTaskStore() (*FileTaskStore, error) {
 func (s *FileTaskStore) Save(record TaskRecord) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	f, err := fileLockExclusive(s.lockPath)
+	if err != nil {
+		return fmt.Errorf("aigo: lock task store: %w", err)
+	}
+	defer fileUnlock(f)
 
 	records, err := s.readAll()
 	if err != nil {
@@ -93,8 +101,14 @@ func (s *FileTaskStore) Save(record TaskRecord) error {
 }
 
 func (s *FileTaskStore) Load(id string) (TaskRecord, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	f, err := fileLockShared(s.lockPath)
+	if err != nil {
+		return TaskRecord{}, fmt.Errorf("aigo: lock task store: %w", err)
+	}
+	defer fileUnlock(f)
 
 	records, err := s.readAll()
 	if err != nil {
@@ -110,14 +124,27 @@ func (s *FileTaskStore) Load(id string) (TaskRecord, error) {
 }
 
 func (s *FileTaskStore) All() ([]TaskRecord, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	f, err := fileLockShared(s.lockPath)
+	if err != nil {
+		return nil, fmt.Errorf("aigo: lock task store: %w", err)
+	}
+	defer fileUnlock(f)
+
 	return s.readAll()
 }
 
 func (s *FileTaskStore) Delete(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	f, err := fileLockExclusive(s.lockPath)
+	if err != nil {
+		return fmt.Errorf("aigo: lock task store: %w", err)
+	}
+	defer fileUnlock(f)
 
 	records, err := s.readAll()
 	if err != nil {
@@ -139,6 +166,12 @@ func (s *FileTaskStore) Purge(maxAge time.Duration) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	f, err := fileLockExclusive(s.lockPath)
+	if err != nil {
+		return fmt.Errorf("aigo: lock task store: %w", err)
+	}
+	defer fileUnlock(f)
+
 	records, err := s.readAll()
 	if err != nil {
 		return err
@@ -156,7 +189,7 @@ func (s *FileTaskStore) Purge(maxAge time.Duration) error {
 }
 
 // readAll reads the JSON file. Returns empty slice if file does not exist.
-// Caller must hold s.mu.
+// Caller must hold s.mu and a file lock (shared or exclusive).
 func (s *FileTaskStore) readAll() ([]TaskRecord, error) {
 	data, err := os.ReadFile(s.path)
 	if err != nil {
@@ -177,7 +210,7 @@ func (s *FileTaskStore) readAll() ([]TaskRecord, error) {
 }
 
 // writeAll writes all records to the JSON file atomically (tmp + rename).
-// Caller must hold s.mu.
+// Caller must hold s.mu and an exclusive file lock.
 func (s *FileTaskStore) writeAll(records []TaskRecord) error {
 	data, err := json.MarshalIndent(records, "", "  ")
 	if err != nil {
