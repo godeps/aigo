@@ -131,8 +131,9 @@ type Selector interface {
 
 // EngineInfo describes a candidate engine's capabilities, provided to RichSelector for informed decisions.
 type EngineInfo struct {
-	Name       string            `json:"name"`
-	Capability engine.Capability `json:"capability"`
+	Name        string             `json:"name"`
+	DisplayName engine.DisplayName `json:"display_name"`
+	Capability  engine.Capability  `json:"capability"`
 }
 
 // RichSelector is an enhanced selector that receives engine capability metadata.
@@ -266,6 +267,72 @@ func (c *Client) RegisterEngineIfKey(name string, e engine.Engine, envVars ...st
 		}
 	}
 	return false, nil
+}
+
+// EngineEntry describes an engine to register with optional env-var gating.
+type EngineEntry struct {
+	Name    string
+	Engine  engine.Engine
+	EnvVars []string // required env vars; if empty, always register
+}
+
+// RegisterAll registers multiple engines at once.
+// Stops and returns the first error encountered.
+func (c *Client) RegisterAll(engines map[string]engine.Engine) error {
+	for name, e := range engines {
+		if err := c.RegisterEngine(name, e); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// RegisterAllIfKey registers multiple engines, each gated by env vars.
+// Engines whose env vars are not set are silently skipped.
+// Returns the names of engines that were actually registered.
+func (c *Client) RegisterAllIfKey(entries []EngineEntry) ([]string, error) {
+	var registered []string
+	for _, e := range entries {
+		if len(e.EnvVars) == 0 {
+			if err := c.RegisterEngine(e.Name, e.Engine); err != nil {
+				return registered, err
+			}
+			registered = append(registered, e.Name)
+			continue
+		}
+		ok, err := c.RegisterEngineIfKey(e.Name, e.Engine, e.EnvVars...)
+		if err != nil {
+			return registered, err
+		}
+		if ok {
+			registered = append(registered, e.Name)
+		}
+	}
+	return registered, nil
+}
+
+// RegisterProvider registers all engines from a provider.
+// Engines whose required env vars are not set are silently skipped.
+// Returns the names of engines that were actually registered.
+func (c *Client) RegisterProvider(p engine.Provider) ([]string, error) {
+	var registered []string
+	for _, cfg := range p.Configs {
+		if len(cfg.EnvVars) == 0 {
+			if err := c.RegisterEngine(cfg.Name, cfg.Engine); err != nil {
+				return registered, err
+			}
+			registered = append(registered, cfg.Name)
+			continue
+		}
+		ok, err := c.RegisterEngineIfKey(cfg.Name, cfg.Engine, cfg.EnvVars...)
+		if err != nil {
+			return registered, err
+		}
+		if ok {
+			registered = append(registered, cfg.Name)
+		}
+	}
+	return registered, nil
 }
 
 // Use appends middleware that wraps every engine on each Execute call.
@@ -493,6 +560,9 @@ func (c *Client) EngineInfos() []EngineInfo {
 		info := EngineInfo{Name: name}
 		if d, ok := e.(engine.Describer); ok {
 			info.Capability = d.Capabilities()
+		}
+		if n, ok := e.(engine.Namer); ok {
+			info.DisplayName = n.DisplayName()
 		}
 		infos = append(infos, info)
 	}

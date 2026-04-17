@@ -13,7 +13,7 @@ import (
 	"time"
 
 	aigo "github.com/godeps/aigo"
-	"github.com/godeps/aigo/engine/aliyun"
+	"github.com/godeps/aigo/engine/alibabacloud"
 )
 
 // Router API style:
@@ -24,11 +24,11 @@ import (
 func main() {
 	client := aigo.NewClient()
 
-	must(client.RegisterEngine("aliyun-image", aliyun.New(aliyun.Config{
-		Model: aliyun.ModelQwenImage,
+	must(client.RegisterEngine("alibabacloud-image", alibabacloud.New(alibabacloud.Config{
+		Model: alibabacloud.ModelQwenImage,
 	})))
-	must(client.RegisterEngine("aliyun-video", aliyun.New(aliyun.Config{
-		Model:             aliyun.ModelWanTextToVideo,
+	must(client.RegisterEngine("alibabacloud-video", alibabacloud.New(alibabacloud.Config{
+		Model:             alibabacloud.ModelWanTextToVideo,
 		WaitForCompletion: true,
 		PollInterval:      15 * time.Second,
 	})))

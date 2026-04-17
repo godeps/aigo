@@ -8,6 +8,7 @@ import (
 // Entry describes a registered engine provider.
 type Entry struct {
 	Name               string
+	DisplayName        DisplayName
 	Engine             Engine
 	ConfigSchemaFunc   func() []ConfigField
 	ModelsByCapability func() map[string][]string

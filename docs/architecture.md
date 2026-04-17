@@ -34,7 +34,7 @@ The top-level router. Registers named engines and dispatches graphs:
 
 ## Engine Implementations
 
-### engine/aliyun
+### engine/alibabacloud
 
 Alibaba Cloud Bailian / DashScope. Uses a model dispatch table (`map[string]modelEntry`) to route to the correct handler (image gen, video gen, TTS, voice design). Long-running tasks use async polling via `engine/poll`.
 

@@ -26,7 +26,7 @@ AgentTask ──► BuildGraph() ──► workflow.Graph (DAG)
 
 | Engine | Backend | Env Var |
 |--------|---------|---------|
-| `aliyun` | Alibaba Cloud DashScope (Qwen, Wan, Z-Image) | `DASHSCOPE_API_KEY` |
+| `alibabacloud` | Alibaba Cloud DashScope (Qwen, Wan, Z-Image) | `DASHSCOPE_API_KEY` |
 | `openai` | OpenAI DALL-E 3 | `OPENAI_API_KEY` |
 | `google` | Google Imagen | `GOOGLE_API_KEY` |
 | `flux` | Black Forest Labs FLUX | `BFL_API_KEY` |
@@ -89,7 +89,7 @@ AgentTask ──► BuildGraph() ──► workflow.Graph (DAG)
 |--------|---------|---------|
 | `embed/openai` | OpenAI Embeddings | `OPENAI_API_KEY` |
 | `embed/gemini` | Google Gemini Embeddings | `GEMINI_API_KEY` |
-| `embed/aliyun` | DashScope Embeddings (text + multimodal) | `DASHSCOPE_API_KEY` |
+| `embed/alibabacloud` | DashScope Embeddings (text + multimodal) | `DASHSCOPE_API_KEY` |
 | `embed/jina` | Jina Embeddings | `JINA_API_KEY` |
 | `embed/voyage` | Voyage AI Embeddings | `VOYAGE_API_KEY` |
 
@@ -106,8 +106,8 @@ go get github.com/godeps/aigo
 ```go
 client := aigo.NewClient()
 
-_ = client.RegisterEngine("img", aliyun.New(aliyun.Config{
-    Model: aliyun.ModelQwenImage,
+_ = client.RegisterEngine("img", alibabacloud.New(alibabacloud.Config{
+    Model: alibabacloud.ModelQwenImage,
 }))
 
 result, err := client.ExecutePrompt(ctx, "img", "A shiba inu riding a vintage motorcycle")
@@ -176,6 +176,71 @@ result, err := client.ExecuteTask(ctx, "vd", aigo.AgentTask{
 })
 ```
 
+## Batch Registration
+
+### Register multiple engines at once
+
+```go
+client.RegisterAll(map[string]engine.Engine{
+    "img":   alibabacloud.New(alibabacloud.Config{Model: alibabacloud.ModelQwenImage}),
+    "video": kling.New(kling.Config{Model: kling.ModelKlingV2Master}),
+})
+```
+
+### Conditional registration (skip if env var is missing)
+
+```go
+client.RegisterAllIfKey([]aigo.EngineEntry{
+    {Name: "kling-video", Engine: klingEngine, EnvVars: []string{"KLING_API_KEY"}},
+    {Name: "luma-video",  Engine: lumaEngine,  EnvVars: []string{"LUMA_API_KEY"}},
+    {Name: "local",       Engine: localEngine}, // always registered
+})
+```
+
+### Provider grouping
+
+Register all engines from a vendor in one call. Engines whose required env vars are not set are silently skipped:
+
+```go
+import "github.com/godeps/aigo/engine/alibabacloud"
+
+registered, _ := client.RegisterProvider(alibabacloud.DefaultProvider())
+// registered: ["alibabacloud-image", "alibabacloud-video", "alibabacloud-tts"]
+```
+
+Every engine package exports `DefaultProvider()` with sensible presets.
+
+### Config-file-driven setup
+
+Declare engines in a JSON file instead of code:
+
+```json
+{
+  "engines": [
+    {"name": "img",   "provider": "alibabacloud", "model": "qwen-image"},
+    {"name": "video", "provider": "kling",         "model": "kling-v2-master"},
+    {"name": "tts",   "provider": "elevenlabs"},
+    {"name": "backup","provider": "runway",         "enabled": false}
+  ]
+}
+```
+
+```go
+cfg, _ := aigo.LoadConfig("engines.json")
+registered, _ := client.ApplyConfig(cfg)
+```
+
+Each engine package registers its factory via `init()`, so importing the package is sufficient:
+
+```go
+import (
+    _ "github.com/godeps/aigo/engine/alibabacloud"
+    _ "github.com/godeps/aigo/engine/kling"
+    _ "github.com/godeps/aigo/engine/elevenlabs"
+    _ "github.com/godeps/aigo/engine/runway"
+)
+```
+
 ## Agent-Native Features
 
 ### Structured errors with retry classification
@@ -239,7 +304,7 @@ allModels := reg.AllModels()
 Query what engines can do — for dynamic tool selection:
 
 ```go
-cap, _ := client.EngineCapabilities("aliyun-img")
+cap, _ := client.EngineCapabilities("alibabacloud-img")
 // cap.MediaTypes  → ["image"]
 // cap.Models      → ["qwen-image"]
 // cap.SupportsSync, cap.SupportsPoll
@@ -487,14 +552,14 @@ result, err := client.Execute(ctx, "img", graph)
 
 ```bash
 # Alibaba Cloud
-go run ./examples/aliyun_qwen_image
-go run ./examples/aliyun_wan_image
-go run ./examples/aliyun_zimage
-go run ./examples/aliyun_wan_t2v
-go run ./examples/aliyun_wan_r2v
-go run ./examples/aliyun_wan_videoedit
-go run ./examples/aliyun_qwen_tts
-go run ./examples/aliyun_qwen_voice_design
+go run ./examples/alibabacloud_qwen_image
+go run ./examples/alibabacloud_wan_image
+go run ./examples/alibabacloud_zimage
+go run ./examples/alibabacloud_wan_t2v
+go run ./examples/alibabacloud_wan_r2v
+go run ./examples/alibabacloud_wan_videoedit
+go run ./examples/alibabacloud_qwen_tts
+go run ./examples/alibabacloud_qwen_voice_design
 
 # New API gateway
 go run ./examples/newapi_image

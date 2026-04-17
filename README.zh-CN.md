@@ -26,7 +26,7 @@ AgentTask ──► BuildGraph() ──► workflow.Graph (DAG)
 
 | 引擎 | 后端 | 环境变量 |
 |------|------|---------|
-| `aliyun` | 阿里云 DashScope（通义万相、Wan、Z-Image） | `DASHSCOPE_API_KEY` |
+| `alibabacloud` | 阿里云百炼 DashScope（通义万相、Wan、Z-Image） | `DASHSCOPE_API_KEY` |
 | `openai` | OpenAI DALL-E 3 | `OPENAI_API_KEY` |
 | `google` | Google Imagen | `GOOGLE_API_KEY` |
 | `flux` | Black Forest Labs FLUX | `BFL_API_KEY` |
@@ -89,7 +89,7 @@ AgentTask ──► BuildGraph() ──► workflow.Graph (DAG)
 |------|------|---------|
 | `embed/openai` | OpenAI Embeddings | `OPENAI_API_KEY` |
 | `embed/gemini` | Google Gemini Embeddings | `GEMINI_API_KEY` |
-| `embed/aliyun` | DashScope Embeddings（文本+多模态） | `DASHSCOPE_API_KEY` |
+| `embed/alibabacloud` | 百炼向量嵌入（文本+多模态） | `DASHSCOPE_API_KEY` |
 | `embed/jina` | Jina Embeddings | `JINA_API_KEY` |
 | `embed/voyage` | Voyage AI Embeddings | `VOYAGE_API_KEY` |
 
@@ -106,8 +106,8 @@ go get github.com/godeps/aigo
 ```go
 client := aigo.NewClient()
 
-_ = client.RegisterEngine("img", aliyun.New(aliyun.Config{
-    Model: aliyun.ModelQwenImage,
+_ = client.RegisterEngine("img", alibabacloud.New(alibabacloud.Config{
+    Model: alibabacloud.ModelQwenImage,
 }))
 
 result, err := client.ExecutePrompt(ctx, "img", "一只骑复古摩托的柴犬，电影感")
@@ -176,6 +176,71 @@ result, err := client.ExecuteTask(ctx, "vd", aigo.AgentTask{
 })
 ```
 
+## 批量注册
+
+### 一次注册多个引擎
+
+```go
+client.RegisterAll(map[string]engine.Engine{
+    "img":   alibabacloud.New(alibabacloud.Config{Model: alibabacloud.ModelQwenImage}),
+    "video": kling.New(kling.Config{Model: kling.ModelKlingV2Master}),
+})
+```
+
+### 条件注册（环境变量缺失时跳过）
+
+```go
+client.RegisterAllIfKey([]aigo.EngineEntry{
+    {Name: "kling-video", Engine: klingEngine, EnvVars: []string{"KLING_API_KEY"}},
+    {Name: "luma-video",  Engine: lumaEngine,  EnvVars: []string{"LUMA_API_KEY"}},
+    {Name: "local",       Engine: localEngine}, // 始终注册
+})
+```
+
+### Provider 分组
+
+一次调用注册某个供应商的所有引擎。缺少所需环境变量的引擎会被自动跳过：
+
+```go
+import "github.com/godeps/aigo/engine/alibabacloud"
+
+registered, _ := client.RegisterProvider(alibabacloud.DefaultProvider())
+// registered: ["alibabacloud-image", "alibabacloud-video", "alibabacloud-tts"]
+```
+
+每个引擎包都导出 `DefaultProvider()`，包含合理的默认预设。
+
+### 配置文件驱动
+
+通过 JSON 文件声明引擎，无需在代码中硬编码：
+
+```json
+{
+  "engines": [
+    {"name": "img",   "provider": "alibabacloud", "model": "qwen-image"},
+    {"name": "video", "provider": "kling",         "model": "kling-v2-master"},
+    {"name": "tts",   "provider": "elevenlabs"},
+    {"name": "backup","provider": "runway",         "enabled": false}
+  ]
+}
+```
+
+```go
+cfg, _ := aigo.LoadConfig("engines.json")
+registered, _ := client.ApplyConfig(cfg)
+```
+
+每个引擎包通过 `init()` 注册工厂函数，只需 import 即可使用：
+
+```go
+import (
+    _ "github.com/godeps/aigo/engine/alibabacloud"
+    _ "github.com/godeps/aigo/engine/kling"
+    _ "github.com/godeps/aigo/engine/elevenlabs"
+    _ "github.com/godeps/aigo/engine/runway"
+)
+```
+
 ## Agent 原生特性
 
 ### 结构化错误与重试分类
@@ -239,7 +304,7 @@ allModels := reg.AllModels()
 查询引擎的能力 — 用于动态工具选择：
 
 ```go
-cap, _ := client.EngineCapabilities("aliyun-img")
+cap, _ := client.EngineCapabilities("alibabacloud-img")
 // cap.MediaTypes  → ["image"]
 // cap.Models      → ["qwen-image"]
 // cap.SupportsSync, cap.SupportsPoll
@@ -487,14 +552,14 @@ result, err := client.Execute(ctx, "img", graph)
 
 ```bash
 # 阿里云百炼
-go run ./examples/aliyun_qwen_image
-go run ./examples/aliyun_wan_image
-go run ./examples/aliyun_zimage
-go run ./examples/aliyun_wan_t2v
-go run ./examples/aliyun_wan_r2v
-go run ./examples/aliyun_wan_videoedit
-go run ./examples/aliyun_qwen_tts
-go run ./examples/aliyun_qwen_voice_design
+go run ./examples/alibabacloud_qwen_image
+go run ./examples/alibabacloud_wan_image
+go run ./examples/alibabacloud_zimage
+go run ./examples/alibabacloud_wan_t2v
+go run ./examples/alibabacloud_wan_r2v
+go run ./examples/alibabacloud_wan_videoedit
+go run ./examples/alibabacloud_qwen_tts
+go run ./examples/alibabacloud_qwen_voice_design
 
 # New API 网关
 go run ./examples/newapi_image

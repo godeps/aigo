@@ -61,6 +61,11 @@ type Describer interface {
 	Capabilities() Capability
 }
 
+// Namer is an optional interface that engines can implement to provide localized display names.
+type Namer interface {
+	DisplayName() DisplayName
+}
+
 // DryRunResult is the outcome of a dry-run estimation.
 type DryRunResult struct {
 	WillPoll      bool
@@ -97,6 +102,15 @@ func ClassifyOutput(s string) OutputKind {
 	}
 	return OutputPlainText
 }
+
+// DisplayName holds localized display names for an engine.
+type DisplayName struct {
+	EN string `json:"en"` // English display name, e.g. "Kling AI"
+	ZH string `json:"zh"` // Chinese display name, e.g. "可灵 AI"
+}
+
+// String returns the English display name.
+func (d DisplayName) String() string { return d.EN }
 
 // Discoverer is a package-level interface for providers that can enumerate
 // all known models grouped by capability (e.g. "image", "video", "tts").
