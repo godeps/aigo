@@ -26,18 +26,22 @@ func (e *Engine) runOpenAIImageGenerations(ctx context.Context, apiKey string, g
 		return "", wrapGraphErr(err)
 	}
 
+	gptImage := isGPTImageModel(e.model)
 	payload := map[string]any{
-		"model":           e.model,
-		"prompt":          prompt,
-		"size":            graph.ExtractImageSizeOpenAI(g),
-		"n":               1,
-		"response_format": "url",
+		"model":  e.model,
+		"prompt": prompt,
+		"size":   graph.ExtractImageSizeOpenAI(g),
+		"n":      1,
+	}
+	if !gptImage {
+		// gpt-image-* always returns b64_json and rejects response_format/style.
+		payload["response_format"] = "url"
+		if e.style != "" {
+			payload["style"] = e.style
+		}
 	}
 	if e.quality != "" {
 		payload["quality"] = e.quality
-	}
-	if e.style != "" {
-		payload["style"] = e.style
 	}
 	if n, ok := graph.IntOption(g, "n"); ok && n >= 1 && n <= 10 {
 		payload["n"] = n
@@ -70,7 +74,10 @@ func (e *Engine) runOpenAIImageEdits(ctx context.Context, apiKey string, g workf
 	w := multipart.NewWriter(&buf)
 	_ = w.WriteField("model", e.model)
 	_ = w.WriteField("prompt", prompt)
-	_ = w.WriteField("response_format", "url")
+	if !isGPTImageModel(e.model) {
+		// gpt-image-* always returns b64_json; response_format is not accepted.
+		_ = w.WriteField("response_format", "url")
+	}
 	if s := graph.ExtractImageSizeOpenAI(g); s != "" {
 		_ = w.WriteField("size", s)
 	}
@@ -320,6 +327,12 @@ func decodeOpenAIImageData(respBody []byte) (string, error) {
 		return "data:image/png;base64," + decoded.Data[0].B64JSON, nil
 	}
 	return "", errors.New("newapi: image response had no url or b64_json")
+}
+
+// isGPTImageModel reports whether the model belongs to the gpt-image-* family,
+// which has a different request/response contract than DALL-E models.
+func isGPTImageModel(name string) bool {
+	return strings.HasPrefix(strings.TrimSpace(name), "gpt-image-")
 }
 
 func speechMIME(format string) string {

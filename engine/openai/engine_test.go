@@ -96,3 +96,72 @@ func TestExecuteCallsImagesAPI(t *testing.T) {
 		t.Fatalf("model = %#v, want %q", gotPayload["model"], defaultModel)
 	}
 }
+
+func TestExecuteGPTImage2OmitsUnsupportedFieldsAndDecodesBase64(t *testing.T) {
+	t.Parallel()
+
+	var gotPayload map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&gotPayload); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"b64_json":"AAECAw=="}]}`))
+	}))
+	defer server.Close()
+
+	engine := New(Config{
+		APIKey:  "test-key",
+		BaseURL: server.URL,
+		Model:   "gpt-image-2",
+		Quality: "high",
+		Style:   "vivid", // must be silently dropped for gpt-image-*
+	})
+
+	graph := workflow.Graph{
+		"1": {
+			ClassType: "CLIPTextEncode",
+			Inputs:    map[string]any{"text": "a quiet zen garden at dawn"},
+		},
+		"2": {
+			ClassType: "EmptyLatentImage",
+			Inputs:    map[string]any{"width": 1024, "height": 1024},
+		},
+	}
+
+	got, err := engine.Execute(context.Background(), graph)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	if _, ok := gotPayload["response_format"]; ok {
+		t.Errorf("payload must not include response_format for gpt-image-*: %#v", gotPayload)
+	}
+	if _, ok := gotPayload["style"]; ok {
+		t.Errorf("payload must not include style for gpt-image-*: %#v", gotPayload)
+	}
+	if gotPayload["quality"] != "high" {
+		t.Errorf("quality = %#v, want \"high\"", gotPayload["quality"])
+	}
+	if gotPayload["model"] != "gpt-image-2" {
+		t.Errorf("model = %#v, want \"gpt-image-2\"", gotPayload["model"])
+	}
+	wantPrefix := "data:image/png;base64,"
+	if got.Value[:len(wantPrefix)] != wantPrefix {
+		t.Errorf("Execute() = %q, want data URI", got.Value)
+	}
+}
+
+func TestNewQualityDefaultsByModelFamily(t *testing.T) {
+	t.Parallel()
+
+	dalle := New(Config{Model: "dall-e-3"})
+	if dalle.quality != "standard" {
+		t.Errorf("dall-e-3 default quality = %q, want \"standard\"", dalle.quality)
+	}
+
+	gpt := New(Config{Model: "gpt-image-2"})
+	if gpt.quality != "" {
+		t.Errorf("gpt-image-2 default quality = %q, want \"\" (omit)", gpt.quality)
+	}
+}

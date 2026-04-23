@@ -69,7 +69,7 @@ func New(cfg Config) *Engine {
 	}
 
 	quality := cfg.Quality
-	if quality == "" {
+	if quality == "" && !isGPTImageModel(model) {
 		quality = "standard"
 	}
 
@@ -81,6 +81,12 @@ func New(cfg Config) *Engine {
 		style:      cfg.Style,
 		httpClient: httpClient,
 	}
+}
+
+// isGPTImageModel reports whether the model belongs to the gpt-image-* family,
+// which has a different request/response contract than DALL-E models.
+func isGPTImageModel(name string) bool {
+	return strings.HasPrefix(strings.TrimSpace(name), "gpt-image-")
 }
 
 // Compile extracts prompt and size from a graph into an OpenAI request.
@@ -136,15 +142,25 @@ func (e *Engine) Execute(ctx context.Context, graph workflow.Graph) (engine.Resu
 	}
 
 	payload := map[string]any{
-		"model":           req.Model,
-		"prompt":          req.Prompt,
-		"size":            req.Size,
-		"quality":         req.Quality,
-		"n":               1,
-		"response_format": "url",
+		"model":  req.Model,
+		"prompt": req.Prompt,
+		"size":   req.Size,
+		"n":      1,
 	}
-	if req.Style != "" {
-		payload["style"] = req.Style
+	if isGPTImageModel(req.Model) {
+		// gpt-image-* always returns b64_json; response_format and style
+		// parameters are not accepted by the API.
+		if req.Quality != "" {
+			payload["quality"] = req.Quality
+		}
+	} else {
+		payload["response_format"] = "url"
+		if req.Quality != "" {
+			payload["quality"] = req.Quality
+		}
+		if req.Style != "" {
+			payload["style"] = req.Style
+		}
 	}
 
 	body, err := json.Marshal(payload)
@@ -200,10 +216,14 @@ func (e *Engine) Execute(ctx context.Context, graph workflow.Graph) (engine.Resu
 
 // Capabilities implements engine.Describer.
 func (e *Engine) Capabilities() engine.Capability {
+	sizes := []string{"1024x1024", "1024x1792", "1792x1024"}
+	if isGPTImageModel(e.model) {
+		sizes = []string{"1024x1024", "1024x1536", "1536x1024"}
+	}
 	return engine.Capability{
 		MediaTypes:   []string{"image"},
 		Models:       []string{e.model},
-		Sizes:        []string{"1024x1024", "1024x1792", "1792x1024"},
+		Sizes:        sizes,
 		SupportsSync: true,
 	}
 }
@@ -219,6 +239,6 @@ func ConfigSchema() []engine.ConfigField {
 // ModelsByCapability returns all known OpenAI models grouped by capability.
 func ModelsByCapability() map[string][]string {
 	return map[string][]string{
-		"image": {"dall-e-3", "dall-e-2"},
+		"image": {"gpt-image-2", "gpt-image-1", "dall-e-3", "dall-e-2"},
 	}
 }

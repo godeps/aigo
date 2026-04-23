@@ -2,6 +2,7 @@ package newapi
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -159,5 +160,67 @@ func TestExecuteSpeechDataURI(t *testing.T) {
 	}
 	if len(out.Value) < 30 || out.Value[:5] != "data:" {
 		t.Fatalf("unexpected %q", out.Value)
+	}
+}
+
+func TestExecuteGPTImage2OmitsResponseFormatAndStyle(t *testing.T) {
+	t.Parallel()
+
+	var gotPayload map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/images/generations" || r.Method != http.MethodPost {
+			t.Fatalf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&gotPayload); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"b64_json":"AAECAw=="}]}`))
+	}))
+	defer server.Close()
+
+	eng := New(Config{
+		BaseURL: server.URL + "/v1",
+		Model:   "gpt-image-2",
+		Kind:    KindImage,
+		APIKey:  "sk-test",
+		Quality: "high",
+		Style:   "vivid", // must be silently dropped for gpt-image-*
+	})
+
+	graph := workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "a misty mountain at sunrise"}},
+	}
+	out, err := eng.Execute(context.Background(), graph)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := gotPayload["response_format"]; ok {
+		t.Errorf("payload must omit response_format for gpt-image-*: %#v", gotPayload)
+	}
+	if _, ok := gotPayload["style"]; ok {
+		t.Errorf("payload must omit style for gpt-image-*: %#v", gotPayload)
+	}
+	if gotPayload["quality"] != "high" {
+		t.Errorf("quality = %#v, want \"high\"", gotPayload["quality"])
+	}
+	if gotPayload["model"] != "gpt-image-2" {
+		t.Errorf("model = %#v, want \"gpt-image-2\"", gotPayload["model"])
+	}
+	wantPrefix := "data:image/png;base64,"
+	if len(out.Value) < len(wantPrefix) || out.Value[:len(wantPrefix)] != wantPrefix {
+		t.Errorf("Execute() = %q, want data URI", out.Value)
+	}
+}
+
+func TestLookupRouteGPTImage2(t *testing.T) {
+	t.Parallel()
+
+	route, kind := LookupRoute("gpt-image-2")
+	if route != RouteOpenAIImagesGenerations {
+		t.Errorf("route = %q, want %q", route, RouteOpenAIImagesGenerations)
+	}
+	if kind != KindImage {
+		t.Errorf("kind = %q, want %q", kind, KindImage)
 	}
 }
