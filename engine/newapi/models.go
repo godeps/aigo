@@ -14,7 +14,6 @@ type knownModel struct {
 // support additional models not listed here.
 var knownModels = map[string]knownModel{
 	// OpenAI compatible images
-	"gpt-image-1": {route: RouteOpenAIImagesGenerations, kind: KindImage, cap: "image"},
 	"gpt-image-2": {route: RouteOpenAIImagesGenerations, kind: KindImage, cap: "image"},
 
 	// Kling via newapi gateway

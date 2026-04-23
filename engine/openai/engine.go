@@ -239,6 +239,6 @@ func ConfigSchema() []engine.ConfigField {
 // ModelsByCapability returns all known OpenAI models grouped by capability.
 func ModelsByCapability() map[string][]string {
 	return map[string][]string{
-		"image": {"gpt-image-2", "gpt-image-1", "dall-e-3", "dall-e-2"},
+		"image": {"gpt-image-2", "dall-e-3", "dall-e-2"},
 	}
 }

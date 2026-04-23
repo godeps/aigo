@@ -25,7 +25,7 @@ func TestExecuteImage(t *testing.T) {
 
 	eng := New(Config{
 		BaseURL: server.URL + "/v1",
-		Model:   "gpt-image-1",
+		Model:   "gpt-image-2",
 		Kind:    KindImage,
 		APIKey:  "sk-test",
 	})

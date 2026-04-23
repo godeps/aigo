@@ -7,13 +7,6 @@ import "github.com/godeps/aigo/engine"
 func ModelInfos() []engine.ModelInfo {
 	return []engine.ModelInfo{
 		{
-			Name:        "newapi/gpt-image-1",
-			Provider:    "newapi",
-			DisplayName: engine.DisplayName{"en": "GPT Image 1 (NewAPI)", "zh": "GPT Image 1 (NewAPI)"},
-			Description: engine.DisplayName{"en": "OpenAI image generation via NewAPI", "zh": "通过 NewAPI 调用 OpenAI 图片生成"},
-			Capability:  "image",
-		},
-		{
 			Name:        "newapi/gpt-image-2",
 			Provider:    "newapi",
 			DisplayName: engine.DisplayName{"en": "GPT Image 2 (NewAPI)", "zh": "GPT Image 2 (NewAPI)"},
