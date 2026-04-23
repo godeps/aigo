@@ -101,8 +101,11 @@ type AgentTask struct {
 
 // AgentTaskStructured 将图像与视频选项分组；便于扩展而无需继续增大 AgentTask 扁平字段。
 type AgentTaskStructured struct {
-	ImageSize      string
-	ImageWatermark *bool
+	ImageSize        string
+	ImageAspectRatio string
+	ImageResolution  string // "1K", "2K", "4K"
+	ImageCameraAngle string
+	ImageWatermark   *bool
 	VideoDuration  int
 	VideoSize      string
 	VideoWatermark *bool
@@ -133,7 +136,10 @@ type Selector interface {
 type EngineInfo struct {
 	Name        string             `json:"name"`
 	DisplayName engine.DisplayName `json:"display_name"`
+	Intro       engine.DisplayName `json:"intro,omitempty"`
+	DocURL      string             `json:"doc_url,omitempty"`
 	Capability  engine.Capability  `json:"capability"`
+	Models      []engine.ModelInfo `json:"models,omitempty"`
 }
 
 // RichSelector is an enhanced selector that receives engine capability metadata.
@@ -564,10 +570,49 @@ func (c *Client) EngineInfos() []EngineInfo {
 		if n, ok := e.(engine.Namer); ok {
 			info.DisplayName = n.DisplayName()
 		}
+		// Enrich with engine-level metadata (intro, doc URL).
+		meta := engine.LookupEngineMetadata(name)
+		if info.DisplayName == nil {
+			info.DisplayName = meta.DisplayName
+		}
+		info.Intro = meta.Intro
+		info.DocURL = meta.DocURL
+		// Attach model infos registered by this provider.
+		info.Models = engine.ModelInfosByProvider(name)
 		infos = append(infos, info)
 	}
 	sort.Slice(infos, func(i, j int) bool { return infos[i].Name < infos[j].Name })
 	return infos
+}
+
+// ModelInfo returns the i18n metadata for a specific model name.
+func (c *Client) ModelInfo(model string) (engine.ModelInfo, bool) {
+	return engine.LookupModelInfo(model)
+}
+
+// AllModelInfos returns all registered model i18n metadata, sorted by name.
+func (c *Client) AllModelInfos() []engine.ModelInfo {
+	return engine.AllModelInfos()
+}
+
+// ModelInfosByCapability returns all registered model metadata matching the given capability.
+func (c *Client) ModelInfosByCapability(cap string) []engine.ModelInfo {
+	return engine.ModelInfosByCapability(cap)
+}
+
+// ModelInfosByProvider returns all registered model metadata for the given provider/engine name.
+func (c *Client) ModelInfosByProvider(provider string) []engine.ModelInfo {
+	return engine.ModelInfosByProvider(provider)
+}
+
+// SearchModelInfos returns models whose Name or DisplayName contains the query (case-insensitive).
+func (c *Client) SearchModelInfos(query string) []engine.ModelInfo {
+	return engine.SearchModelInfos(query)
+}
+
+// ExportModelCatalog returns the complete model catalog as JSON bytes.
+func (c *Client) ExportModelCatalog() ([]byte, error) {
+	return engine.ExportModelCatalog()
 }
 
 // BuildGraph compiles a high-level agent task into the SDK's workflow graph format.

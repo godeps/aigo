@@ -10,6 +10,7 @@ func init() {
 			WaitForCompletion: true,
 		}), nil
 	})
+	engine.RegisterModelInfos(ModelInfos())
 }
 
 // DefaultProvider returns preset engine configurations for hedra.

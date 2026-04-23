@@ -8,8 +8,10 @@ func init() {
 			APIKey:  cfg.APIKey,
 			BaseURL: cfg.BaseURL,
 			Model:   cfg.Model,
+			VoiceID: cfg.Meta("voiceId", ""),
 		}), nil
 	})
+	engine.RegisterModelInfos(ModelInfos())
 }
 
 // DefaultProvider returns preset engine configurations for elevenlabs.

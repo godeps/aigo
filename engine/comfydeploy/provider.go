@@ -3,10 +3,13 @@ package comfydeploy
 import "github.com/godeps/aigo/engine"
 
 func init() {
+	engine.RegisterModelInfos(ModelInfos())
 	engine.RegisterFactory("comfydeploy", func(cfg engine.EngineConfig) (engine.Engine, error) {
 		return New(Config{
-			APIToken: cfg.APIKey,
-			BaseURL:  cfg.BaseURL,
+			APIToken:          cfg.APIKey,
+			BaseURL:           cfg.BaseURL,
+			DeploymentID:      cfg.Meta("deploymentId", ""),
+			WaitForCompletion: true,
 		}), nil
 	})
 }

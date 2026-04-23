@@ -7,9 +7,11 @@ func init() {
 		return New(Config{
 			APIKey:            cfg.APIKey,
 			BaseURL:           cfg.BaseURL,
+			Endpoint:          cfg.Meta("endpoint", ""),
 			WaitForCompletion: true,
 		}), nil
 	})
+	engine.RegisterModelInfos(ModelInfos())
 }
 
 // DefaultProvider returns preset engine configurations for meshy.

@@ -10,6 +10,7 @@ func init() {
 			Model:   cfg.Model,
 		}), nil
 	})
+	engine.RegisterModelInfos(ModelInfos())
 }
 
 // DefaultProvider returns preset engine configurations for gpt4o.

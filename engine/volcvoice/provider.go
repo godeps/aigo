@@ -5,11 +5,13 @@ import "github.com/godeps/aigo/engine"
 func init() {
 	engine.RegisterFactory("volcvoice", func(cfg engine.EngineConfig) (engine.Engine, error) {
 		return New(Config{
+			AppID:       cfg.Meta("appId", ""),
 			AccessToken: cfg.APIKey,
 			BaseURL:     cfg.BaseURL,
 			Model:       cfg.Model,
 		}), nil
 	})
+	engine.RegisterModelInfos(ModelInfos())
 }
 
 // DefaultProvider returns preset engine configurations for volcvoice.

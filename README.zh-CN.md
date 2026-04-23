@@ -241,6 +241,57 @@ import (
 )
 ```
 
+## 模型 i18n 元数据
+
+每个通过引擎包注册的模型都携带中英文显示名称和功能描述：
+
+```go
+import _ "github.com/godeps/aigo/engine/kling"
+
+info, ok := client.ModelInfo("kling-v2-master")
+fmt.Println(info.DisplayName["en"]) // "Kling V2 Master"
+fmt.Println(info.DisplayName["zh"]) // "可灵 V2 大师版"
+fmt.Println(info.Description["zh"]) // "最高画质视频和图片生成"
+fmt.Println(info.Intro["zh"])       // "可灵旗舰视频生成模型，支持文生视频和图生视频..."
+fmt.Println(info.DocURL)            // "https://docs.qingque.cn/..."
+fmt.Println(info.Capability)        // "video"
+```
+
+列出所有已注册模型：
+
+```go
+for _, m := range client.AllModelInfos() {
+    fmt.Printf("%-25s %-8s %s\n", m.Name, m.Capability, m.DisplayName["zh"])
+}
+```
+
+也可以直接使用 `engine.LookupModelInfo(name)` 和 `engine.AllModelInfos()`。
+
+### 按能力过滤模型
+
+```go
+videoModels := client.ModelInfosByCapability("video")
+for _, m := range videoModels {
+    fmt.Printf("%s — %s\n", m.Name, m.DisplayName["zh"])
+}
+```
+
+### 按引擎查询模型
+
+```go
+klingModels := client.ModelInfosByProvider("kling")
+// 返回 kling 引擎包注册的所有 ModelInfo
+```
+
+### 引擎级别元数据
+
+```go
+meta := engine.LookupEngineMetadata("kling")
+fmt.Println(meta.DisplayName["zh"]) // "可灵 AI"
+fmt.Println(meta.Intro["zh"])       // 详细介绍
+fmt.Println(meta.DocURL)            // 官方文档地址
+```
+
 ## Agent 原生特性
 
 ### 结构化错误与重试分类

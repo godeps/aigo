@@ -5,12 +5,23 @@ import "sync"
 // EngineConfig is a generic, JSON-friendly configuration for creating an engine.
 // Used by LoadConfig / ApplyConfig for declarative engine setup.
 type EngineConfig struct {
-	Name     string `json:"name"`               // registration name
-	Provider string `json:"provider"`            // engine package key, e.g. "alibabacloud", "kling"
-	Model    string `json:"model,omitempty"`      // model override
-	APIKey   string `json:"api_key,omitempty"`    // explicit API key (overrides env)
-	BaseURL  string `json:"base_url,omitempty"`   // custom API endpoint
-	Enabled  *bool  `json:"enabled,omitempty"`    // default true; set false to skip
+	Name     string            `json:"name"`               // registration name
+	Provider string            `json:"provider"`            // engine package key, e.g. "alibabacloud", "kling"
+	Model    string            `json:"model,omitempty"`      // model override
+	APIKey   string            `json:"api_key,omitempty"`    // explicit API key (overrides env)
+	BaseURL  string            `json:"base_url,omitempty"`   // custom API endpoint
+	Enabled  *bool             `json:"enabled,omitempty"`    // default true; set false to skip
+	Metadata map[string]string `json:"metadata,omitempty"`   // provider-specific fields (e.g. voiceId, endpoint)
+}
+
+// Meta returns the metadata value for key, or fallback if not present.
+func (c EngineConfig) Meta(key, fallback string) string {
+	if c.Metadata != nil {
+		if v, ok := c.Metadata[key]; ok && v != "" {
+			return v
+		}
+	}
+	return fallback
 }
 
 // IsEnabled returns whether this engine config is enabled (default true).

@@ -8,9 +8,11 @@ func init() {
 			APIKey:            cfg.APIKey,
 			BaseURL:           cfg.BaseURL,
 			Model:             cfg.Model,
+			Endpoint:          cfg.Meta("endpoint", ""),
 			WaitForCompletion: true,
 		}), nil
 	})
+	engine.RegisterModelInfos(ModelInfos())
 }
 
 // DefaultProvider returns preset engine configurations for kling.

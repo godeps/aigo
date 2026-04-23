@@ -241,6 +241,57 @@ import (
 )
 ```
 
+## Model i18n Metadata
+
+Every model registered via engine packages carries i18n display names and descriptions:
+
+```go
+import _ "github.com/godeps/aigo/engine/kling"
+
+info, ok := client.ModelInfo("kling-v2-master")
+fmt.Println(info.DisplayName["en"]) // "Kling V2 Master"
+fmt.Println(info.DisplayName["zh"]) // "可灵 V2 大师版"
+fmt.Println(info.Description["zh"]) // "最高画质视频和图片生成"
+fmt.Println(info.Intro["zh"])       // "可灵旗舰视频生成模型，支持文生视频和图生视频..."
+fmt.Println(info.DocURL)            // "https://docs.qingque.cn/..."
+fmt.Println(info.Capability)        // "video"
+```
+
+List all registered models:
+
+```go
+for _, m := range client.AllModelInfos() {
+    fmt.Printf("%-25s %-8s %s\n", m.Name, m.Capability, m.DisplayName["zh"])
+}
+```
+
+You can also use `engine.LookupModelInfo(name)` and `engine.AllModelInfos()` directly.
+
+### Filter models by capability
+
+```go
+videoModels := client.ModelInfosByCapability("video")
+for _, m := range videoModels {
+    fmt.Printf("%s — %s\n", m.Name, m.DisplayName["en"])
+}
+```
+
+### Query models by provider (engine)
+
+```go
+klingModels := client.ModelInfosByProvider("kling")
+// Returns all ModelInfo entries registered by the kling engine package
+```
+
+### Engine-level metadata
+
+```go
+meta := engine.LookupEngineMetadata("kling")
+fmt.Println(meta.DisplayName["en"]) // "Kling AI"
+fmt.Println(meta.Intro["en"])       // detailed introduction
+fmt.Println(meta.DocURL)            // official documentation URL
+```
+
 ## Agent-Native Features
 
 ### Structured errors with retry classification

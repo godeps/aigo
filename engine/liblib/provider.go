@@ -3,10 +3,14 @@ package liblib
 import "github.com/godeps/aigo/engine"
 
 func init() {
+	engine.RegisterModelInfos(ModelInfos())
 	engine.RegisterFactory("liblib", func(cfg engine.EngineConfig) (engine.Engine, error) {
 		return New(Config{
 			AccessKey:         cfg.APIKey,
+			SecretKey:         cfg.Meta("secretKey", ""),
 			BaseURL:           cfg.BaseURL,
+			Endpoint:          cfg.Meta("endpoint", ""),
+			TemplateUUID:      cfg.Meta("templateUuid", ""),
 			WaitForCompletion: true,
 		}), nil
 	})

@@ -66,6 +66,24 @@ type Namer interface {
 	DisplayName() DisplayName
 }
 
+// ModelInfo describes a model with i18n metadata for display purposes.
+type ModelInfo struct {
+	Name        string      `json:"name"`                   // API model string, e.g. "kling-v2-master"
+	Provider    string      `json:"provider"`               // engine package name, e.g. "kling", "alibabacloud"
+	DisplayName DisplayName `json:"display_name"`           // i18n display name, e.g. "Kling V2 Master" / "可灵 V2 大师版"
+	Description DisplayName `json:"description"`            // i18n short functional description
+	Intro       DisplayName `json:"intro,omitempty"`        // i18n detailed introduction
+	DocURL      string      `json:"doc_url,omitempty"`      // official documentation URL
+	Capability  string      `json:"capability"`             // "image", "video", "tts", "music", "3d", etc.
+	Deprecated  bool        `json:"deprecated,omitempty"`   // true if the model is retired or superseded
+	Tags        []string    `json:"tags,omitempty"`         // flexible classification, e.g. "open-source", "fast", "chinese-optimized"
+}
+
+// ModelInfoProvider is an optional interface for engines that expose i18n model metadata.
+type ModelInfoProvider interface {
+	ModelInfos() []ModelInfo
+}
+
 // DryRunResult is the outcome of a dry-run estimation.
 type DryRunResult struct {
 	WillPoll      bool
@@ -103,14 +121,14 @@ func ClassifyOutput(s string) OutputKind {
 	return OutputPlainText
 }
 
-// DisplayName holds localized display names for an engine.
-type DisplayName struct {
-	EN string `json:"en"` // English display name, e.g. "Kling AI"
-	ZH string `json:"zh"` // Chinese display name, e.g. "可灵 AI"
-}
+// DisplayName holds localized display texts keyed by language code (e.g. "en", "zh", "ja").
+type DisplayName map[string]string
 
-// String returns the English display name.
-func (d DisplayName) String() string { return d.EN }
+// Get returns the text for the given language code, or empty string if not found.
+func (d DisplayName) Get(lang string) string { return d[lang] }
+
+// String returns the English text as default display.
+func (d DisplayName) String() string { return d["en"] }
 
 // Discoverer is a package-level interface for providers that can enumerate
 // all known models grouped by capability (e.g. "image", "video", "tts").

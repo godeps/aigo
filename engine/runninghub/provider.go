@@ -3,10 +3,12 @@ package runninghub
 import "github.com/godeps/aigo/engine"
 
 func init() {
+	engine.RegisterModelInfos(ModelInfos())
 	engine.RegisterFactory("runninghub", func(cfg engine.EngineConfig) (engine.Engine, error) {
 		return New(Config{
 			APIKey:            cfg.APIKey,
 			BaseURL:           cfg.BaseURL,
+			Endpoint:          cfg.Meta("endpoint", ""),
 			Model:             cfg.Model,
 			WaitForCompletion: true,
 		}), nil

@@ -133,6 +133,22 @@ func GenerateImage() ToolDef {
 					Enum:        []string{"1024x1024", "1024x1536", "1536x1024", "512x512"},
 					Default:     "1024x1024",
 				},
+				"aspect_ratio": {
+					Type:        "string",
+					Description: "Image aspect ratio",
+					Enum:        []string{"1:1", "3:4", "4:3", "16:9", "9:16"},
+				},
+				"resolution": {
+					Type:        "string",
+					Description: "Image resolution quality",
+					Enum:        []string{"1K", "2K", "4K"},
+					Default:     "2K",
+				},
+				"camera_angle": {
+					Type:        "string",
+					Description: "Camera angle preset for the shot",
+					Enum:        []string{"front", "side", "back", "top-down", "low-angle", "high-angle", "45-degree", "close-up"},
+				},
 				"width": {
 					Type:        "integer",
 					Description: "Image width in pixels",

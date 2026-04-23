@@ -3,6 +3,7 @@ package comfyui
 import "github.com/godeps/aigo/engine"
 
 func init() {
+	engine.RegisterModelInfos(ModelInfos())
 	engine.RegisterFactory("comfyui", func(cfg engine.EngineConfig) (engine.Engine, error) {
 		return New(Config{
 			APIKey:            cfg.APIKey,
