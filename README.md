@@ -27,7 +27,7 @@ AgentTask ──► BuildGraph() ──► workflow.Graph (DAG)
 | Engine | Backend | Env Var |
 |--------|---------|---------|
 | `alibabacloud` | Alibaba Cloud DashScope (Qwen, Wan, Z-Image) | `DASHSCOPE_API_KEY` |
-| `openai` | OpenAI DALL-E 3 | `OPENAI_API_KEY` |
+| `openai` | OpenAI Images (gpt-image-2, DALL-E 3, DALL-E 2) | `OPENAI_API_KEY` |
 | `google` | Google Imagen | `GOOGLE_API_KEY` |
 | `flux` | Black Forest Labs FLUX | `BFL_API_KEY` |
 | `stability` | Stability AI (SD3, Ultra, Core) | `STABILITY_API_KEY` |
@@ -63,6 +63,7 @@ AgentTask ──► BuildGraph() ──► workflow.Graph (DAG)
 | Engine | Backend | Env Var |
 |--------|---------|---------|
 | `meshy` | Meshy (text/image to 3D) | `MESHY_API_KEY` |
+| `alibabacloud` | Alibaba Cloud Bailian — Tripo P1.0 / Tripo H3.1 (text / image / multi-image to 3D, `.glb`) | `DASHSCOPE_API_KEY` |
 
 ### Multi-Modal Understanding
 
@@ -611,6 +612,7 @@ go run ./examples/alibabacloud_wan_r2v
 go run ./examples/alibabacloud_wan_videoedit
 go run ./examples/alibabacloud_qwen_tts
 go run ./examples/alibabacloud_qwen_voice_design
+ENGINE=text  go run ./examples/alibabacloud_tripo_3d  # also: ENGINE=image | ENGINE=multi
 
 # New API gateway
 go run ./examples/newapi_image

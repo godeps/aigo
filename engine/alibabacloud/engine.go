@@ -12,6 +12,7 @@ import (
 	"github.com/godeps/aigo/engine/alibabacloud/internal/ierr"
 	"github.com/godeps/aigo/engine/alibabacloud/internal/imggen"
 	"github.com/godeps/aigo/engine/alibabacloud/internal/runtime"
+	"github.com/godeps/aigo/engine/alibabacloud/internal/threedgen"
 	"github.com/godeps/aigo/engine/alibabacloud/internal/vidgen"
 	"github.com/godeps/aigo/engine/httpx"
 	"github.com/godeps/aigo/workflow"
@@ -39,6 +40,11 @@ const (
 
 	ModelQwenASRFlash          = "qwen3-asr-flash"
 	ModelQwenASRFlashFiletrans = "qwen3-asr-flash-filetrans"
+
+	// Tripo 专业 3D 生成模型（最高 2 万面）。
+	ModelTripoP1 = "Tripo/Tripo-P1.0"
+	// Tripo 高精度 3D 生成模型（最高 200 万面，支持 geometry_quality）。
+	ModelTripoH31 = "Tripo/Tripo-H3.1"
 )
 
 // 与 internal/ierr 中哨兵为同一指针，便于 errors.Is。
@@ -49,6 +55,11 @@ var (
 	ErrMissingVoiceDesign = ierr.ErrMissingVoiceDesign
 	ErrMissingAudioURL    = ierr.ErrMissingAudioURL
 	ErrUnsupportedModel   = ierr.ErrUnsupportedModel
+
+	// Tripo 3D 边界错误。
+	ErrMissingTripoInput  = ierr.ErrMissingTripoInput
+	ErrTooManyTripoImages = ierr.ErrTooManyTripoImages
+	ErrTripoPromptTooLong = ierr.ErrTripoPromptTooLong
 )
 
 // Config configures the Alibaba Cloud Bailian engine.
@@ -101,28 +112,37 @@ func New(cfg Config) *Engine {
 
 type aliyunHandler func(ctx context.Context, rt *runtime.RT, apiKey, model string, graph workflow.Graph) (string, error)
 
+// aliyunMultiHandler is an opt-in extension for handlers that can produce
+// multiple result items in a single call (e.g. multimodal-image with n>1).
+// The first return value remains the primary URL for backward compatibility;
+// the second carries the full result set when len > 1.
+type aliyunMultiHandler func(ctx context.Context, rt *runtime.RT, apiKey, model string, graph workflow.Graph) (string, []engine.ResultItem, error)
+
 type modelEntry struct {
-	handler aliyunHandler
-	kind    engine.OutputKind
+	handler      aliyunHandler      // single-result handler (mutually exclusive with multiHandler)
+	multiHandler aliyunMultiHandler // optional multi-result handler
+	kind         engine.OutputKind
 }
 
 var modelTable = map[string]modelEntry{
-	ModelQwenImage:            {imggen.RunQwenImage, engine.OutputURL},
-	ModelQwenImage2:           {imggen.RunMultimodalImage, engine.OutputURL},
-	ModelQwenImageEditPlus:    {imggen.RunMultimodalImage, engine.OutputURL},
-	ModelWanImage:             {imggen.RunMultimodalImage, engine.OutputURL},
-	ModelZImageTurbo:          {imggen.RunMultimodalImage, engine.OutputURL},
-	ModelWanTextToVideo:       {vidgen.RunTextToVideo, engine.OutputURL},
-	ModelWanImageToVideo:      {vidgen.RunReferenceToVideo, engine.OutputURL},
-	ModelWanReferenceVideo:    {vidgen.RunReferenceToVideo, engine.OutputURL},
-	ModelWanVideoEdit:         {vidgen.RunVideoEdit, engine.OutputURL},
-	ModelKlingV3Video:         {vidgen.RunKlingVideo, engine.OutputURL},
-	ModelKlingV3OmniVideo:     {vidgen.RunKlingVideo, engine.OutputURL},
-	ModelQwenTTSFlash:         {audiogen.RunTTS, engine.OutputURL},
-	ModelQwenTTSInstructFlash: {audiogen.RunTTS, engine.OutputURL},
-	ModelQwenVoiceDesign:      {audiogen.RunVoiceDesign, engine.OutputJSON},
-	ModelQwenASRFlash:          {audiogen.RunQwenASR, engine.OutputPlainText},
-	ModelQwenASRFlashFiletrans: {audiogen.RunQwenASRFiletrans, engine.OutputPlainText},
+	ModelQwenImage:            {handler: imggen.RunQwenImage, kind: engine.OutputURL},
+	ModelQwenImage2:           {multiHandler: imggen.RunMultimodalImageMulti, kind: engine.OutputURL},
+	ModelQwenImageEditPlus:    {multiHandler: imggen.RunMultimodalImageMulti, kind: engine.OutputURL},
+	ModelWanImage:             {multiHandler: imggen.RunMultimodalImageMulti, kind: engine.OutputURL},
+	ModelZImageTurbo:          {multiHandler: imggen.RunMultimodalImageMulti, kind: engine.OutputURL},
+	ModelWanTextToVideo:       {handler: vidgen.RunTextToVideo, kind: engine.OutputURL},
+	ModelWanImageToVideo:      {handler: vidgen.RunReferenceToVideo, kind: engine.OutputURL},
+	ModelWanReferenceVideo:    {handler: vidgen.RunReferenceToVideo, kind: engine.OutputURL},
+	ModelWanVideoEdit:         {handler: vidgen.RunVideoEdit, kind: engine.OutputURL},
+	ModelKlingV3Video:         {handler: vidgen.RunKlingVideo, kind: engine.OutputURL},
+	ModelKlingV3OmniVideo:     {handler: vidgen.RunKlingVideo, kind: engine.OutputURL},
+	ModelQwenTTSFlash:         {handler: audiogen.RunTTS, kind: engine.OutputURL},
+	ModelQwenTTSInstructFlash: {handler: audiogen.RunTTS, kind: engine.OutputURL},
+	ModelQwenVoiceDesign:      {handler: audiogen.RunVoiceDesign, kind: engine.OutputJSON},
+	ModelQwenASRFlash:          {handler: audiogen.RunQwenASR, kind: engine.OutputPlainText},
+	ModelQwenASRFlashFiletrans: {handler: audiogen.RunQwenASRFiletrans, kind: engine.OutputPlainText},
+	ModelTripoP1:               {handler: threedgen.RunTripo3D, kind: engine.OutputURL},
+	ModelTripoH31:              {handler: threedgen.RunTripo3D, kind: engine.OutputURL},
 }
 
 // Execute compiles the workflow graph into the configured Bailian model request.
@@ -140,7 +160,19 @@ func (e *Engine) Execute(ctx context.Context, graph workflow.Graph) (engine.Resu
 	if !ok {
 		return engine.Result{}, fmt.Errorf("%w: %s", ErrUnsupportedModel, e.model)
 	}
-	value, err := entry.handler(ctx, &e.rt, apiKey, e.model, graph)
+
+	var (
+		value   string
+		results []engine.ResultItem
+	)
+	switch {
+	case entry.multiHandler != nil:
+		value, results, err = entry.multiHandler(ctx, &e.rt, apiKey, e.model, graph)
+	case entry.handler != nil:
+		value, err = entry.handler(ctx, &e.rt, apiKey, e.model, graph)
+	default:
+		return engine.Result{}, fmt.Errorf("aliyun: model %q has no handler registered", e.model)
+	}
 	if err != nil {
 		return engine.Result{}, err
 	}
@@ -148,7 +180,13 @@ func (e *Engine) Execute(ctx context.Context, graph workflow.Graph) (engine.Resu
 	if kind == engine.OutputURL && strings.HasPrefix(value, "data:") {
 		kind = engine.OutputDataURI
 	}
-	return engine.Result{Value: value, Kind: kind}, nil
+	out := engine.Result{Value: value, Kind: kind}
+	// Only expose Results when there's genuinely more than one item — single-result
+	// callers should keep using Value alone for backward compatibility.
+	if len(results) > 1 {
+		out.Results = results
+	}
+	return out, nil
 }
 
 // Capabilities implements engine.Describer.
@@ -171,6 +209,10 @@ func (e *Engine) Capabilities() engine.Capability {
 		cap.MediaTypes = []string{"audio"}
 	case ModelQwenASRFlash, ModelQwenASRFlashFiletrans:
 		cap.MediaTypes = []string{"audio"}
+	case ModelTripoP1, ModelTripoH31:
+		cap.MediaTypes = []string{"3d"}
+		cap.MaxImages = 4         // 多图生 3D 上限。
+		cap.MaxPromptChars = 1024 // Tripo prompt 字符上限。
 	}
 	return cap
 }

@@ -224,3 +224,80 @@ func TestLookupRouteGPTImage2(t *testing.T) {
 		t.Errorf("kind = %q, want %q", kind, KindImage)
 	}
 }
+
+func TestExecuteGPTImage2OutputFormatDrivesDataURIMIME(t *testing.T) {
+	t.Parallel()
+
+	var gotPayload map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&gotPayload); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"b64_json":"AAECAw=="}]}`))
+	}))
+	defer server.Close()
+
+	eng := New(Config{
+		BaseURL:           server.URL + "/v1",
+		Model:             "gpt-image-2",
+		Kind:              KindImage,
+		APIKey:            "sk-test",
+		Background:        "transparent",
+		OutputFormat:      "jpeg",
+		Moderation:        "low",
+		OutputCompression: 60,
+	})
+
+	graph := workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "soft sunrise"}},
+	}
+	out, err := eng.Execute(context.Background(), graph)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if gotPayload["background"] != "transparent" {
+		t.Errorf("background = %#v", gotPayload["background"])
+	}
+	if gotPayload["output_format"] != "jpeg" {
+		t.Errorf("output_format = %#v", gotPayload["output_format"])
+	}
+	if gotPayload["moderation"] != "low" {
+		t.Errorf("moderation = %#v", gotPayload["moderation"])
+	}
+	if v, _ := gotPayload["output_compression"].(float64); v != 60 {
+		t.Errorf("output_compression = %#v, want 60", gotPayload["output_compression"])
+	}
+	wantPrefix := "data:image/jpeg;base64,"
+	if len(out.Value) < len(wantPrefix) || out.Value[:len(wantPrefix)] != wantPrefix {
+		t.Errorf("Execute() = %q, want %s prefix", out.Value, wantPrefix)
+	}
+}
+
+func TestCapabilitiesSizesByModelFamily(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		model string
+		want  []string
+	}{
+		{"gpt-image-2", []string{"1024x1024", "1024x1536", "1536x1024"}},
+		{"dall-e-3", []string{"1024x1024", "1024x1792", "1792x1024"}},
+		{"dall-e-2", []string{"256x256", "512x512", "1024x1024"}},
+		{"unknown-model-xyz", nil},
+	}
+	for _, tc := range tests {
+		eng := New(Config{Model: tc.model, Kind: KindImage, BaseURL: "https://example.com"})
+		got := eng.Capabilities().Sizes
+		if len(got) != len(tc.want) {
+			t.Errorf("model=%q sizes = %v, want %v", tc.model, got, tc.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != tc.want[i] {
+				t.Errorf("model=%q sizes[%d] = %q, want %q", tc.model, i, got[i], tc.want[i])
+			}
+		}
+	}
+}

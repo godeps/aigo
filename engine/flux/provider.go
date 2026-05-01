@@ -4,10 +4,15 @@ import "github.com/godeps/aigo/engine"
 
 func init() {
 	engine.RegisterFactory("flux", func(cfg engine.EngineConfig) (engine.Engine, error) {
+		// All FLUX image generations are async — without polling the engine
+		// returns a task_id UUID instead of an image URL.
+		wait := cfg.WaitForCompletionOr(true)
 		return New(Config{
-			APIKey:  cfg.APIKey,
-			BaseURL: cfg.BaseURL,
-			Model:   cfg.Model,
+			APIKey:            cfg.APIKey,
+			BaseURL:           cfg.BaseURL,
+			Model:             cfg.Model,
+			WaitForCompletion: wait,
+			PollInterval:      cfg.PollInterval,
 		}), nil
 	})
 	engine.RegisterModelInfos(ModelInfos())

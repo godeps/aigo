@@ -27,7 +27,7 @@ AgentTask ──► BuildGraph() ──► workflow.Graph (DAG)
 | 引擎 | 后端 | 环境变量 |
 |------|------|---------|
 | `alibabacloud` | 阿里云百炼 DashScope（通义万相、Wan、Z-Image） | `DASHSCOPE_API_KEY` |
-| `openai` | OpenAI DALL-E 3 | `OPENAI_API_KEY` |
+| `openai` | OpenAI Images（gpt-image-2、DALL-E 3、DALL-E 2） | `OPENAI_API_KEY` |
 | `google` | Google Imagen | `GOOGLE_API_KEY` |
 | `flux` | Black Forest Labs FLUX | `BFL_API_KEY` |
 | `stability` | Stability AI（SD3、Ultra、Core） | `STABILITY_API_KEY` |
@@ -63,6 +63,7 @@ AgentTask ──► BuildGraph() ──► workflow.Graph (DAG)
 | 引擎 | 后端 | 环境变量 |
 |------|------|---------|
 | `meshy` | Meshy（文本/图片转 3D） | `MESHY_API_KEY` |
+| `alibabacloud` | 阿里云百炼 — Tripo P1.0 / Tripo H3.1（文本 / 单图 / 多图生 3D，输出 `.glb`） | `DASHSCOPE_API_KEY` |
 
 ### 多模态理解
 
@@ -611,6 +612,7 @@ go run ./examples/alibabacloud_wan_r2v
 go run ./examples/alibabacloud_wan_videoedit
 go run ./examples/alibabacloud_qwen_tts
 go run ./examples/alibabacloud_qwen_voice_design
+ENGINE=text  go run ./examples/alibabacloud_tripo_3d  # 还可选 ENGINE=image / ENGINE=multi
 
 # New API 网关
 go run ./examples/newapi_image

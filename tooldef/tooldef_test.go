@@ -24,7 +24,8 @@ func TestAllTools(t *testing.T) {
 		if tool.Parameters.Type != "object" {
 			t.Fatalf("tool %q parameters type = %q, want object", tool.Name, tool.Parameters.Type)
 		}
-		if len(tool.Parameters.Required) == 0 {
+		// generate_3d 接受 prompt / image_url / image_urls 互斥输入，无单一 required 字段。
+		if len(tool.Parameters.Required) == 0 && tool.Name != "generate_3d" {
 			t.Fatalf("tool %q has no required fields", tool.Name)
 		}
 		if names[tool.Name] {
@@ -177,6 +178,79 @@ func TestValidateParams_OptionalEnumSkipped(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("expected no error for missing optional enum param, got: %v", err)
+	}
+}
+
+func TestValidateParams_Generate3DOneOf(t *testing.T) {
+	t.Parallel()
+	tool := Generate3D()
+
+	cases := []struct {
+		name    string
+		params  map[string]interface{}
+		wantErr bool
+		errKey  string // substring required in error message
+	}{
+		{
+			name:    "prompt only",
+			params:  map[string]interface{}{"prompt": "a cute cat"},
+			wantErr: false,
+		},
+		{
+			name:    "image_url only",
+			params:  map[string]interface{}{"image_url": "https://x/a.png"},
+			wantErr: false,
+		},
+		{
+			name:    "image_urls only",
+			params:  map[string]interface{}{"image_urls": []interface{}{"https://x/a.png", "https://x/b.png"}},
+			wantErr: false,
+		},
+		{
+			name:    "all three (prompt + image_url + image_urls)",
+			params:  map[string]interface{}{"prompt": "p", "image_url": "u", "image_urls": []interface{}{"a"}},
+			wantErr: true,
+			errKey:  "mutually exclusive",
+		},
+		{
+			name:    "prompt + image_url",
+			params:  map[string]interface{}{"prompt": "p", "image_url": "u"},
+			wantErr: true,
+			errKey:  "mutually exclusive",
+		},
+		{
+			name:    "none",
+			params:  map[string]interface{}{},
+			wantErr: true,
+			errKey:  "exactly one",
+		},
+		{
+			name:    "empty string prompt counts as not provided",
+			params:  map[string]interface{}{"prompt": "  ", "image_url": "https://x/a.png"},
+			wantErr: false,
+		},
+		{
+			name:    "empty array image_urls counts as not provided",
+			params:  map[string]interface{}{"prompt": "p", "image_urls": []interface{}{}},
+			wantErr: false,
+		},
+	}
+
+	for _, c := range cases {
+		c := c
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			err := ValidateParams(tool, c.params)
+			if c.wantErr && err == nil {
+				t.Fatalf("expected error, got nil (params=%v)", c.params)
+			}
+			if !c.wantErr && err != nil {
+				t.Fatalf("expected no error, got %v (params=%v)", err, c.params)
+			}
+			if c.wantErr && c.errKey != "" && !strings.Contains(err.Error(), c.errKey) {
+				t.Fatalf("error %q should contain %q", err.Error(), c.errKey)
+			}
+		})
 	}
 }
 

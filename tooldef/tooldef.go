@@ -24,6 +24,12 @@ type ToolDef struct {
 }
 
 // Schema is a minimal JSON Schema representation.
+//
+// OneOf encodes mutually-exclusive property groups. Each inner slice is a set
+// of property names where exactly one MUST be provided. This is a pragmatic
+// subset of JSON Schema's full `oneOf` (which takes sub-schemas) — sufficient
+// for our XOR-style tool inputs (e.g. `prompt` vs `image_url` vs `image_urls`)
+// without dragging in a full schema validator.
 type Schema struct {
 	Type        string            `json:"type"`
 	Description string            `json:"description,omitempty"`
@@ -32,6 +38,7 @@ type Schema struct {
 	Enum        []string          `json:"enum,omitempty"`
 	Default     string            `json:"default,omitempty"`
 	Items       *Schema           `json:"items,omitempty"`
+	OneOf       [][]string        `json:"-"`
 }
 
 // ValidateParams checks parameter values against the tool's schema constraints (enums, required fields).
@@ -73,7 +80,44 @@ func ValidateParams(def ToolDef, params map[string]interface{}) error {
 				name, s, strings.Join(prop.Enum, ", "))
 		}
 	}
+
+	// Mutually-exclusive groups: exactly one property in each group must be provided.
+	for _, group := range def.Parameters.OneOf {
+		provided := make([]string, 0, len(group))
+		for _, name := range group {
+			if paramProvided(params[name]) {
+				provided = append(provided, name)
+			}
+		}
+		switch len(provided) {
+		case 0:
+			return fmt.Errorf("exactly one of [%s] must be provided", strings.Join(group, ", "))
+		case 1:
+			// ok
+		default:
+			return fmt.Errorf("parameters %s are mutually exclusive; provide exactly one of [%s]",
+				strings.Join(provided, ", "), strings.Join(group, ", "))
+		}
+	}
 	return nil
+}
+
+// paramProvided returns true when v is a meaningful, non-empty value.
+// Empty strings, nil, and empty arrays count as "not provided" for OneOf checks.
+func paramProvided(v interface{}) bool {
+	if v == nil {
+		return false
+	}
+	switch t := v.(type) {
+	case string:
+		return strings.TrimSpace(t) != ""
+	case []interface{}:
+		return len(t) > 0
+	case []string:
+		return len(t) > 0
+	default:
+		return true
+	}
 }
 
 // AllTools returns every pre-defined tool aigo can provide.
@@ -164,21 +208,32 @@ func GenerateImage() ToolDef {
 }
 
 // Generate3D returns the tool definition for 3D model generation.
+//
+// Inputs are mutually exclusive: provide one of `prompt`, `image_url`, or
+// `image_urls` (multi-image, 2-4 entries). Tripo-style providers also accept
+// `texture_quality` and `geometry_quality` for fidelity tuning.
 func Generate3D() ToolDef {
 	return ToolDef{
 		Name:        "generate_3d",
-		Description: "Generate a 3D model from a text prompt or reference image. Returns a URL to the generated model file (GLB, FBX, OBJ, or USDZ).",
+		Description: "Generate a 3D model from a text prompt, a reference image, or 2-4 multi-view images. Returns a URL to the generated model file (GLB, FBX, OBJ, or USDZ).",
 		Category:    "3d",
 		Parameters: Schema{
 			Type: "object",
 			Properties: map[string]Schema{
 				"prompt": {
 					Type:        "string",
-					Description: "Text description of the 3D model to generate",
+					Description: "Text description of the 3D model to generate (mutually exclusive with image_url / image_urls; <= 1024 chars)",
 				},
 				"image_url": {
 					Type:        "string",
-					Description: "URL of a reference image for image-to-3D generation",
+					Description: "URL of a single reference image for image-to-3D generation",
+				},
+				"image_urls": {
+					Type:        "array",
+					Description: "URLs of 2-4 multi-view reference images for high-precision 3D reconstruction",
+					Items: &Schema{
+						Type: "string",
+					},
 				},
 				"mode": {
 					Type:        "string",
@@ -204,8 +259,19 @@ func Generate3D() ToolDef {
 					Type:        "integer",
 					Description: "Target polygon count for the mesh",
 				},
+				"texture_quality": {
+					Type:        "string",
+					Description: "Texture detail level (Tripo). Omit to generate a no-texture mesh.",
+					Enum:        []string{"standard", "detailed"},
+				},
+				"geometry_quality": {
+					Type:        "string",
+					Description: "Geometry precision level (Tripo H3.1 only). 'ultra' enables max-fidelity mesh up to 2M faces.",
+					Enum:        []string{"standard", "ultra"},
+				},
 			},
-			Required: []string{"prompt"},
+			// Tripo and similar 3D engines accept exactly one input modality.
+			OneOf: [][]string{{"prompt", "image_url", "image_urls"}},
 		},
 	}
 }

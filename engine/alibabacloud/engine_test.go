@@ -868,3 +868,94 @@ func TestExecuteKlingV3OmniReferenceVideoAsync(t *testing.T) {
 		t.Fatalf("video url = %#v", m2["url"])
 	}
 }
+
+// TestExecuteMultimodalImage_MultiResult verifies that when the upstream
+// returns multiple image URLs in a single choice, Execute exposes all of
+// them via Result.Results while keeping Result.Value as the first URL
+// (backward-compatible).
+func TestExecuteMultimodalImage_MultiResult(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/services/aigc/multimodal-generation/generation" {
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"output":{"choices":[{"message":{"content":[
+			{"type":"image","image":"https://img.example.com/multi-1.png"},
+			{"type":"image","image":"https://img.example.com/multi-2.png"},
+			{"type":"image","image":"https://img.example.com/multi-3.png"}
+		]}}]}}`))
+	}))
+	defer server.Close()
+
+	eng := New(Config{
+		APIKey:  "test-key",
+		BaseURL: server.URL + "/api/v1",
+		Model:   ModelQwenImage2,
+	})
+
+	graph := workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "三只小猫"}},
+		"2": {ClassType: "ImageOptions", Inputs: map[string]any{"n": 3}},
+	}
+
+	got, err := eng.Execute(context.Background(), graph)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if got.Value != "https://img.example.com/multi-1.png" {
+		t.Errorf("Value = %q, want first URL for backward compat", got.Value)
+	}
+	if len(got.Results) != 3 {
+		t.Fatalf("Results len = %d, want 3", len(got.Results))
+	}
+	wantURLs := []string{
+		"https://img.example.com/multi-1.png",
+		"https://img.example.com/multi-2.png",
+		"https://img.example.com/multi-3.png",
+	}
+	for i, want := range wantURLs {
+		if got.Results[i].Value != want {
+			t.Errorf("Results[%d].Value = %q, want %q", i, got.Results[i].Value, want)
+		}
+		if got.Results[i].Metadata["index"] == "" {
+			t.Errorf("Results[%d] missing index metadata", i)
+		}
+	}
+}
+
+// TestExecuteMultimodalImage_SingleResultLeavesResultsNil verifies the n=1
+// case keeps Result.Results nil (single-result callers should rely on Value).
+func TestExecuteMultimodalImage_SingleResultLeavesResultsNil(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"output":{"choices":[{"message":{"content":[
+			{"type":"image","image":"https://img.example.com/only.png"}
+		]}}]}}`))
+	}))
+	defer server.Close()
+
+	eng := New(Config{
+		APIKey:  "test-key",
+		BaseURL: server.URL + "/api/v1",
+		Model:   ModelQwenImage2,
+	})
+
+	graph := workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "一只猫"}},
+	}
+
+	got, err := eng.Execute(context.Background(), graph)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if got.Value != "https://img.example.com/only.png" {
+		t.Errorf("Value = %q", got.Value)
+	}
+	if got.Results != nil {
+		t.Errorf("Results should be nil when only one item; got %d items", len(got.Results))
+	}
+}

@@ -42,6 +42,11 @@ type Config struct {
 	// 图像
 	Quality string
 	Style   string
+	// gpt-image-* 专属可选参数
+	Background        string // transparent | opaque | auto
+	OutputFormat      string // png | jpeg | webp
+	Moderation        string // low | auto
+	OutputCompression int    // 0-100, 仅 jpeg/webp 生效
 	// 视频
 	WaitForCompletion bool
 	PollInterval      time.Duration
@@ -53,18 +58,22 @@ type Config struct {
 
 // Engine 实现 engine.Engine。
 type Engine struct {
-	origin       string
-	route        Route
-	kind         MediaKind
-	model        string
-	apiKey       string
-	quality      string
-	style        string
-	httpClient   *http.Client
-	waitVideo    bool
-	pollInterval            time.Duration
-	jimengVer               string
-	allowRemoteMediaFetch   bool
+	origin                string
+	route                 Route
+	kind                  MediaKind
+	model                 string
+	apiKey                string
+	quality               string
+	style                 string
+	background            string
+	outputFormat          string
+	moderation            string
+	outputCompression     int
+	httpClient            *http.Client
+	waitVideo             bool
+	pollInterval          time.Duration
+	jimengVer             string
+	allowRemoteMediaFetch bool
 }
 
 // New 创建引擎。Kind 为空且 Route 为空时，默认 KindImage。
@@ -97,6 +106,10 @@ func New(cfg Config) *Engine {
 		apiKey:                strings.TrimSpace(cfg.APIKey),
 		quality:               cfg.Quality,
 		style:                 cfg.Style,
+		background:            strings.TrimSpace(cfg.Background),
+		outputFormat:          strings.ToLower(strings.TrimSpace(cfg.OutputFormat)),
+		moderation:            strings.TrimSpace(cfg.Moderation),
+		outputCompression:     cfg.OutputCompression,
 		httpClient:            hc,
 		waitVideo:             cfg.WaitForCompletion,
 		pollInterval:          poll,
@@ -168,6 +181,7 @@ func (e *Engine) Capabilities() engine.Capability {
 	case KindImage:
 		cap.MediaTypes = []string{"image"}
 		cap.SupportsSync = true
+		cap.Sizes = imageSizesForModel(e.model)
 	case KindVideo:
 		cap.MediaTypes = []string{"video"}
 		cap.SupportsPoll = e.waitVideo
@@ -180,4 +194,18 @@ func (e *Engine) Capabilities() engine.Capability {
 		cap.SupportsSync = true
 	}
 	return cap
+}
+
+// imageSizesForModel returns the supported image sizes for a known model family.
+// Returns nil for models with unknown size catalogs (the gateway may still accept other sizes).
+func imageSizesForModel(model string) []string {
+	switch {
+	case isGPTImageModel(model):
+		return []string{"1024x1024", "1024x1536", "1536x1024"}
+	case strings.EqualFold(model, "dall-e-3"):
+		return []string{"1024x1024", "1024x1792", "1792x1024"}
+	case strings.EqualFold(model, "dall-e-2"):
+		return []string{"256x256", "512x512", "1024x1024"}
+	}
+	return nil
 }

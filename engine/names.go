@@ -13,12 +13,12 @@ var EngineMetadataMap = map[string]EngineMetadata{
 	// Image Generation
 	"alibabacloud": {
 		DisplayName: DisplayName{"en": "Alibaba Cloud DashScope", "zh": "阿里云百炼"},
-		Intro:       DisplayName{"en": "Alibaba Cloud's DashScope platform provides access to Qwen, Wan, and Z-Image models for image, video, TTS, and voice design generation.", "zh": "阿里云百炼平台提供通义万相、Wan、Z-Image 等模型，支持图片、视频、语音合成和声音设计生成。"},
-		DocURL:      "https://help.aliyun.com/zh/model-studio/",
+		Intro:       DisplayName{"en": "Alibaba Cloud's DashScope platform provides access to Qwen, Wan, Z-Image, and Tripo models for image, video, TTS, voice design, ASR, and 3D asset generation.", "zh": "阿里云百炼平台提供通义万相、Wan、Z-Image、Tripo 等模型，支持图片、视频、语音合成、声音设计、语音识别和 3D 资产生成。"},
+		DocURL:      "https://help.aliyun.com/zh/model-studio/models",
 	},
 	"openai": {
-		DisplayName: DisplayName{"en": "OpenAI DALL-E", "zh": "OpenAI DALL-E"},
-		Intro:       DisplayName{"en": "OpenAI's DALL-E models generate images from text prompts with high quality and creative flexibility.", "zh": "OpenAI 的 DALL-E 模型通过文本提示生成高质量、富有创意的图片。"},
+		DisplayName: DisplayName{"en": "OpenAI Images", "zh": "OpenAI Images"},
+		Intro:       DisplayName{"en": "OpenAI's image models generate and edit images from text prompts. Includes the natively multimodal gpt-image-2 (b64_json output, transparent backgrounds, configurable quality) alongside DALL-E 3 and DALL-E 2.", "zh": "OpenAI 的图片模型通过文本提示生成和编辑图片。包含原生多模态 gpt-image-2（base64 输出、透明背景、多档质量），以及 DALL-E 3 与 DALL-E 2。"},
 		DocURL:      "https://platform.openai.com/docs/guides/images",
 	},
 	"google": {

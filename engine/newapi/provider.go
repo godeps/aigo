@@ -5,10 +5,15 @@ import "github.com/godeps/aigo/engine"
 func init() {
 	engine.RegisterModelInfos(ModelInfos())
 	engine.RegisterFactory("newapi", func(cfg engine.EngineConfig) (engine.Engine, error) {
+		// Most New API gateway routes (Kling/Jimeng/Sora) are async; without
+		// polling the engine returns a task_id UUID instead of a media URL.
+		wait := cfg.WaitForCompletionOr(true)
 		return New(Config{
-			APIKey:  cfg.APIKey,
-			BaseURL: cfg.BaseURL,
-			Model:   cfg.Model,
+			APIKey:            cfg.APIKey,
+			BaseURL:           cfg.BaseURL,
+			Model:             cfg.Model,
+			WaitForCompletion: wait,
+			PollInterval:      cfg.PollInterval,
 		}), nil
 	})
 }

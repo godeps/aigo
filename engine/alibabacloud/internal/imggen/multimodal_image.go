@@ -8,8 +8,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
+	"github.com/godeps/aigo/engine"
 	"github.com/godeps/aigo/engine/aigoerr"
 	"github.com/godeps/aigo/engine/alibabacloud/internal/graphx"
 	"github.com/godeps/aigo/engine/alibabacloud/internal/runtime"
@@ -22,11 +24,25 @@ func IsMultimodalImageModel(model string) bool {
 	return (strings.Contains(model, "image") || strings.HasPrefix(model, "z-image")) && !strings.Contains(model, "video")
 }
 
-// RunMultimodalImage 同步调用多模态图生成接口。
+// RunMultimodalImage 同步调用多模态图生成接口（仅返回首张图，向后兼容）。
+//
+// Prefer RunMultimodalImageMulti when the caller wants the full set of generated
+// images (n>1 use case). This wrapper keeps the legacy signature for existing
+// integrations that only consume the first URL.
 func RunMultimodalImage(ctx context.Context, rt *runtime.RT, apiKey, model string, graph workflow.Graph) (string, error) {
+	value, _, err := RunMultimodalImageMulti(ctx, rt, apiKey, model, graph)
+	return value, err
+}
+
+// RunMultimodalImageMulti 同步调用多模态图生成接口，返回首张图与全部生成结果。
+//
+// When the request asked for n>1 images, the second return value contains
+// every image URL with a stable per-item index in metadata; otherwise it is
+// nil (callers should use the first return value alone).
+func RunMultimodalImageMulti(ctx context.Context, rt *runtime.RT, apiKey, model string, graph workflow.Graph) (string, []engine.ResultItem, error) {
 	prompt, err := graphx.Prompt(graph)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
 	content := []map[string]any{
@@ -75,33 +91,33 @@ func RunMultimodalImage(ctx context.Context, rt *runtime.RT, apiKey, model strin
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return "", fmt.Errorf("aliyun: marshal multimodal image request: %w", err)
+		return "", nil, fmt.Errorf("aliyun: marshal multimodal image request: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, rt.BaseURL+"/services/aigc/multimodal-generation/generation", bytes.NewReader(body))
 	if err != nil {
-		return "", fmt.Errorf("aliyun: build multimodal image request: %w", err)
+		return "", nil, fmt.Errorf("aliyun: build multimodal image request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := rt.HTTPClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("aliyun: call multimodal image api: %w", err)
+		return "", nil, fmt.Errorf("aliyun: call multimodal image api: %w", err)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("aliyun: read multimodal image response: %w", err)
+		return "", nil, fmt.Errorf("aliyun: read multimodal image response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		err := aigoerr.FromHTTPResponse(resp, respBody, "aliyun")
 		// Enhance "invalid size" errors with the list of supported sizes.
 		if resp.StatusCode == 400 && strings.Contains(string(respBody), "size") {
-			return "", fmt.Errorf("%w (supported image sizes: 1024x1024, 1024x1536, 1536x1024, 512x512)", err)
+			return "", nil, fmt.Errorf("%w (supported image sizes: 1024x1024, 1024x1536, 1536x1024, 512x512)", err)
 		}
-		return "", err
+		return "", nil, err
 	}
 
 	var decoded struct {
@@ -117,15 +133,30 @@ func RunMultimodalImage(ctx context.Context, rt *runtime.RT, apiKey, model strin
 		} `json:"output"`
 	}
 	if err := json.Unmarshal(respBody, &decoded); err != nil {
-		return "", fmt.Errorf("aliyun: decode multimodal image response: %w", err)
-	}
-	for _, choice := range decoded.Output.Choices {
-		for _, item := range choice.Message.Content {
-			if item.Image != "" {
-				return item.Image, nil
-			}
-		}
+		return "", nil, fmt.Errorf("aliyun: decode multimodal image response: %w", err)
 	}
 
-	return "", errors.New("aliyun: multimodal image response did not contain an image URL")
+	var (
+		first   string
+		results []engine.ResultItem
+	)
+	for _, choice := range decoded.Output.Choices {
+		for _, item := range choice.Message.Content {
+			if item.Image == "" {
+				continue
+			}
+			if first == "" {
+				first = item.Image
+			}
+			results = append(results, engine.ResultItem{
+				Value:    item.Image,
+				Kind:     engine.OutputURL,
+				Metadata: map[string]string{"index": strconv.Itoa(len(results))},
+			})
+		}
+	}
+	if first == "" {
+		return "", nil, errors.New("aliyun: multimodal image response did not contain an image URL")
+	}
+	return first, results, nil
 }

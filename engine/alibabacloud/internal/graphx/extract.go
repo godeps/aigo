@@ -102,8 +102,20 @@ func DeriveResolution(graph workflow.Graph) (string, bool) {
 	return "", false
 }
 
+// appendUnique appends url to urls only if it has not been added before,
+// preserving insertion order. Used by *URLs helpers to dedup graph inputs
+// where the same asset URL may appear in multiple nodes.
+func appendUnique(urls []string, seen map[string]struct{}, url string) []string {
+	if _, dup := seen[url]; dup {
+		return urls
+	}
+	seen[url] = struct{}{}
+	return append(urls, url)
+}
+
 func ImageURLs(graph workflow.Graph) []string {
 	urls := make([]string, 0)
+	seen := make(map[string]struct{})
 	for _, id := range graph.SortedNodeIDs() {
 		node := graph[id]
 		url, ok := node.StringInput("url")
@@ -111,7 +123,7 @@ func ImageURLs(graph workflow.Graph) []string {
 			continue
 		}
 		if strings.Contains(strings.ToLower(node.ClassType), "image") {
-			urls = append(urls, url)
+			urls = appendUnique(urls, seen, url)
 		}
 	}
 	return urls
@@ -119,6 +131,7 @@ func ImageURLs(graph workflow.Graph) []string {
 
 func VideoURLs(graph workflow.Graph) []string {
 	urls := make([]string, 0)
+	seen := make(map[string]struct{})
 	for _, id := range graph.SortedNodeIDs() {
 		node := graph[id]
 		url, ok := node.StringInput("url")
@@ -126,7 +139,7 @@ func VideoURLs(graph workflow.Graph) []string {
 			continue
 		}
 		if strings.Contains(strings.ToLower(node.ClassType), "video") {
-			urls = append(urls, url)
+			urls = appendUnique(urls, seen, url)
 		}
 	}
 	return urls
@@ -134,6 +147,7 @@ func VideoURLs(graph workflow.Graph) []string {
 
 func MediaURLs(graph workflow.Graph) []string {
 	urls := make([]string, 0)
+	seen := make(map[string]struct{})
 	for _, id := range graph.SortedNodeIDs() {
 		node := graph[id]
 		url, ok := node.StringInput("url")
@@ -142,7 +156,7 @@ func MediaURLs(graph workflow.Graph) []string {
 		}
 		classType := strings.ToLower(node.ClassType)
 		if strings.Contains(classType, "video") || strings.Contains(classType, "image") {
-			urls = append(urls, url)
+			urls = appendUnique(urls, seen, url)
 		}
 	}
 	return urls

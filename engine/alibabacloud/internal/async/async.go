@@ -78,7 +78,11 @@ func wait(ctx context.Context, rt *runtime.RT, apiKey, taskID string, ex URLExtr
 		}
 		if done {
 			if url == "" {
-				return taskID, true, nil
+				return "", true, &aigoerr.Error{
+					Code:      aigoerr.CodeServerError,
+					Message:   fmt.Sprintf("aliyun: task %s SUCCEEDED but no result URL matched extractor paths", taskID),
+					Retryable: false,
+				}
 			}
 			return url, true, nil
 		}
@@ -119,14 +123,23 @@ func fetch(ctx context.Context, rt *runtime.RT, apiKey, taskID string, ex URLExt
 		return "", false, nil
 	case "FAILED", "CANCELED", "UNKNOWN":
 		// Extract error details from task output if available.
-		errMsg := ""
-		if code, _ := output["code"].(string); code != "" {
-			errMsg += " code=" + code
+		taskCode, _ := output["code"].(string)
+		taskMsg, _ := output["message"].(string)
+		extras := ""
+		if taskCode != "" {
+			extras += " code=" + taskCode
 		}
-		if msg, _ := output["message"].(string); msg != "" {
-			errMsg += " message=" + msg
+		if taskMsg != "" {
+			extras += " message=" + taskMsg
 		}
-		return "", true, fmt.Errorf("aliyun: task %s finished with status %s%s", taskID, status, errMsg)
+		// Map terminal status to a classified error so agents can route retries.
+		// CANCELED is non-retryable (user/system intent); FAILED/UNKNOWN are
+		// non-retryable by default since the upstream task already terminated.
+		return "", true, &aigoerr.Error{
+			Code:      aigoerr.CodeServerError,
+			Message:   fmt.Sprintf("aliyun: task %s finished with status %s%s", taskID, status, extras),
+			Retryable: false,
+		}
 	case "SUCCEEDED":
 		for _, path := range ex.URLFields {
 			if url, ok := nestedString(output, path...); ok && url != "" {

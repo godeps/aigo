@@ -57,5 +57,5 @@ func (e *Engine) runQwenImageGenerations(ctx context.Context, apiKey string, g w
 	if err != nil {
 		return "", err
 	}
-	return decodeOpenAIImageData(respBody)
+	return decodeOpenAIImageData(respBody, "")
 }

@@ -33,8 +33,10 @@ func (e *Engine) runOpenAIImageGenerations(ctx context.Context, apiKey string, g
 		"size":   graph.ExtractImageSizeOpenAI(g),
 		"n":      1,
 	}
-	if !gptImage {
+	if gptImage {
 		// gpt-image-* always returns b64_json and rejects response_format/style.
+		e.applyGPTImageOptions(payload)
+	} else {
 		payload["response_format"] = "url"
 		if e.style != "" {
 			payload["style"] = e.style
@@ -57,7 +59,7 @@ func (e *Engine) runOpenAIImageGenerations(ctx context.Context, apiKey string, g
 	if err != nil {
 		return "", err
 	}
-	return decodeOpenAIImageData(respBody)
+	return decodeOpenAIImageData(respBody, e.b64ImageMIME())
 }
 
 func (e *Engine) runOpenAIImageEdits(ctx context.Context, apiKey string, g workflow.Graph) (string, error) {
@@ -74,8 +76,21 @@ func (e *Engine) runOpenAIImageEdits(ctx context.Context, apiKey string, g workf
 	w := multipart.NewWriter(&buf)
 	_ = w.WriteField("model", e.model)
 	_ = w.WriteField("prompt", prompt)
-	if !isGPTImageModel(e.model) {
+	if isGPTImageModel(e.model) {
 		// gpt-image-* always returns b64_json; response_format is not accepted.
+		if e.background != "" {
+			_ = w.WriteField("background", e.background)
+		}
+		if e.outputFormat != "" {
+			_ = w.WriteField("output_format", e.outputFormat)
+		}
+		if e.moderation != "" {
+			_ = w.WriteField("moderation", e.moderation)
+		}
+		if e.outputCompression > 0 {
+			_ = w.WriteField("output_compression", fmt.Sprintf("%d", e.outputCompression))
+		}
+	} else {
 		_ = w.WriteField("response_format", "url")
 	}
 	if s := graph.ExtractImageSizeOpenAI(g); s != "" {
@@ -102,7 +117,7 @@ func (e *Engine) runOpenAIImageEdits(ctx context.Context, apiKey string, g workf
 	if err != nil {
 		return "", err
 	}
-	return decodeOpenAIImageData(respBody)
+	return decodeOpenAIImageData(respBody, e.b64ImageMIME())
 }
 
 func (e *Engine) runOpenAIVideoGenerations(ctx context.Context, apiKey string, g workflow.Graph) (string, error) {
@@ -307,7 +322,7 @@ func (e *Engine) doRequest(ctx context.Context, method, url, apiKey string, body
 	return out, nil
 }
 
-func decodeOpenAIImageData(respBody []byte) (string, error) {
+func decodeOpenAIImageData(respBody []byte, b64MIME string) (string, error) {
 	var decoded struct {
 		Data []struct {
 			URL     string `json:"url"`
@@ -324,9 +339,49 @@ func decodeOpenAIImageData(respBody []byte) (string, error) {
 		return decoded.Data[0].URL, nil
 	}
 	if decoded.Data[0].B64JSON != "" {
-		return "data:image/png;base64," + decoded.Data[0].B64JSON, nil
+		mime := b64MIME
+		if mime == "" {
+			mime = "image/png"
+		}
+		return "data:" + mime + ";base64," + decoded.Data[0].B64JSON, nil
 	}
 	return "", errors.New("newapi: image response had no url or b64_json")
+}
+
+// applyGPTImageOptions writes gpt-image-* specific fields into the JSON payload,
+// omitting any field that is empty/zero.
+func (e *Engine) applyGPTImageOptions(payload map[string]any) {
+	if e.background != "" {
+		payload["background"] = e.background
+	}
+	if e.outputFormat != "" {
+		payload["output_format"] = e.outputFormat
+	}
+	if e.moderation != "" {
+		payload["moderation"] = e.moderation
+	}
+	if e.outputCompression > 0 {
+		payload["output_compression"] = e.outputCompression
+	}
+}
+
+// b64ImageMIME returns the data: URI MIME for b64_json image responses,
+// derived from the configured OutputFormat. Defaults to image/png.
+func (e *Engine) b64ImageMIME() string {
+	return imageMIMEFromOutputFormat(e.outputFormat)
+}
+
+// imageMIMEFromOutputFormat maps OpenAI image `output_format` values to MIME types.
+func imageMIMEFromOutputFormat(format string) string {
+	switch strings.ToLower(strings.TrimSpace(format)) {
+	case "jpeg", "jpg":
+		return "image/jpeg"
+	case "webp":
+		return "image/webp"
+	case "png", "":
+		return "image/png"
+	}
+	return "image/png"
 }
 
 // isGPTImageModel reports whether the model belongs to the gpt-image-* family,

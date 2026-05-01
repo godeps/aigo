@@ -9,6 +9,10 @@ import (
 
 // extractorForModel returns the URLExtractor for a given model name.
 // The paths mirror those used by each handler in imggen/vidgen/audiogen.
+//
+// Sync-only handlers (TTS, VoiceDesign) do not submit async tasks and never
+// reach Resume; we still register an empty extractor so the table is exhaustive
+// and intent is explicit.
 func extractorForModel(model string) async.URLExtractor {
 	switch model {
 	case ModelQwenImage, ModelQwenImage2, ModelQwenImageEditPlus,
@@ -16,8 +20,17 @@ func extractorForModel(model string) async.URLExtractor {
 		return async.URLExtractor{URLFields: [][]string{{"results", "url"}, {"result_url"}}}
 	case ModelQwenASRFlash, ModelQwenASRFlashFiletrans:
 		return async.URLExtractor{URLFields: [][]string{{"results", "transcription_url"}, {"results", "text"}}}
+	case ModelTripoP1, ModelTripoH31:
+		return async.URLExtractor{URLFields: [][]string{{"results", "pbr_model_url"}}}
+	case ModelWanTextToVideo, ModelWanImageToVideo, ModelWanReferenceVideo, ModelWanVideoEdit,
+		ModelKlingV3Video, ModelKlingV3OmniVideo:
+		return async.URLExtractor{URLFields: [][]string{{"video_url"}}}
+	case ModelQwenTTSFlash, ModelQwenTTSInstructFlash, ModelQwenVoiceDesign:
+		// Synchronous handlers: never reach Resume, but keep the case explicit
+		// so adding a new sync model surfaces in code review.
+		return async.URLExtractor{}
 	default:
-		// All video models (wan, kling) use video_url.
+		// Conservative fallback: video_url is the most common shape.
 		return async.URLExtractor{URLFields: [][]string{{"video_url"}}}
 	}
 }

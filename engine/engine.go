@@ -47,13 +47,15 @@ type Engine interface {
 
 // Capability describes what an engine can do.
 type Capability struct {
-	MediaTypes   []string // e.g. ["image", "video", "audio"]
-	Models       []string
-	Sizes        []string // e.g. ["1024x1024", "1280x720"]
-	Voices       []string // supported voice identifiers for TTS engines
-	MaxDuration  int      // max video/audio duration in seconds; 0 = not applicable
-	SupportsSync bool
-	SupportsPoll bool
+	MediaTypes     []string // e.g. ["image", "video", "audio"]
+	Models         []string
+	Sizes          []string // e.g. ["1024x1024", "1280x720"]
+	Voices         []string // supported voice identifiers for TTS engines
+	MaxDuration    int      // max video/audio duration in seconds; 0 = not applicable
+	MaxImages      int      // max number of input images supported by this model; 0 = not applicable / no hard cap
+	MaxPromptChars int      // max prompt length in characters (UTF-8 code points); 0 = not enforced
+	SupportsSync   bool
+	SupportsPoll   bool
 }
 
 // Describer is an optional interface that engines can implement to advertise capabilities.

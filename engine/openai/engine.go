@@ -23,7 +23,10 @@ const (
 	defaultSize    = "1024x1024"
 )
 
-var ErrMissingPrompt = errors.New("openai: prompt not found in workflow graph")
+var (
+	ErrMissingPrompt       = errors.New("openai: prompt not found in workflow graph")
+	ErrRemoteMediaDisabled = errors.New("openai: remote media fetch is disabled by configuration")
+)
 
 // Config configures the OpenAI image engine.
 type Config struct {
@@ -32,7 +35,14 @@ type Config struct {
 	Model      string
 	Quality    string
 	Style      string
-	HTTPClient *http.Client
+	// gpt-image-* 专属可选参数
+	Background        string // transparent | opaque | auto
+	OutputFormat      string // png | jpeg | webp
+	Moderation        string // low | auto
+	OutputCompression int    // 0-100, 仅 jpeg/webp 生效
+	// AllowRemoteImageFetch 控制 image_url 是否允许 HTTP GET（默认 true）。
+	DisableRemoteMediaFetch bool
+	HTTPClient              *http.Client
 }
 
 // Request is the flattened image generation payload derived from a graph.
@@ -46,12 +56,17 @@ type Request struct {
 
 // Engine compiles a workflow graph into an OpenAI image request.
 type Engine struct {
-	apiKey     string
-	baseURL    string
-	model      string
-	quality    string
-	style      string
-	httpClient *http.Client
+	apiKey                string
+	baseURL               string
+	model                 string
+	quality               string
+	style                 string
+	background            string
+	outputFormat          string
+	moderation            string
+	outputCompression     int
+	httpClient            *http.Client
+	allowRemoteMediaFetch bool
 }
 
 // New creates an OpenAI engine instance.
@@ -74,12 +89,17 @@ func New(cfg Config) *Engine {
 	}
 
 	return &Engine{
-		apiKey:     cfg.APIKey,
-		baseURL:    baseURL,
-		model:      model,
-		quality:    quality,
-		style:      cfg.Style,
-		httpClient: httpClient,
+		apiKey:                cfg.APIKey,
+		baseURL:               baseURL,
+		model:                 model,
+		quality:               quality,
+		style:                 cfg.Style,
+		background:            strings.TrimSpace(cfg.Background),
+		outputFormat:          strings.ToLower(strings.TrimSpace(cfg.OutputFormat)),
+		moderation:            strings.TrimSpace(cfg.Moderation),
+		outputCompression:     cfg.OutputCompression,
+		httpClient:            httpClient,
+		allowRemoteMediaFetch: !cfg.DisableRemoteMediaFetch,
 	}
 }
 
@@ -130,6 +150,9 @@ func (e *Engine) Compile(graph workflow.Graph) (Request, error) {
 }
 
 // Execute compiles the workflow and calls the OpenAI images API.
+// If the graph carries an image source (image_b64/image_path/image_url/LoadImage),
+// it dispatches to /v1/images/edits with multipart upload; otherwise it calls
+// /v1/images/generations with JSON.
 func (e *Engine) Execute(ctx context.Context, graph workflow.Graph) (engine.Result, error) {
 	req, err := e.Compile(graph)
 	if err != nil {
@@ -139,6 +162,10 @@ func (e *Engine) Execute(ctx context.Context, graph workflow.Graph) (engine.Resu
 	apiKey, err := engine.ResolveKey(e.apiKey, "OPENAI_API_KEY")
 	if err != nil {
 		return engine.Result{}, err
+	}
+
+	if hasImageSource(graph) {
+		return e.executeEdits(ctx, apiKey, req, graph)
 	}
 
 	payload := map[string]any{
@@ -153,6 +180,7 @@ func (e *Engine) Execute(ctx context.Context, graph workflow.Graph) (engine.Resu
 		if req.Quality != "" {
 			payload["quality"] = req.Quality
 		}
+		e.applyGPTImageOptions(payload)
 	} else {
 		payload["response_format"] = "url"
 		if req.Quality != "" {
@@ -208,10 +236,46 @@ func (e *Engine) Execute(ctx context.Context, graph workflow.Graph) (engine.Resu
 		return engine.Result{Value: decoded.Data[0].URL, Kind: engine.OutputURL}, nil
 	}
 	if decoded.Data[0].B64JSON != "" {
-		return engine.Result{Value: "data:image/png;base64," + decoded.Data[0].B64JSON, Kind: engine.OutputDataURI}, nil
+		return engine.Result{Value: "data:" + e.b64ImageMIME() + ";base64," + decoded.Data[0].B64JSON, Kind: engine.OutputDataURI}, nil
 	}
 
 	return engine.Result{}, errors.New("openai: response did not contain a usable image result")
+}
+
+// applyGPTImageOptions writes gpt-image-* specific fields into the JSON payload,
+// omitting any field that is empty/zero.
+func (e *Engine) applyGPTImageOptions(payload map[string]any) {
+	if e.background != "" {
+		payload["background"] = e.background
+	}
+	if e.outputFormat != "" {
+		payload["output_format"] = e.outputFormat
+	}
+	if e.moderation != "" {
+		payload["moderation"] = e.moderation
+	}
+	if e.outputCompression > 0 {
+		payload["output_compression"] = e.outputCompression
+	}
+}
+
+// b64ImageMIME returns the MIME for b64_json data URIs based on OutputFormat.
+// Defaults to image/png.
+func (e *Engine) b64ImageMIME() string {
+	return imageMIMEFromOutputFormat(e.outputFormat)
+}
+
+// imageMIMEFromOutputFormat maps OpenAI image `output_format` values to MIME types.
+func imageMIMEFromOutputFormat(format string) string {
+	switch strings.ToLower(strings.TrimSpace(format)) {
+	case "jpeg", "jpg":
+		return "image/jpeg"
+	case "webp":
+		return "image/webp"
+	case "png", "":
+		return "image/png"
+	}
+	return "image/png"
 }
 
 // Capabilities implements engine.Describer.

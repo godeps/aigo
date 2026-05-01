@@ -1,6 +1,9 @@
 package engine
 
-import "sync"
+import (
+	"sync"
+	"time"
+)
 
 // EngineConfig is a generic, JSON-friendly configuration for creating an engine.
 // Used by LoadConfig / ApplyConfig for declarative engine setup.
@@ -12,6 +15,27 @@ type EngineConfig struct {
 	BaseURL  string            `json:"base_url,omitempty"`   // custom API endpoint
 	Enabled  *bool             `json:"enabled,omitempty"`    // default true; set false to skip
 	Metadata map[string]string `json:"metadata,omitempty"`   // provider-specific fields (e.g. voiceId, endpoint)
+
+	// WaitForCompletion controls async-task polling on backends that submit
+	// asynchronous jobs (DashScope X-DashScope-Async, etc.). nil = use the
+	// engine's smart default; *true = always poll until SUCCEEDED/FAILED;
+	// *false = return the upstream task_id immediately so the caller resumes
+	// it later. The pointer type is intentional so engines can distinguish
+	// "user did not say" from "user explicitly disabled".
+	WaitForCompletion *bool `json:"wait_for_completion,omitempty"`
+
+	// PollInterval overrides the engine's default polling cadence; only
+	// effective when WaitForCompletion resolves to true.
+	PollInterval time.Duration `json:"poll_interval,omitempty"`
+}
+
+// WaitForCompletionOr returns the resolved WaitForCompletion value, falling
+// back to def when the user did not configure it explicitly.
+func (c EngineConfig) WaitForCompletionOr(def bool) bool {
+	if c.WaitForCompletion == nil {
+		return def
+	}
+	return *c.WaitForCompletion
 }
 
 // Meta returns the metadata value for key, or fallback if not present.
