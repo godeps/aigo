@@ -262,6 +262,15 @@ func (e *Engine) buildPayload(g workflow.Graph) (map[string]any, error) {
 	if v, ok := intOption(g, "execution_expires_after"); ok {
 		payload["execution_expires_after"] = v
 	}
+	if v, ok := intOption(g, "frames"); ok {
+		payload["frames"] = v
+	}
+	if v, ok := boolOption(g, "camera_fixed"); ok {
+		payload["camera_fixed"] = v
+	}
+	if tools := extractTools(g); len(tools) > 0 {
+		payload["tools"] = tools
+	}
 
 	// extra body merge
 	mergeJSONOption(g, payload, "extra_body", "ark_extra")

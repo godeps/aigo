@@ -100,6 +100,30 @@ func boolOption(g workflow.Graph, keys ...string) (bool, bool) {
 	return resolve.BoolOption(g, keys...)
 }
 
+// extractTools returns a tools array from the Options node (e.g. [{"type":"web_search"}]).
+func extractTools(g workflow.Graph) []map[string]any {
+	for _, id := range g.SortedNodeIDs() {
+		raw, ok := g[id].Input("tools")
+		if !ok {
+			continue
+		}
+		slice, ok := raw.([]any)
+		if !ok {
+			continue
+		}
+		tools := make([]map[string]any, 0, len(slice))
+		for _, item := range slice {
+			if m, ok := item.(map[string]any); ok {
+				tools = append(tools, m)
+			}
+		}
+		if len(tools) > 0 {
+			return tools
+		}
+	}
+	return nil
+}
+
 // mergeJSONOption delegates to resolve.MergeJSONOption.
 func mergeJSONOption(g workflow.Graph, dst map[string]any, keys ...string) {
 	resolve.MergeJSONOption(g, dst, keys...)
