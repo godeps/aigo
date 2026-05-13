@@ -17,4 +17,7 @@ var (
 	ErrTooManyTripoImages = errors.New("aliyun tripo: images must be 2-4 entries")
 	// Tripo 3D prompt 字符上限 1024（UTF-8 字符数）。
 	ErrTripoPromptTooLong = errors.New("aliyun tripo: prompt exceeds 1024 characters")
+
+	// HappyHorse r2v 参考图上限 9 张。
+	ErrTooManyHappyHorseImages = errors.New("aliyun happyhorse: reference images must be 1-9")
 )

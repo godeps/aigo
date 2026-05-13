@@ -28,8 +28,10 @@ func TestDefaultWaitForModel(t *testing.T) {
 		{ModelQwenASRFlashFiletrans, true},
 		{ModelQwenImageEditPlus, true}, // listed in editModels
 
+		// Async (RunQwenImage uses async.Submit): must poll.
+		{ModelQwenImage, true},
+
 		// Sync: defaults should NOT block.
-		{ModelQwenImage, false},
 		{"", false},
 		{"some-future-sync-model", false},
 	}
@@ -53,7 +55,6 @@ func TestFactoryRespectsExplicitWaitForCompletion(t *testing.T) {
 		t.Fatal("alibabacloud factory not registered")
 	}
 
-	tt := true
 	ff := false
 
 	cases := []struct {
@@ -72,9 +73,9 @@ func TestFactoryRespectsExplicitWaitForCompletion(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "user can force true on sync image model",
-			cfg:  engine.EngineConfig{Model: ModelQwenImage, WaitForCompletion: &tt},
-			want: true,
+			name: "user can force false on async image model",
+			cfg:  engine.EngineConfig{Model: ModelQwenImage, WaitForCompletion: &ff},
+			want: false,
 		},
 	}
 	for _, c := range cases {

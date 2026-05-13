@@ -23,9 +23,10 @@ func extractorForModel(model string) async.URLExtractor {
 	case ModelTripoP1, ModelTripoH31:
 		return async.URLExtractor{URLFields: [][]string{{"results", "pbr_model_url"}}}
 	case ModelWanTextToVideo, ModelWanImageToVideo, ModelWanReferenceVideo, ModelWanVideoEdit,
-		ModelKlingV3Video, ModelKlingV3OmniVideo:
+		ModelKlingV3Video, ModelKlingV3OmniVideo,
+		ModelHappyHorseT2V, ModelHappyHorseI2V, ModelHappyHorseR2V, ModelHappyHorseVideoEdit:
 		return async.URLExtractor{URLFields: [][]string{{"video_url"}}}
-	case ModelQwenTTSFlash, ModelQwenTTSInstructFlash, ModelQwenVoiceDesign:
+	case ModelQwenTTSFlash, ModelQwenTTSInstructFlash, ModelQwenVoiceDesign, ModelFunMusic:
 		// Synchronous handlers: never reach Resume, but keep the case explicit
 		// so adding a new sync model surfaces in code review.
 		return async.URLExtractor{}

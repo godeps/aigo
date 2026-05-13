@@ -29,10 +29,16 @@ func TestExtractorForModel_AllTableEntriesCovered(t *testing.T) {
 		ModelWanVideoEdit:      {{"video_url"}},
 		ModelKlingV3Video:      {{"video_url"}},
 		ModelKlingV3OmniVideo:  {{"video_url"}},
+		// video (happyhorse)
+		ModelHappyHorseT2V:       {{"video_url"}},
+		ModelHappyHorseI2V:       {{"video_url"}},
+		ModelHappyHorseR2V:       {{"video_url"}},
+		ModelHappyHorseVideoEdit: {{"video_url"}},
 		// sync-only handlers: empty extractor (never reach Resume)
 		ModelQwenTTSFlash:         nil,
 		ModelQwenTTSInstructFlash: nil,
 		ModelQwenVoiceDesign:      nil,
+		ModelFunMusic:             nil,
 	}
 
 	for model := range modelTable {

@@ -37,14 +37,19 @@ func defaultWaitForModel(model string) bool {
 		return true
 	}
 	switch model {
-	case ModelWanTextToVideo,
+	case ModelQwenImage,
+		ModelWanTextToVideo,
 		ModelWanImageToVideo,
 		ModelWanReferenceVideo,
 		ModelWanVideoEdit,
 		ModelKlingV3Video,
 		ModelKlingV3OmniVideo,
 		ModelTripoP1,
-		ModelTripoH31:
+		ModelTripoH31,
+		ModelHappyHorseT2V,
+		ModelHappyHorseI2V,
+		ModelHappyHorseR2V,
+		ModelHappyHorseVideoEdit:
 		return true
 	}
 	return false
@@ -67,9 +72,15 @@ func DefaultProvider() engine.Provider {
 		Configs: []engine.ProviderConfig{
 			{
 				Name:        "alibabacloud-image",
-				Engine:      New(Config{Model: ModelQwenImage}),
+				Engine:      New(Config{Model: ModelWanImage}),
 				EnvVars:     []string{"DASHSCOPE_API_KEY"},
 				DisplayName: suffixed("Image", "图像"),
+			},
+			{
+				Name:        "alibabacloud-image-turbo",
+				Engine:      New(Config{Model: ModelZImageTurbo}),
+				EnvVars:     []string{"DASHSCOPE_API_KEY"},
+				DisplayName: suffixed("Image Turbo", "极速图像"),
 			},
 			{
 				Name:        "alibabacloud-image-edit",
@@ -112,6 +123,24 @@ func DefaultProvider() engine.Provider {
 				Engine:      New(Config{Model: ModelTripoP1, WaitForCompletion: true}),
 				EnvVars:     []string{"DASHSCOPE_API_KEY"},
 				DisplayName: suffixed("3D", "3D 资产"),
+			},
+			{
+				Name:        "alibabacloud-happyhorse-video",
+				Engine:      New(Config{Model: ModelHappyHorseT2V, WaitForCompletion: true}),
+				EnvVars:     []string{"DASHSCOPE_API_KEY"},
+				DisplayName: suffixed("HappyHorse Video", "欢乐马视频"),
+			},
+			{
+				Name:        "alibabacloud-happyhorse-video-edit",
+				Engine:      New(Config{Model: ModelHappyHorseVideoEdit, WaitForCompletion: true}),
+				EnvVars:     []string{"DASHSCOPE_API_KEY"},
+				DisplayName: suffixed("HappyHorse Video Edit", "欢乐马视频编辑"),
+			},
+			{
+				Name:        "alibabacloud-music",
+				Engine:      New(Config{Model: ModelFunMusic}),
+				EnvVars:     []string{"DASHSCOPE_API_KEY"},
+				DisplayName: suffixed("Music", "音乐生成"),
 			},
 		},
 	}

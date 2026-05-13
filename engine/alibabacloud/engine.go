@@ -1,9 +1,11 @@
 package alibabacloud
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -45,6 +47,13 @@ const (
 	ModelTripoP1 = "Tripo/Tripo-P1.0"
 	// Tripo 高精度 3D 生成模型（最高 200 万面，支持 geometry_quality）。
 	ModelTripoH31 = "Tripo/Tripo-H3.1"
+
+	ModelHappyHorseT2V       = "happyhorse-1.0-t2v"
+	ModelHappyHorseI2V       = "happyhorse-1.0-i2v"
+	ModelHappyHorseR2V       = "happyhorse-1.0-r2v"
+	ModelHappyHorseVideoEdit = "happyhorse-1.0-video-edit"
+
+	ModelFunMusic = "fun-music-v1"
 )
 
 // 与 internal/ierr 中哨兵为同一指针，便于 errors.Is。
@@ -60,6 +69,9 @@ var (
 	ErrMissingTripoInput  = ierr.ErrMissingTripoInput
 	ErrTooManyTripoImages = ierr.ErrTooManyTripoImages
 	ErrTripoPromptTooLong = ierr.ErrTripoPromptTooLong
+
+	// HappyHorse 边界错误。
+	ErrTooManyHappyHorseImages = ierr.ErrTooManyHappyHorseImages
 )
 
 // Config configures the Alibaba Cloud Bailian engine.
@@ -143,6 +155,11 @@ var modelTable = map[string]modelEntry{
 	ModelQwenASRFlashFiletrans: {handler: audiogen.RunQwenASRFiletrans, kind: engine.OutputPlainText},
 	ModelTripoP1:               {handler: threedgen.RunTripo3D, kind: engine.OutputURL},
 	ModelTripoH31:              {handler: threedgen.RunTripo3D, kind: engine.OutputURL},
+	ModelHappyHorseT2V:         {handler: vidgen.RunHappyHorseTextToVideo, kind: engine.OutputURL},
+	ModelHappyHorseI2V:         {handler: vidgen.RunHappyHorseImageToVideo, kind: engine.OutputURL},
+	ModelHappyHorseR2V:         {handler: vidgen.RunHappyHorseReferenceToVideo, kind: engine.OutputURL},
+	ModelHappyHorseVideoEdit:   {handler: vidgen.RunHappyHorseVideoEdit, kind: engine.OutputURL},
+	ModelFunMusic:              {handler: audiogen.RunMusic, kind: engine.OutputURL},
 }
 
 // Execute compiles the workflow graph into the configured Bailian model request.
@@ -202,6 +219,27 @@ func (e *Engine) Capabilities() engine.Capability {
 	case ModelWanTextToVideo, ModelWanImageToVideo, ModelWanReferenceVideo, ModelWanVideoEdit,
 		ModelKlingV3Video, ModelKlingV3OmniVideo:
 		cap.MediaTypes = []string{"video"}
+	case ModelHappyHorseT2V:
+		cap.MediaTypes = []string{"video"}
+		cap.Sizes = []string{"16:9", "9:16", "1:1", "4:3", "3:4", "4:5", "5:4"}
+		cap.MaxDuration = 15
+		cap.MaxPromptChars = 2500
+	case ModelHappyHorseI2V:
+		cap.MediaTypes = []string{"video"}
+		cap.MaxImages = 1
+		cap.MaxDuration = 15
+		cap.MaxPromptChars = 2500
+	case ModelHappyHorseR2V:
+		cap.MediaTypes = []string{"video"}
+		cap.Sizes = []string{"16:9", "9:16", "1:1", "4:3", "3:4", "4:5", "5:4"}
+		cap.MaxImages = 9
+		cap.MaxDuration = 15
+		cap.MaxPromptChars = 2500
+	case ModelHappyHorseVideoEdit:
+		cap.MediaTypes = []string{"video"}
+		cap.MaxImages = 5
+		cap.MaxDuration = 15
+		cap.MaxPromptChars = 2500
 	case ModelQwenTTSFlash, ModelQwenTTSInstructFlash:
 		cap.MediaTypes = []string{"audio"}
 		cap.Voices = []string{"Cherry", "Serena", "Ethan", "Chelsie"}
@@ -213,6 +251,9 @@ func (e *Engine) Capabilities() engine.Capability {
 		cap.MediaTypes = []string{"3d"}
 		cap.MaxImages = 4         // 多图生 3D 上限。
 		cap.MaxPromptChars = 1024 // Tripo prompt 字符上限。
+	case ModelFunMusic:
+		cap.MediaTypes = []string{"audio"}
+		cap.MaxPromptChars = 2000
 	}
 	return cap
 }
@@ -220,8 +261,9 @@ func (e *Engine) Capabilities() engine.Capability {
 // editModels lists models that are editors, not generators.
 // Used by ModelsByCapability to classify them under "*_edit" keys.
 var editModels = map[string]string{
-	ModelQwenImageEditPlus: "image_edit",
-	ModelWanVideoEdit:      "video_edit",
+	ModelQwenImageEditPlus:   "image_edit",
+	ModelWanVideoEdit:        "video_edit",
+	ModelHappyHorseVideoEdit: "video_edit",
 }
 
 // dualModels lists models that support both generation and editing.
@@ -237,12 +279,27 @@ var asrModels = map[string]bool{
 	ModelQwenASRFlashFiletrans: true,
 }
 
+// musicModels lists models that are music generation, not TTS.
+// Used by ModelsByCapability to classify them under "music" key.
+var musicModels = map[string]bool{
+	ModelFunMusic: true,
+}
+
 // ConfigSchema returns the configuration fields required by the Aliyun engine.
 func ConfigSchema() []engine.ConfigField {
 	return []engine.ConfigField{
 		{Key: "apiKey", Label: "API Key", Type: "secret", Required: true, EnvVar: "DASHSCOPE_API_KEY", Description: "DashScope API key"},
 		{Key: "baseUrl", Label: "Base URL", Type: "url", EnvVar: "DASHSCOPE_BASE_URL", Description: "Custom API base URL (optional)"},
 	}
+}
+
+// modelSortPriority returns 0 for sync models (multiHandler) and 1 for async
+// models (handler). Lower priority sorts first in the routing slice.
+func modelSortPriority(model string) int {
+	if entry, ok := modelTable[model]; ok && entry.multiHandler != nil {
+		return 0
+	}
+	return 1
 }
 
 // ModelsByCapability returns all supported models grouped by capability key
@@ -257,6 +314,8 @@ func ModelsByCapability() map[string][]string {
 			key := mt
 			if editKey, ok := editModels[model]; ok {
 				key = editKey
+			} else if musicModels[model] {
+				key = "music"
 			} else if asrModels[model] {
 				key = "asr"
 			} else if mt == "audio" && model == ModelQwenVoiceDesign {
@@ -270,6 +329,17 @@ func ModelsByCapability() map[string][]string {
 				result[editKey] = append(result[editKey], model)
 			}
 		}
+	}
+	// Sort each capability slice: sync models (multiHandler) before async
+	// (handler), then alphabetically for deterministic order across restarts.
+	for _, models := range result {
+		slices.SortFunc(models, func(a, b string) int {
+			pa, pb := modelSortPriority(a), modelSortPriority(b)
+			if pa != pb {
+				return cmp.Compare(pa, pb)
+			}
+			return cmp.Compare(a, b)
+		})
 	}
 	return result
 }

@@ -13,7 +13,7 @@ var EngineMetadataMap = map[string]EngineMetadata{
 	// Image Generation
 	"alibabacloud": {
 		DisplayName: DisplayName{"en": "Alibaba Cloud DashScope", "zh": "阿里云百炼"},
-		Intro:       DisplayName{"en": "Alibaba Cloud's DashScope platform provides access to Qwen, Wan, Z-Image, and Tripo models for image, video, TTS, voice design, ASR, and 3D asset generation.", "zh": "阿里云百炼平台提供通义万相、Wan、Z-Image、Tripo 等模型，支持图片、视频、语音合成、声音设计、语音识别和 3D 资产生成。"},
+		Intro:       DisplayName{"en": "Alibaba Cloud's DashScope platform provides access to Qwen, Wan, Z-Image, Tripo, HappyHorse, and Fun-Music models for image, video, TTS, voice design, ASR, 3D asset, and music generation.", "zh": "阿里云百炼平台提供通义万相、Wan、Z-Image、Tripo、欢乐马、Fun-Music 等模型，支持图片、视频、语音合成、声音设计、语音识别、3D 资产生成和音乐生成。"},
 		DocURL:      "https://help.aliyun.com/zh/model-studio/models",
 	},
 	"openai": {

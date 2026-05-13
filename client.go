@@ -864,6 +864,9 @@ func (c *Client) ExecuteWithFallback(ctx context.Context, engines []string, grap
 
 	var skipped []FallbackError
 	for _, name := range engines {
+		if err := ctx.Err(); err != nil {
+			return FallbackResult{Skipped: skipped}, fmt.Errorf("aigo: context cancelled before engine %q: %w", name, err)
+		}
 		result, err := c.Execute(ctx, name, graph, opts...)
 		if err == nil {
 			return FallbackResult{Engine: name, Output: result, Skipped: skipped}, nil
