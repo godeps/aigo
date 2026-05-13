@@ -11,6 +11,25 @@ import (
 	"github.com/godeps/aigo/workflow"
 )
 
+func validateWanVideoEditMedia(media []map[string]any) error {
+	var videos, images int
+	for _, m := range media {
+		switch m["type"] {
+		case "video":
+			videos++
+		case "reference_image":
+			images++
+		}
+	}
+	if videos != 1 {
+		return ierr.ErrWanVideoEditMissingVideo
+	}
+	if images > 4 {
+		return ierr.ErrWanVideoEditTooManyImages
+	}
+	return nil
+}
+
 // IsVideoEditModel 视频编辑（如 *videoedit*）。
 func IsVideoEditModel(model string) bool {
 	return strings.Contains(model, "videoedit")
@@ -24,8 +43,8 @@ func RunVideoEdit(ctx context.Context, rt *runtime.RT, apiKey, model string, gra
 	}
 
 	media := graphx.VideoEditMedia(graph)
-	if len(media) == 0 {
-		return "", ierr.ErrMissingReference
+	if err := validateWanVideoEditMedia(media); err != nil {
+		return "", err
 	}
 
 	input := map[string]any{

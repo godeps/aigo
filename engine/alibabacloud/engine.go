@@ -71,7 +71,13 @@ var (
 	ErrTripoPromptTooLong = ierr.ErrTripoPromptTooLong
 
 	// HappyHorse 边界错误。
-	ErrTooManyHappyHorseImages = ierr.ErrTooManyHappyHorseImages
+	ErrTooManyHappyHorseImages          = ierr.ErrTooManyHappyHorseImages
+	ErrHappyHorseVideoEditMissingVideo  = ierr.ErrHappyHorseVideoEditMissingVideo
+	ErrHappyHorseVideoEditTooManyImages = ierr.ErrHappyHorseVideoEditTooManyImages
+
+	// Wan video-edit 边界错误。
+	ErrWanVideoEditMissingVideo  = ierr.ErrWanVideoEditMissingVideo
+	ErrWanVideoEditTooManyImages = ierr.ErrWanVideoEditTooManyImages
 )
 
 // Config configures the Alibaba Cloud Bailian engine.

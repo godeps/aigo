@@ -99,8 +99,8 @@ func RunHappyHorseVideoEdit(ctx context.Context, rt *runtime.RT, apiKey, model s
 	}
 
 	media := graphx.VideoEditMedia(graph)
-	if len(media) == 0 {
-		return "", ierr.ErrMissingReference
+	if err := validateVideoEditMedia(media); err != nil {
+		return "", err
 	}
 
 	input := map[string]any{
@@ -117,6 +117,25 @@ func RunHappyHorseVideoEdit(ctx context.Context, rt *runtime.RT, apiKey, model s
 	return async.Submit(ctx, rt, apiKey, "/services/aigc/video-generation/video-synthesis", payload, async.URLExtractor{
 		URLFields: [][]string{{"video_url"}},
 	})
+}
+
+func validateVideoEditMedia(media []map[string]any) error {
+	var videos, images int
+	for _, m := range media {
+		switch m["type"] {
+		case "video":
+			videos++
+		case "reference_image":
+			images++
+		}
+	}
+	if videos != 1 {
+		return ierr.ErrHappyHorseVideoEditMissingVideo
+	}
+	if images > 5 {
+		return ierr.ErrHappyHorseVideoEditTooManyImages
+	}
+	return nil
 }
 
 // buildHappyHorseParams 构建 HappyHorse 特有的 parameters。

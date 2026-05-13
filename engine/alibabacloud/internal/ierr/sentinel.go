@@ -18,6 +18,15 @@ var (
 	// Tripo 3D prompt 字符上限 1024（UTF-8 字符数）。
 	ErrTripoPromptTooLong = errors.New("aliyun tripo: prompt exceeds 1024 characters")
 
+	// Wan video-edit 必须恰好包含 1 个 video。
+	ErrWanVideoEditMissingVideo = errors.New("aliyun wan: video-edit requires exactly 1 video")
+	// Wan video-edit 参考图上限 4 张。
+	ErrWanVideoEditTooManyImages = errors.New("aliyun wan: video-edit reference images must be 0-4")
+
 	// HappyHorse r2v 参考图上限 9 张。
 	ErrTooManyHappyHorseImages = errors.New("aliyun happyhorse: reference images must be 1-9")
+	// HappyHorse video-edit 必须恰好包含 1 个 video。
+	ErrHappyHorseVideoEditMissingVideo = errors.New("aliyun happyhorse: video-edit requires exactly 1 video")
+	// HappyHorse video-edit 参考图上限 5 张。
+	ErrHappyHorseVideoEditTooManyImages = errors.New("aliyun happyhorse: video-edit reference images must be 0-5")
 )
