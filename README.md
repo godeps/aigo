@@ -2,7 +2,7 @@
 
 [中文说明](./README.zh-CN.md)
 
-`aigo` is an agent-native Go SDK for multimodal media generation. Describe work as a lightweight workflow graph, route it to 30+ execution engines, and get structured results with error classification, retry hints, and progress callbacks.
+`aigo` is an agent-native Go SDK for multimodal media generation. Describe work as a lightweight workflow graph, route it to 35+ execution engines, and get structured results with error classification, retry hints, and progress callbacks.
 
 ## Architecture
 
@@ -26,7 +26,7 @@ AgentTask ──► BuildGraph() ──► workflow.Graph (DAG)
 
 | Engine | Backend | Env Var |
 |--------|---------|---------|
-| `alibabacloud` | Alibaba Cloud DashScope (Qwen, Wan, Z-Image) | `DASHSCOPE_API_KEY` |
+| `alibabacloud` | Alibaba Cloud DashScope (Qwen, Wan, Z-Image, HappyHorse) | `DASHSCOPE_API_KEY` |
 | `openai` | OpenAI Images (gpt-image-2, DALL-E 3, DALL-E 2) | `OPENAI_API_KEY` |
 | `google` | Google Imagen | `GOOGLE_API_KEY` |
 | `flux` | Black Forest Labs FLUX | `BFL_API_KEY` |
@@ -36,12 +36,16 @@ AgentTask ──► BuildGraph() ──► workflow.Graph (DAG)
 | `midjourney` | Midjourney (via GoAPI) | `GOAPI_KEY` |
 | `jimeng` | Jimeng (Volcengine) | `JIMENG_API_KEY` |
 | `liblib` | LibLibAI (HMAC-SHA1 auth) | `LIBLIB_ACCESS_KEY` / `LIBLIB_SECRET_KEY` |
-| `ark` | Volcengine Ark | `ARK_API_KEY` |
+| `ark` | Volcengine Ark (Seedream image) | `ARK_API_KEY` |
 
 ### Video Generation
 
 | Engine | Backend | Env Var |
 |--------|---------|---------|
+| `alibabacloud` | DashScope HappyHorse (t2v, i2v, r2v, video-edit) | `DASHSCOPE_API_KEY` |
+| `alibabacloud` | DashScope Wan (t2v, i2v, r2v, video-edit) | `DASHSCOPE_API_KEY` |
+| `alibabacloud` | DashScope Kling V3 (video, omni-video) | `DASHSCOPE_API_KEY` |
+| `ark` | Volcengine Ark Seedance 2.0 / 2.0 Fast / 1.0 Lite | `ARK_API_KEY` |
 | `kling` | Kling AI (v1/v1.5/v2/v2.1) | `KLING_API_KEY` |
 | `hailuo` | Hailuo / MiniMax Video | `HAILUO_API_KEY` |
 | `luma` | Luma Dream Machine | `LUMA_API_KEY` |
@@ -49,10 +53,14 @@ AgentTask ──► BuildGraph() ──► workflow.Graph (DAG)
 | `pika` | Pika Labs | `PIKA_API_KEY` |
 | `hedra` | Hedra (talking head video) | `HEDRA_API_KEY` |
 
-### Audio / Music
+### Audio / Music / Speech
 
 | Engine | Backend | Env Var |
 |--------|---------|---------|
+| `alibabacloud` | DashScope TTS (Qwen3-TTS Flash / Instruct Flash) | `DASHSCOPE_API_KEY` |
+| `alibabacloud` | DashScope Voice Design (Qwen Voice Design) | `DASHSCOPE_API_KEY` |
+| `alibabacloud` | DashScope ASR (Qwen3-ASR Flash / Filetrans) | `DASHSCOPE_API_KEY` |
+| `alibabacloud` | DashScope Fun-Music v1 (music generation) | `DASHSCOPE_API_KEY` |
 | `elevenlabs` | ElevenLabs TTS | `ELEVENLABS_API_KEY` |
 | `minimax` | MiniMax TTS & Music | `MINIMAX_API_KEY` |
 | `suno` | Suno Music Generation | `SUNO_API_KEY` |
@@ -76,7 +84,7 @@ AgentTask ──► BuildGraph() ──► workflow.Graph (DAG)
 
 | Engine | Backend | Env Var |
 |--------|---------|---------|
-| `newapi` | Multi-route gateway (OpenAI, Kling, Jimeng, Sora, Qwen, Gemini) | `NEWAPI_API_KEY` |
+| `newapi` | Multi-route gateway (OpenAI, Kling, Jimeng, Sora, Qwen, Gemini, Seedance) | `NEWAPI_API_KEY` |
 | `openrouter` | OpenRouter (multi-provider routing) | `OPENROUTER_API_KEY` |
 | `fal` | Fal.ai (generic model runner) | `FAL_KEY` |
 | `replicate` | Replicate (generic model runner) | `REPLICATE_API_TOKEN` |
@@ -618,6 +626,7 @@ ENGINE=text  go run ./examples/alibabacloud_tripo_3d  # also: ENGINE=image | ENG
 go run ./examples/newapi_image
 go run ./examples/newapi_speech
 go run ./examples/newapi_video
+go run ./examples/newapi_seedance_video
 
 # Auto-routing
 go run ./examples/agent_auto_router

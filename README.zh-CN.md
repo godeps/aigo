@@ -2,7 +2,7 @@
 
 [English README](./README.md)
 
-`aigo` 是一个面向 Agent 的 Go SDK，用于多模态媒体生成。Agent 输出轻量工作流图，SDK 把图路由到 30+ 执行引擎，并返回结构化结果（含错误分类、重试提示和进度回调）。
+`aigo` 是一个面向 Agent 的 Go SDK，用于多模态媒体生成。Agent 输出轻量工作流图，SDK 把图路由到 35+ 执行引擎，并返回结构化结果（含错误分类、重试提示和进度回调）。
 
 ## 架构
 
@@ -26,7 +26,7 @@ AgentTask ──► BuildGraph() ──► workflow.Graph (DAG)
 
 | 引擎 | 后端 | 环境变量 |
 |------|------|---------|
-| `alibabacloud` | 阿里云百炼 DashScope（通义万相、Wan、Z-Image） | `DASHSCOPE_API_KEY` |
+| `alibabacloud` | 阿里云百炼 DashScope（通义万相、Wan、Z-Image、HappyHorse） | `DASHSCOPE_API_KEY` |
 | `openai` | OpenAI Images（gpt-image-2、DALL-E 3、DALL-E 2） | `OPENAI_API_KEY` |
 | `google` | Google Imagen | `GOOGLE_API_KEY` |
 | `flux` | Black Forest Labs FLUX | `BFL_API_KEY` |
@@ -36,12 +36,16 @@ AgentTask ──► BuildGraph() ──► workflow.Graph (DAG)
 | `midjourney` | Midjourney（GoAPI 代理） | `GOAPI_KEY` |
 | `jimeng` | 即梦（火山引擎） | `JIMENG_API_KEY` |
 | `liblib` | LibLibAI（HMAC-SHA1 签名） | `LIBLIB_ACCESS_KEY` / `LIBLIB_SECRET_KEY` |
-| `ark` | 火山引擎 Ark | `ARK_API_KEY` |
+| `ark` | 火山引擎 Ark（Seedream 图像） | `ARK_API_KEY` |
 
 ### 视频生成
 
 | 引擎 | 后端 | 环境变量 |
 |------|------|---------|
+| `alibabacloud` | 百炼 HappyHorse 欢乐马（文生视频、图生视频、参考图生视频、视频编辑） | `DASHSCOPE_API_KEY` |
+| `alibabacloud` | 百炼 Wan 万相（文生视频、图生视频、参考视频、视频编辑） | `DASHSCOPE_API_KEY` |
+| `alibabacloud` | 百炼 Kling V3（视频生成、全能视频） | `DASHSCOPE_API_KEY` |
+| `ark` | 火山引擎 Ark Seedance 2.0 / 2.0 快速版 / 1.0 轻量版 | `ARK_API_KEY` |
 | `kling` | 可灵 AI（v1/v1.5/v2/v2.1） | `KLING_API_KEY` |
 | `hailuo` | 海螺 / MiniMax 视频 | `HAILUO_API_KEY` |
 | `luma` | Luma Dream Machine | `LUMA_API_KEY` |
@@ -49,10 +53,14 @@ AgentTask ──► BuildGraph() ──► workflow.Graph (DAG)
 | `pika` | Pika Labs | `PIKA_API_KEY` |
 | `hedra` | Hedra（数字人视频） | `HEDRA_API_KEY` |
 
-### 音频 / 音乐
+### 音频 / 音乐 / 语音
 
 | 引擎 | 后端 | 环境变量 |
 |------|------|---------|
+| `alibabacloud` | 百炼 TTS（Qwen3-TTS Flash / Instruct Flash） | `DASHSCOPE_API_KEY` |
+| `alibabacloud` | 百炼声音设计（Qwen Voice Design） | `DASHSCOPE_API_KEY` |
+| `alibabacloud` | 百炼 ASR 语音识别（Qwen3-ASR Flash / Filetrans） | `DASHSCOPE_API_KEY` |
+| `alibabacloud` | 百炼 Fun-Music v1（音乐生成） | `DASHSCOPE_API_KEY` |
 | `elevenlabs` | ElevenLabs TTS | `ELEVENLABS_API_KEY` |
 | `minimax` | MiniMax TTS 与音乐 | `MINIMAX_API_KEY` |
 | `suno` | Suno 音乐生成 | `SUNO_API_KEY` |
@@ -76,7 +84,7 @@ AgentTask ──► BuildGraph() ──► workflow.Graph (DAG)
 
 | 引擎 | 后端 | 环境变量 |
 |------|------|---------|
-| `newapi` | 多路网关（OpenAI、可灵、即梦、Sora、通义、Gemini） | `NEWAPI_API_KEY` |
+| `newapi` | 多路网关（OpenAI、可灵、即梦、Sora、通义、Gemini、Seedance） | `NEWAPI_API_KEY` |
 | `openrouter` | OpenRouter（多供应商路由） | `OPENROUTER_API_KEY` |
 | `fal` | Fal.ai（通用模型运行器） | `FAL_KEY` |
 | `replicate` | Replicate（通用模型运行器） | `REPLICATE_API_TOKEN` |
@@ -618,6 +626,7 @@ ENGINE=text  go run ./examples/alibabacloud_tripo_3d  # 还可选 ENGINE=image /
 go run ./examples/newapi_image
 go run ./examples/newapi_speech
 go run ./examples/newapi_video
+go run ./examples/newapi_seedance_video
 
 # 自动路由
 go run ./examples/agent_auto_router
