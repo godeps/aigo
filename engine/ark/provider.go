@@ -20,14 +20,33 @@ func init() {
 
 // DefaultProvider returns preset engine configurations for ark.
 func DefaultProvider() engine.Provider {
+	base := engine.LookupDisplayName("ark")
+	suffixed := func(en, zh string) engine.DisplayName {
+		return engine.DisplayName{
+			"en": base["en"] + " · " + en,
+			"zh": base["zh"] + " · " + zh,
+		}
+	}
 	return engine.Provider{
 		Name: "ark",
 		Configs: []engine.ProviderConfig{
 			{
 				Name:        "ark-image",
-				Engine:      New(Config{}),
+				Engine:      New(Config{Model: ModelSeedream3_0}),
 				EnvVars:     []string{"ARK_API_KEY"},
-				DisplayName: engine.LookupDisplayName("ark"),
+				DisplayName: suffixed("Image", "图像"),
+			},
+			{
+				Name:        "ark-video",
+				Engine:      New(Config{Model: "doubao-seedance-2-0-260128", WaitForCompletion: true}),
+				EnvVars:     []string{"ARK_API_KEY"},
+				DisplayName: suffixed("Video", "视频"),
+			},
+			{
+				Name:        "ark-video-fast",
+				Engine:      New(Config{Model: "doubao-seedance-2-0-fast-260128", WaitForCompletion: true}),
+				EnvVars:     []string{"ARK_API_KEY"},
+				DisplayName: suffixed("Video Fast", "快速视频"),
 			},
 		},
 	}

@@ -32,6 +32,10 @@ var knownModels = map[string]knownModel{
 	// Gemini
 	"gemini-2.0-flash": {route: RouteGeminiGenerateContent, kind: KindImage, cap: "image"},
 
+	// Doubao Seedance (via newapi OpenAI-compatible video endpoint)
+	"doubao-seedance-2-0-260128":      {route: RouteOpenAIVideoGenerations, kind: KindVideo, cap: "video"},
+	"doubao-seedance-2-0-fast-260128": {route: RouteOpenAIVideoGenerations, kind: KindVideo, cap: "video"},
+
 	// OpenAI TTS
 	"tts-1":    {route: RouteOpenAISpeech, kind: KindSpeech, cap: "tts"},
 	"tts-1-hd": {route: RouteOpenAISpeech, kind: KindSpeech, cap: "tts"},

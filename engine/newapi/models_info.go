@@ -77,6 +77,20 @@ func ModelInfos() []engine.ModelInfo {
 			Capability:  "asr",
 		},
 		{
+			Name:        "newapi/doubao-seedance-2-0-260128",
+			Provider:    "newapi",
+			DisplayName: engine.DisplayName{"en": "Seedance 2.0 (NewAPI)", "zh": "Seedance 2.0 (NewAPI)"},
+			Description: engine.DisplayName{"en": "Doubao Seedance 2.0 video generation via NewAPI", "zh": "通过 NewAPI 调用豆包 Seedance 2.0 视频生成"},
+			Capability:  "video",
+		},
+		{
+			Name:        "newapi/doubao-seedance-2-0-fast-260128",
+			Provider:    "newapi",
+			DisplayName: engine.DisplayName{"en": "Seedance 2.0 Fast (NewAPI)", "zh": "Seedance 2.0 快速版 (NewAPI)"},
+			Description: engine.DisplayName{"en": "Doubao Seedance 2.0 Fast video generation via NewAPI", "zh": "通过 NewAPI 调用豆包 Seedance 2.0 快速版视频生成"},
+			Capability:  "video",
+		},
+		{
 			Name:        "newapi/whisper-large-v3",
 			Provider:    "newapi",
 			DisplayName: engine.DisplayName{"en": "Whisper Large V3 (NewAPI)", "zh": "Whisper Large V3 (NewAPI)"},

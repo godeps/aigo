@@ -23,5 +23,32 @@ func ModelInfos() []engine.ModelInfo {
 			DocURL:      "https://www.volcengine.com/docs/6791/overview",
 			Capability:  "image",
 		},
+		{
+			Name:        "doubao-seedance-2-0-260128",
+			Provider:    "ark",
+			DisplayName: engine.DisplayName{"en": "Seedance 2.0", "zh": "Seedance 2.0"},
+			Description: engine.DisplayName{"en": "High-quality video generation", "zh": "高质量视频生成"},
+			Intro:       engine.DisplayName{"en": "Seedance 2.0 is ByteDance's latest video generation model with superior motion quality, multi-subject consistency, and support for text-to-video and image-to-video.", "zh": "Seedance 2.0 是字节跳动最新视频生成模型，具备卓越的运动质量、多主体一致性，支持文生视频和图生视频。"},
+			DocURL:      "https://www.volcengine.com/docs/6791/overview",
+			Capability:  "video",
+		},
+		{
+			Name:        "doubao-seedance-2-0-fast-260128",
+			Provider:    "ark",
+			DisplayName: engine.DisplayName{"en": "Seedance 2.0 Fast", "zh": "Seedance 2.0 快速版"},
+			Description: engine.DisplayName{"en": "Fast video generation", "zh": "快速视频生成"},
+			Intro:       engine.DisplayName{"en": "Seedance 2.0 Fast delivers accelerated video generation with reduced latency while maintaining strong visual quality, ideal for real-time and batch workflows.", "zh": "Seedance 2.0 快速版提供加速视频生成，延迟更低同时保持优秀视觉质量，适合实时和批量工作流。"},
+			DocURL:      "https://www.volcengine.com/docs/6791/overview",
+			Capability:  "video",
+		},
+		{
+			Name:        "doubao-seedance-1-0-lite-250428",
+			Provider:    "ark",
+			DisplayName: engine.DisplayName{"en": "Seedance 1.0 Lite", "zh": "Seedance 1.0 轻量版"},
+			Description: engine.DisplayName{"en": "Lightweight video generation", "zh": "轻量视频生成"},
+			Intro:       engine.DisplayName{"en": "Seedance 1.0 Lite is a cost-effective video generation model suitable for rapid prototyping and preview scenarios.", "zh": "Seedance 1.0 轻量版是一款高性价比的视频生成模型，适用于快速原型和预览场景。"},
+			DocURL:      "https://www.volcengine.com/docs/6791/overview",
+			Capability:  "video",
+		},
 	}
 }

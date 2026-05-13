@@ -189,6 +189,7 @@ func ModelsByCapability() map[string][]string {
 	return map[string][]string{
 		"video": {
 			"doubao-seedance-2-0-260128",
+			"doubao-seedance-2-0-fast-260128",
 			"doubao-seedance-1-0-lite-250428",
 		},
 		"image": {
