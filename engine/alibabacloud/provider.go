@@ -38,6 +38,7 @@ func defaultWaitForModel(model string) bool {
 	}
 	switch model {
 	case ModelQwenImage,
+		ModelQwenImage2,
 		ModelWanTextToVideo,
 		ModelWanImageToVideo,
 		ModelWanReferenceVideo,

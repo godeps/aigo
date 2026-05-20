@@ -106,25 +106,18 @@ func TestGenerateVideo_ReferenceImagesArray(t *testing.T) {
 	}
 }
 
-func TestTextToSpeech_VoiceEnum(t *testing.T) {
+func TestTextToSpeech_VoiceNoEnum(t *testing.T) {
 	t.Parallel()
 	tool := TextToSpeech()
 	voiceProp, ok := tool.Parameters.Properties["voice"]
 	if !ok {
 		t.Fatal("missing voice property")
 	}
-	if len(voiceProp.Enum) == 0 {
-		t.Fatal("voice should have enum values")
+	if len(voiceProp.Enum) > 0 {
+		t.Fatal("voice should not have hardcoded enum (provider-dependent)")
 	}
-	// Verify known voices are present.
-	voices := map[string]bool{}
-	for _, v := range voiceProp.Enum {
-		voices[v] = true
-	}
-	for _, want := range []string{"Cherry", "Serena", "Ethan", "Chelsie"} {
-		if !voices[want] {
-			t.Fatalf("voice enum missing %q", want)
-		}
+	if !strings.Contains(voiceProp.Description, "Cherry") {
+		t.Fatal("voice description should mention common voices")
 	}
 }
 
@@ -140,20 +133,28 @@ func TestValidateParams_RequiredMissing(t *testing.T) {
 	if !strings.Contains(err.Error(), "\"text\"") {
 		t.Fatalf("error should mention 'text', got: %s", err)
 	}
+
+	// voice is optional — providing only text should pass.
+	err = ValidateParams(tool, map[string]interface{}{
+		"text": "hello world",
+	})
+	if err != nil {
+		t.Fatalf("voice is optional, should not error: %v", err)
+	}
 }
 
 func TestValidateParams_InvalidEnum(t *testing.T) {
 	t.Parallel()
-	tool := TextToSpeech()
+	tool := GenerateImage()
 	err := ValidateParams(tool, map[string]interface{}{
-		"text":  "hello",
-		"voice": "alloy",
+		"prompt": "a cat",
+		"size":   "999x999",
 	})
 	if err == nil {
-		t.Fatal("expected error for invalid voice enum")
+		t.Fatal("expected error for invalid size enum")
 	}
-	if !strings.Contains(err.Error(), "alloy") || !strings.Contains(err.Error(), "Cherry") {
-		t.Fatalf("error should mention invalid value and valid options, got: %s", err)
+	if !strings.Contains(err.Error(), "999x999") {
+		t.Fatalf("error should mention invalid value, got: %s", err)
 	}
 }
 

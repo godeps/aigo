@@ -158,33 +158,33 @@ func ToolsFor(categories ...string) []ToolDef {
 func GenerateImage() ToolDef {
 	return ToolDef{
 		Name:        "generate_image",
-		Description: "Generate an image from a text prompt using AI. Returns a URL or data URI of the generated image.",
+		Description: "Generate an image from a text prompt. Returns a URL of the generated image. Write detailed prompts: describe subject, style, composition, lighting, and mood. Use negative_prompt to exclude unwanted elements.",
 		Category:    "image",
 		Parameters: Schema{
 			Type: "object",
 			Properties: map[string]Schema{
 				"prompt": {
 					Type:        "string",
-					Description: "Text description of the image to generate",
+					Description: "Detailed description of the image. Structure as: subject → style/medium → composition/framing → lighting/mood → color palette. Be specific: 'a ceramic coffee mug on a marble countertop, soft studio lighting, warm tones' is better than 'a mug'.",
 				},
 				"negative_prompt": {
 					Type:        "string",
-					Description: "What to avoid in the generated image",
+					Description: "Elements to exclude from the image (e.g. 'blurry, watermark, text, low quality, extra fingers')",
 				},
 				"size": {
 					Type:        "string",
-					Description: "Image dimensions (e.g., 1024x1024, 1024x1536)",
+					Description: "Image dimensions. Use 1024x1024 for square, 1536x1024 for landscape, 1024x1536 for portrait",
 					Enum:        []string{"1024x1024", "1024x1536", "1536x1024", "512x512"},
 					Default:     "1024x1024",
 				},
 				"aspect_ratio": {
 					Type:        "string",
-					Description: "Image aspect ratio",
+					Description: "Image aspect ratio. 16:9 for landscape/hero banners, 9:16 for mobile/portrait, 1:1 for avatar/square",
 					Enum:        []string{"1:1", "3:4", "4:3", "16:9", "9:16"},
 				},
 				"resolution": {
 					Type:        "string",
-					Description: "Image resolution quality",
+					Description: "Image resolution quality. Use 1K for drafts, 2K for standard, 4K for print/high-detail",
 					Enum:        []string{"1K", "2K", "4K"},
 					Default:     "2K",
 				},
@@ -195,11 +195,11 @@ func GenerateImage() ToolDef {
 				},
 				"width": {
 					Type:        "integer",
-					Description: "Image width in pixels",
+					Description: "Custom image width in pixels (use instead of size for non-standard dimensions)",
 				},
 				"height": {
 					Type:        "integer",
-					Description: "Image height in pixels",
+					Description: "Custom image height in pixels (use instead of size for non-standard dimensions)",
 				},
 			},
 			Required: []string{"prompt"},
@@ -215,22 +215,22 @@ func GenerateImage() ToolDef {
 func Generate3D() ToolDef {
 	return ToolDef{
 		Name:        "generate_3d",
-		Description: "Generate a 3D model from a text prompt, a reference image, or 2-4 multi-view images. Returns a URL to the generated model file (GLB, FBX, OBJ, or USDZ).",
+		Description: "Generate a 3D model from a text prompt, a reference image, or 2-4 multi-view images. Returns a URL to the model file (GLB/FBX/OBJ/USDZ). Provide exactly one of: prompt (text-to-3D), image_url (single image), or image_urls (multi-view reconstruction).",
 		Category:    "3d",
 		Parameters: Schema{
 			Type: "object",
 			Properties: map[string]Schema{
 				"prompt": {
 					Type:        "string",
-					Description: "Text description of the 3D model to generate (mutually exclusive with image_url / image_urls; <= 1024 chars)",
+					Description: "Describe the 3D object: shape, material, surface detail, and scale. 'a low-poly wooden treasure chest with iron hinges and a rusty lock' is better than 'a chest'. Keep under 1024 chars. Mutually exclusive with image_url / image_urls.",
 				},
 				"image_url": {
 					Type:        "string",
-					Description: "URL of a single reference image for image-to-3D generation",
+					Description: "URL of a single reference image for image-to-3D. Use a clean, well-lit photo with the object centered on a simple background for best results",
 				},
 				"image_urls": {
 					Type:        "array",
-					Description: "URLs of 2-4 multi-view reference images for high-precision 3D reconstruction",
+					Description: "URLs of 2-4 multi-view images of the same object (e.g. front, side, back, top) for high-precision 3D reconstruction",
 					Items: &Schema{
 						Type: "string",
 					},
@@ -280,50 +280,50 @@ func Generate3D() ToolDef {
 func GenerateVideo() ToolDef {
 	return ToolDef{
 		Name:        "generate_video",
-		Description: "Generate a video from a text prompt, optionally with reference images or videos. Supports text-to-video, image-to-video, and video-to-video modes. Returns a URL to the generated video.",
+		Description: "Generate a video from a text prompt. Returns a URL to the generated video. Supports text-to-video, image-to-video (provide reference_image), and video-to-video (provide reference_video). For best results with image-to-video, generate an image first with generate_image, then pass its URL as reference_image.",
 		Category:    "video",
 		Parameters: Schema{
 			Type: "object",
 			Properties: map[string]Schema{
 				"prompt": {
 					Type:        "string",
-					Description: "Text description of the video to generate",
+					Description: "Describe the video scene: subject, action/motion, environment, camera movement, and mood. Be specific about motion: 'camera slowly pans right as leaves fall' is better than 'nature scene'.",
 				},
 				"duration": {
 					Type:        "integer",
-					Description: "Video duration in seconds",
+					Description: "Video duration in seconds (shorter durations produce higher quality)",
 				},
 				"size": {
 					Type:        "string",
-					Description: "Video dimensions. Use '*' as separator (not 'x')",
-					Enum:        []string{"1280*720", "960*960", "720*1280", "1920*1080", "1080*1920"},
-					Default:     "1280*720",
+					Description: "Video dimensions. 1280x720 for landscape, 720x1280 for portrait/mobile, 960x960 for square",
+					Enum:        []string{"1280x720", "960x960", "720x1280", "1920x1080", "1080x1920"},
+					Default:     "1280x720",
 				},
 				"aspect_ratio": {
 					Type:        "string",
-					Description: "Video aspect ratio",
+					Description: "Video aspect ratio. 16:9 for standard video, 9:16 for mobile/shorts, 1:1 for social media",
 					Enum:        []string{"16:9", "9:16", "1:1", "4:3", "3:4"},
 				},
 				"resolution": {
 					Type:        "string",
-					Description: "Video resolution quality",
+					Description: "Video resolution. Use 720P for drafts, 1080P for final output",
 					Enum:        []string{"480P", "720P", "1080P"},
 					Default:     "720P",
 				},
 				"reference_image": {
 					Type:        "string",
-					Description: "URL of a reference image for image-to-video generation",
+					Description: "URL of a reference image for image-to-video. Tip: generate a high-quality image first with generate_image, then animate it",
 				},
 				"reference_images": {
 					Type:        "array",
-					Description: "URLs of reference images for multi-image-to-video generation",
+					Description: "URLs of multiple reference images for multi-image-to-video (e.g. start and end frames)",
 					Items: &Schema{
 						Type: "string",
 					},
 				},
 				"reference_video": {
 					Type:        "string",
-					Description: "URL of a reference video for video-to-video generation",
+					Description: "URL of a source video for video-to-video transformation (style transfer, motion retargeting)",
 				},
 				"audio": {
 					Type:        "boolean",
@@ -343,19 +343,18 @@ func GenerateVideo() ToolDef {
 func TextToSpeech() ToolDef {
 	return ToolDef{
 		Name:        "text_to_speech",
-		Description: "Convert text to speech audio. Returns a URL or data URI of the audio.",
+		Description: "Convert text to speech audio. Returns a URL of the audio. Use the instructions parameter to control speed, emotion, and delivery style (e.g. 'speak slowly with warm emotion').",
 		Category:    "audio",
 		Parameters: Schema{
 			Type: "object",
 			Properties: map[string]Schema{
 				"text": {
 					Type:        "string",
-					Description: "The text to convert to speech",
+					Description: "The text to convert to speech. For long text, break into natural paragraphs. Punctuation affects pacing: commas add short pauses, periods add longer pauses.",
 				},
 				"voice": {
 					Type:        "string",
-					Description: "Voice to use. Cherry: female Chinese, Serena: female Chinese/English, Ethan: male English, Chelsie: female English",
-					Enum:        []string{"Cherry", "Serena", "Ethan", "Chelsie"},
+					Description: "Voice identifier. Common voices: Cherry (female Chinese), Serena (female Chinese/English), Ethan (male English), Chelsie (female English). Other providers may support different voices.",
 				},
 				"language": {
 					Type:        "string",
@@ -366,7 +365,7 @@ func TextToSpeech() ToolDef {
 					Description: "Style instructions for the speech, e.g. 'speak slowly and clearly', 'with warm emotion', 'fast pace'. Controls speed, emotion, and delivery style",
 				},
 			},
-			Required: []string{"text", "voice"},
+			Required: []string{"text"},
 		},
 	}
 }
@@ -382,16 +381,15 @@ func DesignVoice() ToolDef {
 			Properties: map[string]Schema{
 				"voice_prompt": {
 					Type:        "string",
-					Description: "Natural language description of the desired voice characteristics",
+					Description: "Describe the voice: gender, age range, tone, and speaking style. 'A warm, confident female voice in her 30s with a slight British accent' is better than 'female voice'.",
 				},
 				"preview_text": {
 					Type:        "string",
-					Description: "Sample text for the voice to speak as a preview",
+					Description: "A short sentence for the voice to speak as a preview. Choose text that showcases the voice's range and character.",
 				},
 				"target_model": {
 					Type:        "string",
-					Description: "The TTS model this voice will be used with",
-					Enum:        []string{"qwen3-tts-flash", "qwen3-tts-instruct-flash"},
+					Description: "The TTS model this voice will be used with (default: provider's primary TTS model)",
 					Default:     "qwen3-tts-flash",
 				},
 				"preferred_name": {
@@ -413,22 +411,22 @@ func DesignVoice() ToolDef {
 func EditImage() ToolDef {
 	return ToolDef{
 		Name:        "edit_image",
-		Description: "Edit an existing image based on a text prompt. Returns a URL or data URI of the edited image.",
+		Description: "Edit an existing image based on a text prompt. Returns a URL of the edited image. Use this for iterative refinement after generate_image, or to modify user-provided images.",
 		Category:    "image",
 		Parameters: Schema{
 			Type: "object",
 			Properties: map[string]Schema{
 				"prompt": {
 					Type:        "string",
-					Description: "Text description of the desired edit",
+					Description: "Describe WHAT to change, not the whole image. Be specific: 'change the sky to sunset orange' is better than 'make it look nice'. For additions use 'add ...', for removals use 'remove ...'.",
 				},
 				"image_url": {
 					Type:        "string",
-					Description: "URL of the source image to edit",
+					Description: "URL of the source image to edit. Tip: use a URL returned by generate_image for iterative refinement",
 				},
 				"size": {
 					Type:        "string",
-					Description: "Output image dimensions",
+					Description: "Output image dimensions. Match the source aspect ratio to avoid distortion",
 					Enum:        []string{"1024x1024", "1024x1536", "1536x1024"},
 					Default:     "1024x1024",
 				},
@@ -442,27 +440,27 @@ func EditImage() ToolDef {
 func EditVideo() ToolDef {
 	return ToolDef{
 		Name:        "edit_video",
-		Description: "Edit an existing video based on a text prompt, optionally with reference images. Returns a URL to the edited video.",
+		Description: "Edit an existing video based on a text prompt. Returns a URL to the edited video. Optionally provide a reference_image for style guidance.",
 		Category:    "video",
 		Parameters: Schema{
 			Type: "object",
 			Properties: map[string]Schema{
 				"prompt": {
 					Type:        "string",
-					Description: "Text description of the desired edit",
+					Description: "Describe the edit to apply. Focus on what changes: 'apply watercolor painting style' or 'replace background with ocean sunset'. Keep the original motion unless you want to change it.",
 				},
 				"video_url": {
 					Type:        "string",
-					Description: "URL of the source video to edit",
+					Description: "URL of the source video to edit. Can be a URL returned by generate_video",
 				},
 				"reference_image": {
 					Type:        "string",
-					Description: "URL of a reference image for style guidance (optional)",
+					Description: "URL of a reference image for style transfer. The video adopts the visual style of this image while keeping its motion",
 				},
 				"size": {
 					Type:        "string",
-					Description: "Output video dimensions. Use '*' as separator",
-					Enum:        []string{"1280*720", "960*960", "720*1280", "1920*1080", "1080*1920"},
+					Description: "Output video dimensions. Match the source aspect ratio to avoid distortion",
+					Enum:        []string{"1280x720", "960x960", "720x1280", "1920x1080", "1080x1920"},
 				},
 				"duration": {
 					Type:        "integer",
@@ -478,22 +476,22 @@ func EditVideo() ToolDef {
 func GenerateMusic() ToolDef {
 	return ToolDef{
 		Name:        "generate_music",
-		Description: "Generate music from a text prompt describing style/mood, optionally with lyrics. Returns a URL or audio data.",
+		Description: "Generate music from a text prompt describing style/mood. Returns a URL of the audio. Use lyrics with section markers like [verse], [chorus], [bridge] for songs. Set is_instrumental=true for music without vocals.",
 		Category:    "music",
 		Parameters: Schema{
 			Type: "object",
 			Properties: map[string]Schema{
 				"prompt": {
 					Type:        "string",
-					Description: "Music style and mood description (e.g., 'indie folk, melancholy, introspective')",
+					Description: "Describe genre, mood, tempo, and instruments. Be specific: 'upbeat lo-fi hip-hop, jazzy piano chords, vinyl crackle, 85 BPM' is better than 'chill music'. Combine genre + mood + instrumentation for best results.",
 				},
 				"lyrics": {
 					Type:        "string",
-					Description: "Song lyrics with section markers like [verse], [chorus], [bridge]",
+					Description: "Song lyrics with structure markers: [verse], [chorus], [bridge], [intro], [outro]. Each section on its own line. Leave empty or set is_instrumental=true for instrumental tracks.",
 				},
 				"is_instrumental": {
 					Type:        "boolean",
-					Description: "Generate instrumental music without vocals",
+					Description: "Set true for music without vocals. When true, lyrics are ignored",
 				},
 				"output_format": {
 					Type:        "string",
@@ -528,15 +526,15 @@ func TranscribeAudio() ToolDef {
 			Properties: map[string]Schema{
 				"audio_url": {
 					Type:        "string",
-					Description: "URL of the audio file to transcribe",
+					Description: "URL of the audio file to transcribe. Supports common formats: mp3, wav, flac, m4a, webm",
 				},
 				"language": {
 					Type:        "string",
-					Description: "Language code of the audio (e.g., en, zh)",
+					Description: "Language code of the audio (e.g., en, zh, ja). Providing the correct language improves accuracy",
 				},
 				"response_format": {
 					Type:        "string",
-					Description: "Output format",
+					Description: "Output format. Use 'text' for plain transcript, 'srt'/'vtt' for subtitles with timestamps, 'json' for structured data",
 					Enum:        []string{"json", "text", "srt", "vtt"},
 				},
 			},

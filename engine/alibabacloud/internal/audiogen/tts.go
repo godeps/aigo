@@ -19,7 +19,59 @@ import (
 )
 
 // SupportedVoices lists the built-in voice identifiers for qwen3-tts models.
-var SupportedVoices = []string{"Cherry", "Serena", "Ethan", "Chelsie"}
+// Full catalog: https://help.aliyun.com/zh/model-studio/non-realtime-tts-user-guide
+var SupportedVoices = []string{
+	// Female
+	"Cherry",
+	"Serena",
+	"Chelsie",
+	"Momo",
+	"Vivian",
+	"Maia",
+	"Bella",
+	"Jennifer",
+	"Katerina",
+	"Mia",
+	"Bellona",
+	"Bunny",
+	"Elias",
+	"Nini",
+	"Seren",
+	"Stella",
+	"Sonrisa",
+	"Sohee",
+	"Ono Anna",
+	"Jada",
+	"Sunny",
+	"Kiki",
+	// Male
+	"Ethan",
+	"Moon",
+	"Kai",
+	"Nofish",
+	"Ryan",
+	"Aiden",
+	"Eldric Sage",
+	"Mochi",
+	"Vincent",
+	"Neil",
+	"Arthur",
+	"Pip",
+	"Bodega",
+	"Alek",
+	"Dolce",
+	"Lenn",
+	"Emilien",
+	"Andre",
+	"Radio Gol",
+	"Dylan",
+	"Li",
+	"Marcus",
+	"Roy",
+	"Peter",
+	"Eric",
+	"Rocky",
+}
 
 // IsTTSModel 判断是否为 Qwen 语音合成模型（不含声音设计）。
 func IsTTSModel(model string) bool {
