@@ -365,7 +365,7 @@ func TextToSpeech() ToolDef {
 					Description: "Style instructions for the speech, e.g. 'speak slowly and clearly', 'with warm emotion', 'fast pace'. Controls speed, emotion, and delivery style",
 				},
 			},
-			Required: []string{"text"},
+			Required: []string{"text", "voice"},
 		},
 	}
 }

@@ -18,8 +18,8 @@ func TestExecute_TextOnly(t *testing.T) {
 		if r.Method != http.MethodPost {
 			t.Fatalf("method = %q, want POST", r.Method)
 		}
-		if r.URL.Query().Get("key") != "test-key" {
-			t.Fatalf("key = %q", r.URL.Query().Get("key"))
+		if r.Header.Get("x-goog-api-key") != "test-key" {
+			t.Fatalf("x-goog-api-key = %q", r.Header.Get("x-goog-api-key"))
 		}
 		if ct := r.Header.Get("Content-Type"); ct != "application/json" {
 			t.Fatalf("Content-Type = %q", ct)

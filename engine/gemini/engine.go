@@ -1,7 +1,7 @@
 // Package gemini implements engine.Engine for Google Gemini multi-modal understanding.
 //
 // Gemini supports text generation with optional image/video inputs for analysis.
-// Auth: API key as query param ?key={api_key}, env GEMINI_API_KEY or GOOGLE_API_KEY.
+// Auth: API key via x-goog-api-key header, env GEMINI_API_KEY or GOOGLE_API_KEY.
 //
 // Endpoint: POST /models/{model}:generateContent
 // Default model: gemini-2.0-flash
@@ -171,8 +171,8 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 		return engine.Result{}, fmt.Errorf("gemini: marshal request: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/models/%s:generateContent?key=%s", e.baseURL, e.model, apiKey)
-	respBody, err := e.doRequest(ctx, http.MethodPost, url, body)
+	url := fmt.Sprintf("%s/models/%s:generateContent", e.baseURL, e.model)
+	respBody, err := e.doRequest(ctx, http.MethodPost, url, body, apiKey)
 	if err != nil {
 		return engine.Result{}, err
 	}
@@ -218,13 +218,13 @@ func extractText(c candidate) string {
 	return sb.String()
 }
 
-// doRequest sends a JSON request with API key as query param (not Bearer).
-func (e *Engine) doRequest(ctx context.Context, method, url string, body []byte) ([]byte, error) {
+func (e *Engine) doRequest(ctx context.Context, method, url string, body []byte, apiKey string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, method, url, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("gemini: build request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-goog-api-key", apiKey)
 
 	resp, err := e.httpClient.Do(req)
 	if err != nil {

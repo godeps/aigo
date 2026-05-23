@@ -134,12 +134,13 @@ func (e *Engine) doEmbed(ctx context.Context, apiReq apiEmbedRequest) (embed.Res
 		return embed.Result{}, err
 	}
 
-	url := fmt.Sprintf(endpointFmt, e.model) + "?key=" + e.apiKey
+	url := fmt.Sprintf(endpointFmt, e.model)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return embed.Result{}, err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("x-goog-api-key", e.apiKey)
 
 	resp, err := e.client.Do(httpReq)
 	if err != nil {

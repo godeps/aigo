@@ -1,8 +1,8 @@
 // Package google implements engine.Engine for Google Imagen and Veo APIs.
 //
 // Image generation is synchronous via the Gemini API:
-// POST /v1beta/models/{model}:predict with API key as query param.
-// Auth: ?key={api_key}, env GOOGLE_API_KEY.
+// POST /v1beta/models/{model}:predict with API key via x-goog-api-key header.
+// Auth: x-goog-api-key header, env GOOGLE_API_KEY.
 package google
 
 import (
@@ -158,8 +158,8 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 		return engine.Result{}, fmt.Errorf("google: marshal request: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/v1beta/models/%s:predict?key=%s", e.baseURL, e.model, apiKey)
-	respBody, err := e.doRequest(ctx, http.MethodPost, url, body)
+	url := fmt.Sprintf("%s/v1beta/models/%s:predict", e.baseURL, e.model)
+	respBody, err := e.doRequest(ctx, http.MethodPost, url, body, apiKey)
 	if err != nil {
 		return engine.Result{}, err
 	}
@@ -180,13 +180,13 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 	return engine.Result{Value: dataURI, Kind: engine.OutputDataURI}, nil
 }
 
-// doRequest sends a JSON request with API key as query param (not Bearer).
-func (e *Engine) doRequest(ctx context.Context, method, url string, body []byte) ([]byte, error) {
+func (e *Engine) doRequest(ctx context.Context, method, url string, body []byte, apiKey string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, method, url, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("google: build request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-goog-api-key", apiKey)
 
 	resp, err := e.httpClient.Do(req)
 	if err != nil {

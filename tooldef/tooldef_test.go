@@ -134,12 +134,24 @@ func TestValidateParams_RequiredMissing(t *testing.T) {
 		t.Fatalf("error should mention 'text', got: %s", err)
 	}
 
-	// voice is optional — providing only text should pass.
+	// voice is also required — providing only text should fail.
 	err = ValidateParams(tool, map[string]interface{}{
 		"text": "hello world",
 	})
+	if err == nil {
+		t.Fatal("expected error for missing required 'voice'")
+	}
+	if !strings.Contains(err.Error(), "\"voice\"") {
+		t.Fatalf("error should mention 'voice', got: %s", err)
+	}
+
+	// providing both text and voice should pass.
+	err = ValidateParams(tool, map[string]interface{}{
+		"text":  "hello world",
+		"voice": "Cherry",
+	})
 	if err != nil {
-		t.Fatalf("voice is optional, should not error: %v", err)
+		t.Fatalf("text+voice should pass, got: %v", err)
 	}
 }
 
