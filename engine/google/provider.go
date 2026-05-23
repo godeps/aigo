@@ -8,19 +8,20 @@ func init() {
 			APIKey:  cfg.APIKey,
 			BaseURL: cfg.BaseURL,
 			Model:   cfg.Model,
-		}), nil
+		})
 	})
 	engine.RegisterModelInfos(ModelInfos())
 }
 
 // DefaultProvider returns preset engine configurations for google.
 func DefaultProvider() engine.Provider {
+	e, _ := New(Config{})
 	return engine.Provider{
 		Name: "google",
 		Configs: []engine.ProviderConfig{
 			{
 				Name:        "google-image",
-				Engine:      New(Config{}),
+				Engine:      e,
 				EnvVars:     []string{"GOOGLE_API_KEY"},
 				DisplayName: engine.LookupDisplayName("google"),
 			},

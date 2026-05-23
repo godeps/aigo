@@ -1,29 +1,24 @@
 // Package gemini implements the Gemini Embedding 2 backend.
 //
-// Supports text, image, and native video embedding via inline content parts.
+// Supports text, image, and native video embedding via the official Google GenAI SDK.
 // Model: gemini-embedding-2-preview (768 dimensions, MRL-capable).
 package gemini
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
 
 	"github.com/godeps/aigo/engine"
-	"github.com/godeps/aigo/engine/aigoerr"
 	"github.com/godeps/aigo/engine/embed"
-	"github.com/godeps/aigo/engine/httpx"
+	"google.golang.org/genai"
 )
 
 const (
 	DefaultModel      = "gemini-embedding-2-preview"
 	DefaultDimensions = 768
 	DefaultRPM        = 55
-	endpointFmt       = "https://generativelanguage.googleapis.com/v1beta/models/%s:embedContent"
 )
 
 // Config configures the Gemini embedding engine.
@@ -37,11 +32,10 @@ type Config struct {
 
 // Engine implements embed.EmbedEngine for Gemini Embedding 2.
 type Engine struct {
-	apiKey     string
+	client     *genai.Client
 	model      string
 	dimensions int
 	limiter    *embed.RateLimiter
-	client     *http.Client
 }
 
 // New creates a Gemini embedding engine.
@@ -64,12 +58,24 @@ func New(cfg Config) (*Engine, error) {
 		rpm = DefaultRPM
 	}
 
+	cc := &genai.ClientConfig{
+		APIKey:  apiKey,
+		Backend: genai.BackendGeminiAPI,
+	}
+	if cfg.HTTPClient != nil {
+		cc.HTTPClient = cfg.HTTPClient
+	}
+
+	client, err := genai.NewClient(context.Background(), cc)
+	if err != nil {
+		return nil, fmt.Errorf("gemini embed: create client: %w", err)
+	}
+
 	return &Engine{
-		apiKey:     apiKey,
+		client:     client,
 		model:      model,
 		dimensions: dims,
 		limiter:    embed.NewRateLimiter(rpm),
-		client:     httpx.OrDefault(cfg.HTTPClient, 120*time.Second),
 	}, nil
 }
 
@@ -87,19 +93,27 @@ func (e *Engine) Embed(ctx context.Context, req embed.Request) (embed.Result, er
 		taskType = "RETRIEVAL_DOCUMENT"
 	}
 
-	apiReq := apiEmbedRequest{
-		Content: content,
-		Config: apiEmbedConfig{
-			TaskType:             taskType,
-			OutputDimensionality: e.dimensions,
-		},
+	dims := int32(e.dimensions)
+	embedCfg := &genai.EmbedContentConfig{
+		TaskType:             taskType,
+		OutputDimensionality: &dims,
 	}
 
 	var result embed.Result
 	err := embed.Retry(func() error {
-		var rerr error
-		result, rerr = e.doEmbed(ctx, apiReq)
-		return rerr
+		resp, rerr := e.client.Models.EmbedContent(ctx, e.model, []*genai.Content{content}, embedCfg)
+		if rerr != nil {
+			return rerr
+		}
+		if resp == nil || len(resp.Embeddings) == 0 || len(resp.Embeddings[0].Values) == 0 {
+			return fmt.Errorf("gemini embed: empty embedding returned")
+		}
+		result = embed.Result{
+			Vector:     resp.Embeddings[0].Values,
+			Dimensions: len(resp.Embeddings[0].Values),
+			Model:      e.model,
+		}
+		return nil
 	}, 5, 2*time.Second)
 
 	return result, err
@@ -128,96 +142,19 @@ func (e *Engine) EmbedCapabilities() embed.Capability {
 	}
 }
 
-func (e *Engine) doEmbed(ctx context.Context, apiReq apiEmbedRequest) (embed.Result, error) {
-	body, err := json.Marshal(apiReq)
-	if err != nil {
-		return embed.Result{}, err
-	}
-
-	url := fmt.Sprintf(endpointFmt, e.model)
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
-	if err != nil {
-		return embed.Result{}, err
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("x-goog-api-key", e.apiKey)
-
-	resp, err := e.client.Do(httpReq)
-	if err != nil {
-		return embed.Result{}, err
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return embed.Result{}, fmt.Errorf("read response: %w", err)
-	}
-
-	if resp.StatusCode != 200 {
-		return embed.Result{}, aigoerr.FromHTTPResponse(resp, respBody, "gemini-embed")
-	}
-
-	var apiResp apiEmbedResponse
-	if err := json.Unmarshal(respBody, &apiResp); err != nil {
-		return embed.Result{}, fmt.Errorf("parse response: %w", err)
-	}
-
-	if len(apiResp.Embedding.Values) == 0 {
-		return embed.Result{}, fmt.Errorf("gemini embed: empty embedding returned")
-	}
-
-	return embed.Result{
-		Vector:     apiResp.Embedding.Values,
-		Dimensions: len(apiResp.Embedding.Values),
-		Model:      e.model,
-	}, nil
-}
-
-func (e *Engine) buildContent(req embed.Request) apiContent {
+func (e *Engine) buildContent(req embed.Request) *genai.Content {
 	switch req.Type {
 	case embed.ContentText:
 		text, _ := req.Content.(string)
-		return apiContent{Parts: []apiPart{{Text: text}}}
+		return genai.NewContentFromText(text, genai.RoleUser)
 	case embed.ContentImage:
 		data, _ := req.Content.([]byte)
-		return apiContent{Parts: []apiPart{{InlineData: &apiBlob{MimeType: "image/jpeg", Data: data}}}}
+		return genai.NewContentFromBytes(data, "image/jpeg", genai.RoleUser)
 	case embed.ContentVideo:
 		data, _ := req.Content.([]byte)
-		return apiContent{Parts: []apiPart{{InlineData: &apiBlob{MimeType: "video/mp4", Data: data}}}}
+		return genai.NewContentFromBytes(data, "video/mp4", genai.RoleUser)
 	default:
 		text, _ := req.Content.(string)
-		return apiContent{Parts: []apiPart{{Text: text}}}
+		return genai.NewContentFromText(text, genai.RoleUser)
 	}
-}
-
-// --- API types ---
-
-type apiContent struct {
-	Parts []apiPart `json:"parts"`
-}
-
-type apiPart struct {
-	Text       string   `json:"text,omitempty"`
-	InlineData *apiBlob `json:"inline_data,omitempty"`
-}
-
-type apiBlob struct {
-	MimeType string `json:"mime_type"`
-	Data     []byte `json:"data"`
-}
-
-type apiEmbedConfig struct {
-	TaskType             string `json:"task_type"`
-	OutputDimensionality int    `json:"output_dimensionality"`
-}
-
-type apiEmbedRequest struct {
-	Content apiContent     `json:"content"`
-	Config  apiEmbedConfig `json:"config"`
-}
-
-type apiEmbedResponse struct {
-	Embedding struct {
-		Values []float32 `json:"values"`
-	} `json:"embedding"`
 }

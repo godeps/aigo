@@ -1,26 +1,22 @@
 // Package google implements engine.Engine for Google Imagen and Veo APIs.
 //
-// Image generation is synchronous via the Gemini API:
-// POST /v1beta/models/{model}:predict with API key via x-goog-api-key header.
-// Auth: x-goog-api-key header, env GOOGLE_API_KEY.
+// Image generation via the official Google GenAI SDK.
+// Auth: API key via SDK, env GOOGLE_API_KEY.
 package google
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/base64"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"strings"
 
 	"github.com/godeps/aigo/engine"
-	"github.com/godeps/aigo/engine/aigoerr"
-	"github.com/godeps/aigo/engine/httpx"
 	"github.com/godeps/aigo/workflow"
 	"github.com/godeps/aigo/workflow/resolve"
+	"google.golang.org/genai"
 )
 
 const defaultBaseURL = "https://generativelanguage.googleapis.com"
@@ -43,22 +39,18 @@ type Config struct {
 
 // Engine implements engine.Engine for Google Imagen.
 type Engine struct {
-	apiKey     string
-	baseURL    string
-	model      string
-	httpClient *http.Client
+	client *genai.Client
+	model  string
 }
 
 // New creates a Google Imagen engine instance.
-func New(cfg Config) *Engine {
-	hc := httpx.OrDefault(cfg.HTTPClient, httpx.DefaultTimeout)
-
-	base := strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/")
-	if base == "" {
-		base = strings.TrimRight(strings.TrimSpace(os.Getenv("GOOGLE_BASE_URL")), "/")
+func New(cfg Config) (*Engine, error) {
+	apiKey := strings.TrimSpace(cfg.APIKey)
+	if apiKey == "" {
+		apiKey = strings.TrimSpace(os.Getenv("GOOGLE_API_KEY"))
 	}
-	if base == "" {
-		base = defaultBaseURL
+	if apiKey == "" {
+		return nil, fmt.Errorf("google: missing API key (set Config.APIKey or GOOGLE_API_KEY)")
 	}
 
 	model := strings.TrimSpace(cfg.Model)
@@ -66,64 +58,37 @@ func New(cfg Config) *Engine {
 		model = ModelImagen3Generate002
 	}
 
+	base := strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/")
+	if base == "" {
+		base = strings.TrimRight(strings.TrimSpace(os.Getenv("GOOGLE_BASE_URL")), "/")
+	}
+
+	cc := &genai.ClientConfig{
+		APIKey:  apiKey,
+		Backend: genai.BackendGeminiAPI,
+	}
+	if cfg.HTTPClient != nil {
+		cc.HTTPClient = cfg.HTTPClient
+	}
+	if base != "" {
+		cc.HTTPOptions = genai.HTTPOptions{BaseURL: base}
+	}
+
+	client, err := genai.NewClient(context.Background(), cc)
+	if err != nil {
+		return nil, fmt.Errorf("google: create client: %w", err)
+	}
+
 	return &Engine{
-		apiKey:     strings.TrimSpace(cfg.APIKey),
-		baseURL:    base,
-		model:      model,
-		httpClient: hc,
-	}
-}
-
-// predictRequest is the request body for the Imagen predict endpoint.
-type predictRequest struct {
-	Instances  []instance  `json:"instances"`
-	Parameters *parameters `json:"parameters,omitempty"`
-}
-
-type instance struct {
-	Prompt string `json:"prompt"`
-}
-
-type parameters struct {
-	SampleCount int    `json:"sampleCount,omitempty"`
-	AspectRatio string `json:"aspectRatio,omitempty"`
-	Seed        int    `json:"seed,omitempty"`
-	HasSeed     bool   `json:"-"`
-}
-
-func (p parameters) MarshalJSON() ([]byte, error) {
-	m := map[string]any{}
-	if p.SampleCount > 0 {
-		m["sampleCount"] = p.SampleCount
-	}
-	if p.AspectRatio != "" {
-		m["aspectRatio"] = p.AspectRatio
-	}
-	if p.HasSeed {
-		m["seed"] = p.Seed
-	}
-	return json.Marshal(m)
-}
-
-// predictResponse is the response from the Imagen predict endpoint.
-type predictResponse struct {
-	Predictions []prediction `json:"predictions"`
-}
-
-type prediction struct {
-	BytesBase64Encoded string `json:"bytesBase64Encoded"`
-	MimeType           string `json:"mimeType"`
+		client: client,
+		model:  model,
+	}, nil
 }
 
 // Execute generates an image via the Google Imagen API.
 func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, error) {
 	if err := g.Validate(); err != nil {
 		return engine.Result{}, fmt.Errorf("google: validate graph: %w", err)
-	}
-
-	apiKey, err := engine.ResolveKey(e.apiKey, "GOOGLE_API_KEY")
-	if err != nil {
-		return engine.Result{}, err
 	}
 
 	prompt, err := resolve.ExtractPrompt(g)
@@ -134,73 +99,36 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 		return engine.Result{}, ErrMissingPrompt
 	}
 
-	params := &parameters{
-		SampleCount: 1,
+	imgCfg := &genai.GenerateImagesConfig{
+		NumberOfImages: 1,
 	}
 	if ar, ok := resolve.StringOption(g, "aspect_ratio", "aspectRatio"); ok && ar != "" {
-		params.AspectRatio = ar
+		imgCfg.AspectRatio = ar
 	}
 	if seed, ok := resolve.IntOption(g, "seed"); ok {
-		params.Seed = seed
-		params.HasSeed = true
+		s := int32(seed)
+		imgCfg.Seed = &s
 	}
 	if count, ok := resolve.IntOption(g, "sample_count", "sampleCount"); ok && count > 0 {
-		params.SampleCount = count
+		imgCfg.NumberOfImages = int32(count)
 	}
 
-	reqBody := predictRequest{
-		Instances:  []instance{{Prompt: prompt}},
-		Parameters: params,
-	}
-
-	body, err := json.Marshal(reqBody)
+	resp, err := e.client.Models.GenerateImages(ctx, e.model, prompt, imgCfg)
 	if err != nil {
-		return engine.Result{}, fmt.Errorf("google: marshal request: %w", err)
+		return engine.Result{}, fmt.Errorf("google: generate images: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/v1beta/models/%s:predict", e.baseURL, e.model)
-	respBody, err := e.doRequest(ctx, http.MethodPost, url, body, apiKey)
-	if err != nil {
-		return engine.Result{}, err
+	if resp == nil || len(resp.GeneratedImages) == 0 {
+		return engine.Result{}, fmt.Errorf("google: no images in response")
 	}
 
-	var resp predictResponse
-	if err := json.Unmarshal(respBody, &resp); err != nil {
-		return engine.Result{}, fmt.Errorf("google: decode response: %w", err)
-	}
-	if len(resp.Predictions) == 0 {
-		return engine.Result{}, fmt.Errorf("google: no predictions in response")
-	}
-
-	mime := resp.Predictions[0].MimeType
+	img := resp.GeneratedImages[0].Image
+	mime := img.MIMEType
 	if mime == "" {
 		mime = "image/png"
 	}
-	dataURI := fmt.Sprintf("data:%s;base64,%s", mime, resp.Predictions[0].BytesBase64Encoded)
+	dataURI := fmt.Sprintf("data:%s;base64,%s", mime, base64.StdEncoding.EncodeToString(img.ImageBytes))
 	return engine.Result{Value: dataURI, Kind: engine.OutputDataURI}, nil
-}
-
-func (e *Engine) doRequest(ctx context.Context, method, url string, body []byte, apiKey string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, method, url, bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("google: build request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-goog-api-key", apiKey)
-
-	resp, err := e.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("google: http %s: %w", method, err)
-	}
-	defer resp.Body.Close()
-	out, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("google: read body: %w", err)
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, aigoerr.FromHTTPResponse(resp, out, "google")
-	}
-	return out, nil
 }
 
 // Capabilities implements engine.Describer.

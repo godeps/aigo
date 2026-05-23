@@ -8,19 +8,20 @@ func init() {
 			APIKey:  cfg.APIKey,
 			BaseURL: cfg.BaseURL,
 			Model:   cfg.Model,
-		}), nil
+		})
 	})
 	engine.RegisterModelInfos(ModelInfos())
 }
 
 // DefaultProvider returns preset engine configurations for gemini.
 func DefaultProvider() engine.Provider {
+	e, _ := New(Config{})
 	return engine.Provider{
 		Name: "gemini",
 		Configs: []engine.ProviderConfig{
 			{
 				Name:        "gemini",
-				Engine:      New(Config{}),
+				Engine:      e,
 				EnvVars:     []string{"GEMINI_API_KEY"},
 				DisplayName: engine.LookupDisplayName("gemini"),
 			},

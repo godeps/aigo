@@ -1,31 +1,28 @@
 // Package gemini implements engine.Engine for Google Gemini multi-modal understanding.
 //
 // Gemini supports text generation with optional image/video inputs for analysis.
-// Auth: API key via x-goog-api-key header, env GEMINI_API_KEY or GOOGLE_API_KEY.
+// Auth: API key via official SDK, env GEMINI_API_KEY or GOOGLE_API_KEY.
 //
 // Endpoint: POST /models/{model}:generateContent
 // Default model: gemini-2.0-flash
 package gemini
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/base64"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"strings"
 
 	"github.com/godeps/aigo/engine"
-	"github.com/godeps/aigo/engine/aigoerr"
-	"github.com/godeps/aigo/engine/httpx"
 	"github.com/godeps/aigo/workflow"
 	"github.com/godeps/aigo/workflow/resolve"
+	"google.golang.org/genai"
 )
 
-const defaultBaseURL = "https://generativelanguage.googleapis.com/v1beta"
+const defaultBaseURL = "https://generativelanguage.googleapis.com"
 
 // Model constants.
 const (
@@ -43,29 +40,28 @@ var (
 // Config configures the Gemini engine.
 type Config struct {
 	APIKey     string
-	BaseURL    string // default: https://generativelanguage.googleapis.com/v1beta
+	BaseURL    string // default: https://generativelanguage.googleapis.com
 	Model      string // default: gemini-2.0-flash
 	HTTPClient *http.Client
 }
 
 // Engine implements engine.Engine for Google Gemini multi-modal understanding.
 type Engine struct {
-	apiKey     string
-	baseURL    string
-	model      string
-	httpClient *http.Client
+	client *genai.Client
+	model  string
 }
 
 // New creates a Gemini engine instance.
-func New(cfg Config) *Engine {
-	hc := httpx.OrDefault(cfg.HTTPClient, httpx.DefaultTimeout)
-
-	base := strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/")
-	if base == "" {
-		base = strings.TrimRight(strings.TrimSpace(os.Getenv("GEMINI_BASE_URL")), "/")
+func New(cfg Config) (*Engine, error) {
+	apiKey := strings.TrimSpace(cfg.APIKey)
+	if apiKey == "" {
+		apiKey = strings.TrimSpace(os.Getenv("GEMINI_API_KEY"))
 	}
-	if base == "" {
-		base = defaultBaseURL
+	if apiKey == "" {
+		apiKey = strings.TrimSpace(os.Getenv("GOOGLE_API_KEY"))
+	}
+	if apiKey == "" {
+		return nil, ErrMissingAPIKey
 	}
 
 	model := strings.TrimSpace(cfg.Model)
@@ -73,67 +69,37 @@ func New(cfg Config) *Engine {
 		model = ModelGemini20Flash
 	}
 
-	return &Engine{
-		apiKey:     strings.TrimSpace(cfg.APIKey),
-		baseURL:    base,
-		model:      model,
-		httpClient: hc,
+	base := strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/")
+	if base == "" {
+		base = strings.TrimRight(strings.TrimSpace(os.Getenv("GEMINI_BASE_URL")), "/")
 	}
-}
 
-// --- request types ---
+	cc := &genai.ClientConfig{
+		APIKey:  apiKey,
+		Backend: genai.BackendGeminiAPI,
+	}
+	if cfg.HTTPClient != nil {
+		cc.HTTPClient = cfg.HTTPClient
+	}
+	if base != "" {
+		cc.HTTPOptions = genai.HTTPOptions{BaseURL: base}
+	}
 
-type generateRequest struct {
-	Contents []content `json:"contents"`
-}
+	client, err := genai.NewClient(context.Background(), cc)
+	if err != nil {
+		return nil, fmt.Errorf("gemini: create client: %w", err)
+	}
 
-type content struct {
-	Parts []part `json:"parts"`
-}
-
-type part struct {
-	Text       string    `json:"text,omitempty"`
-	InlineData *blobData `json:"inline_data,omitempty"`
-	FileData   *fileData `json:"file_data,omitempty"`
-}
-
-type blobData struct {
-	MimeType string `json:"mime_type"`
-	Data     string `json:"data"`
-}
-
-type fileData struct {
-	MimeType string `json:"mime_type"`
-	FileURI  string `json:"file_uri"`
-}
-
-// --- response types ---
-
-type generateResponse struct {
-	Candidates []candidate `json:"candidates"`
-}
-
-type candidate struct {
-	Content candidateContent `json:"content"`
-}
-
-type candidateContent struct {
-	Parts []responsePart `json:"parts"`
-}
-
-type responsePart struct {
-	Text string `json:"text"`
+	return &Engine{
+		client: client,
+		model:  model,
+	}, nil
 }
 
 // Execute sends a multi-modal request to the Gemini API.
 func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, error) {
 	if err := g.Validate(); err != nil {
 		return engine.Result{}, fmt.Errorf("gemini: validate graph: %w", err)
-	}
-
-	apiKey, err := engine.ResolveKey(e.apiKey, "GEMINI_API_KEY", "GOOGLE_API_KEY")
-	if err != nil {
-		return engine.Result{}, fmt.Errorf("gemini: %w", err)
 	}
 
 	prompt, err := resolve.ExtractPrompt(g)
@@ -144,101 +110,62 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 		return engine.Result{}, ErrMissingPrompt
 	}
 
-	parts := []part{{Text: prompt}}
+	parts := []*genai.Part{{Text: prompt}}
 
-	// Collect image inputs from LoadImage nodes.
 	for _, ref := range g.FindByClassType("LoadImage") {
-		p, ok := buildMediaPart(ref, "image/jpeg")
-		if ok {
+		if p := buildSDKPart(ref, "image/jpeg"); p != nil {
 			parts = append(parts, p)
 		}
 	}
 
-	// Collect video inputs from LoadVideo nodes.
 	for _, ref := range g.FindByClassType("LoadVideo") {
-		p, ok := buildMediaPart(ref, "video/mp4")
-		if ok {
+		if p := buildSDKPart(ref, "video/mp4"); p != nil {
 			parts = append(parts, p)
 		}
 	}
 
-	reqBody := generateRequest{
-		Contents: []content{{Parts: parts}},
+	contents := []*genai.Content{
+		genai.NewContentFromParts(parts, genai.RoleUser),
 	}
 
-	body, err := json.Marshal(reqBody)
+	resp, err := e.client.Models.GenerateContent(ctx, e.model, contents, nil)
 	if err != nil {
-		return engine.Result{}, fmt.Errorf("gemini: marshal request: %w", err)
+		return engine.Result{}, fmt.Errorf("gemini: generate content: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/models/%s:generateContent", e.baseURL, e.model)
-	respBody, err := e.doRequest(ctx, http.MethodPost, url, body, apiKey)
-	if err != nil {
-		return engine.Result{}, err
+	text := resp.Text()
+	if text == "" && len(resp.Candidates) > 0 && resp.Candidates[0].Content != nil {
+		var sb strings.Builder
+		for _, p := range resp.Candidates[0].Content.Parts {
+			sb.WriteString(p.Text)
+		}
+		text = sb.String()
 	}
 
-	var resp generateResponse
-	if err := json.Unmarshal(respBody, &resp); err != nil {
-		return engine.Result{}, fmt.Errorf("gemini: decode response: %w", err)
-	}
-	if len(resp.Candidates) == 0 {
-		return engine.Result{}, fmt.Errorf("gemini: no candidates in response")
-	}
-
-	text := extractText(resp.Candidates[0])
 	return engine.Result{Value: text, Kind: engine.OutputPlainText}, nil
 }
 
-// buildMediaPart creates a part from a LoadImage or LoadVideo node reference.
-// It checks for a "url" input (file_data) or "data"+"mime_type" inputs (inline_data).
-func buildMediaPart(ref workflow.NodeRef, defaultMime string) (part, bool) {
+// buildSDKPart creates a genai.Part from a LoadImage or LoadVideo node reference.
+func buildSDKPart(ref workflow.NodeRef, defaultMime string) *genai.Part {
 	if u, ok := ref.Node.Inputs["url"].(string); ok && u != "" {
 		mime := defaultMime
 		if m, ok := ref.Node.Inputs["mime_type"].(string); ok && m != "" {
 			mime = m
 		}
-		return part{FileData: &fileData{MimeType: mime, FileURI: u}}, true
+		return &genai.Part{FileData: &genai.FileData{MIMEType: mime, FileURI: u}}
 	}
 	if d, ok := ref.Node.Inputs["data"].(string); ok && d != "" {
 		mime := defaultMime
 		if m, ok := ref.Node.Inputs["mime_type"].(string); ok && m != "" {
 			mime = m
 		}
-		return part{InlineData: &blobData{MimeType: mime, Data: d}}, true
+		data, err := base64.StdEncoding.DecodeString(d)
+		if err != nil {
+			return nil
+		}
+		return &genai.Part{InlineData: &genai.Blob{MIMEType: mime, Data: data}}
 	}
-	return part{}, false
-}
-
-// extractText concatenates all text parts from a candidate.
-func extractText(c candidate) string {
-	var sb strings.Builder
-	for _, p := range c.Content.Parts {
-		sb.WriteString(p.Text)
-	}
-	return sb.String()
-}
-
-func (e *Engine) doRequest(ctx context.Context, method, url string, body []byte, apiKey string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, method, url, bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("gemini: build request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-goog-api-key", apiKey)
-
-	resp, err := e.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("gemini: http %s: %w", method, err)
-	}
-	defer resp.Body.Close()
-	out, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("gemini: read body: %w", err)
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, aigoerr.FromHTTPResponse(resp, out, "gemini")
-	}
-	return out, nil
+	return nil
 }
 
 // Capabilities implements engine.Describer.

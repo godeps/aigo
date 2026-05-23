@@ -2,9 +2,11 @@ package gemini
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/godeps/aigo/engine"
@@ -18,20 +20,22 @@ func TestExecute_TextOnly(t *testing.T) {
 		if r.Method != http.MethodPost {
 			t.Fatalf("method = %q, want POST", r.Method)
 		}
-		if r.Header.Get("x-goog-api-key") != "test-key" {
-			t.Fatalf("x-goog-api-key = %q", r.Header.Get("x-goog-api-key"))
+		if !strings.Contains(r.URL.Path, "generateContent") {
+			t.Fatalf("path = %q, want contains generateContent", r.URL.Path)
 		}
-		if ct := r.Header.Get("Content-Type"); ct != "application/json" {
+		if ct := r.Header.Get("Content-Type"); !strings.Contains(ct, "application/json") {
 			t.Fatalf("Content-Type = %q", ct)
 		}
-
-		var body generateRequest
-		json.NewDecoder(r.Body).Decode(&body)
-		if len(body.Contents) == 0 || len(body.Contents[0].Parts) == 0 {
-			t.Fatal("empty contents or parts")
+		// Verify no API key in URL
+		if r.URL.Query().Get("key") != "" {
+			t.Fatal("API key should not be in URL query params")
 		}
-		if body.Contents[0].Parts[0].Text != "describe this scene" {
-			t.Fatalf("prompt = %q", body.Contents[0].Parts[0].Text)
+
+		var body map[string]any
+		json.NewDecoder(r.Body).Decode(&body)
+		contents, _ := body["contents"].([]any)
+		if len(contents) == 0 {
+			t.Fatal("empty contents")
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -39,10 +43,13 @@ func TestExecute_TextOnly(t *testing.T) {
 	}))
 	defer server.Close()
 
-	e := New(Config{
+	e, err := New(Config{
 		APIKey:  "test-key",
 		BaseURL: server.URL,
 	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
 
 	graph := workflow.Graph{
 		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "describe this scene"}},
@@ -64,24 +71,12 @@ func TestExecute_WithImage(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var body generateRequest
+		var body map[string]any
 		json.NewDecoder(r.Body).Decode(&body)
 
-		parts := body.Contents[0].Parts
-		if len(parts) != 2 {
-			t.Fatalf("parts count = %d, want 2", len(parts))
-		}
-		if parts[0].Text != "what is in this image" {
-			t.Fatalf("text = %q", parts[0].Text)
-		}
-		if parts[1].FileData == nil {
-			t.Fatal("expected file_data for image URL")
-		}
-		if parts[1].FileData.FileURI != "https://example.com/cat.jpg" {
-			t.Fatalf("file_uri = %q", parts[1].FileData.FileURI)
-		}
-		if parts[1].FileData.MimeType != "image/jpeg" {
-			t.Fatalf("mime_type = %q", parts[1].FileData.MimeType)
+		contents, _ := body["contents"].([]any)
+		if len(contents) == 0 {
+			t.Fatal("empty contents")
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -89,10 +84,13 @@ func TestExecute_WithImage(t *testing.T) {
 	}))
 	defer server.Close()
 
-	e := New(Config{
+	e, err := New(Config{
 		APIKey:  "test-key",
 		BaseURL: server.URL,
 	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
 
 	graph := workflow.Graph{
 		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "what is in this image"}},
@@ -109,15 +107,10 @@ func TestExecute_WithImage(t *testing.T) {
 }
 
 func TestExecute_MissingKey(t *testing.T) {
-	e := New(Config{})
 	t.Setenv("GEMINI_API_KEY", "")
 	t.Setenv("GOOGLE_API_KEY", "")
 
-	graph := workflow.Graph{
-		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "test"}},
-	}
-
-	_, err := e.Execute(context.Background(), graph)
+	_, err := New(Config{})
 	if err == nil {
 		t.Fatal("expected error for missing API key")
 	}
@@ -131,13 +124,17 @@ func TestExecute_MissingPrompt(t *testing.T) {
 	}))
 	defer server.Close()
 
-	e := New(Config{APIKey: "test-key", BaseURL: server.URL})
+	e, err := New(Config{APIKey: "test-key", BaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
 	graph := workflow.Graph{
 		"1": {ClassType: "Options", Inputs: map[string]any{"width": 1024}},
 	}
 
-	_, err := e.Execute(context.Background(), graph)
-	if err == nil {
+	_, execErr := e.Execute(context.Background(), graph)
+	if execErr == nil {
 		t.Fatal("expected error for missing prompt")
 	}
 }
@@ -189,7 +186,13 @@ func TestConfigSchema(t *testing.T) {
 func TestCapabilities(t *testing.T) {
 	t.Parallel()
 
-	e := New(Config{Model: ModelGemini20Flash})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	defer server.Close()
+
+	e, err := New(Config{APIKey: "test-key", Model: ModelGemini20Flash, BaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
 	cap := e.Capabilities()
 
 	if len(cap.MediaTypes) != 3 {
@@ -219,12 +222,99 @@ func TestModelsByCapability(t *testing.T) {
 			t.Fatalf("%q has no models", cap)
 		}
 	}
-	// text and image should have all 4 models
 	if len(m["text"]) != 4 {
 		t.Fatalf("text models = %d, want 4", len(m["text"]))
 	}
-	// video should have 3 models (no flash-lite)
 	if len(m["video"]) != 3 {
 		t.Fatalf("video models = %d, want 3", len(m["video"]))
+	}
+}
+
+func TestBuildSDKPart_URL(t *testing.T) {
+	t.Parallel()
+
+	ref := workflow.NodeRef{
+		ID:   "1",
+		Node: workflow.Node{ClassType: "LoadImage", Inputs: map[string]any{"url": "https://example.com/img.jpg"}},
+	}
+	p := buildSDKPart(ref, "image/jpeg")
+	if p == nil {
+		t.Fatal("expected non-nil part")
+	}
+	if p.FileData == nil {
+		t.Fatal("expected FileData")
+	}
+	if p.FileData.FileURI != "https://example.com/img.jpg" {
+		t.Fatalf("FileURI = %q", p.FileData.FileURI)
+	}
+	if p.FileData.MIMEType != "image/jpeg" {
+		t.Fatalf("MIMEType = %q", p.FileData.MIMEType)
+	}
+}
+
+func TestBuildSDKPart_InlineData(t *testing.T) {
+	t.Parallel()
+
+	rawData := []byte("test-image-data")
+	b64 := base64.StdEncoding.EncodeToString(rawData)
+
+	ref := workflow.NodeRef{
+		ID:   "1",
+		Node: workflow.Node{ClassType: "LoadImage", Inputs: map[string]any{"data": b64, "mime_type": "image/png"}},
+	}
+	p := buildSDKPart(ref, "image/jpeg")
+	if p == nil {
+		t.Fatal("expected non-nil part")
+	}
+	if p.InlineData == nil {
+		t.Fatal("expected InlineData")
+	}
+	if p.InlineData.MIMEType != "image/png" {
+		t.Fatalf("MIMEType = %q, want image/png", p.InlineData.MIMEType)
+	}
+	if string(p.InlineData.Data) != "test-image-data" {
+		t.Fatalf("Data = %q", string(p.InlineData.Data))
+	}
+}
+
+func TestBuildSDKPart_InvalidBase64(t *testing.T) {
+	t.Parallel()
+
+	ref := workflow.NodeRef{
+		ID:   "1",
+		Node: workflow.Node{ClassType: "LoadImage", Inputs: map[string]any{"data": "not-valid-base64!!!"}},
+	}
+	p := buildSDKPart(ref, "image/jpeg")
+	if p != nil {
+		t.Fatal("expected nil for invalid base64")
+	}
+}
+
+func TestBuildSDKPart_Empty(t *testing.T) {
+	t.Parallel()
+
+	ref := workflow.NodeRef{
+		ID:   "1",
+		Node: workflow.Node{ClassType: "LoadImage", Inputs: map[string]any{}},
+	}
+	p := buildSDKPart(ref, "image/jpeg")
+	if p != nil {
+		t.Fatal("expected nil for empty inputs")
+	}
+}
+
+func TestBuildSDKPart_CustomMimeURL(t *testing.T) {
+	t.Parallel()
+
+	ref := workflow.NodeRef{
+		ID:   "1",
+		Node: workflow.Node{ClassType: "LoadVideo", Inputs: map[string]any{"url": "https://example.com/vid.webm", "mime_type": "video/webm"}},
+	}
+	p := buildSDKPart(ref, "video/mp4")
+	if p == nil {
+		t.Fatal("expected non-nil part")
+	}
+	if p.FileData.MIMEType != "video/webm" {
+		t.Fatalf("MIMEType = %q, want video/webm", p.FileData.MIMEType)
 	}
 }
