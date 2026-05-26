@@ -351,9 +351,11 @@ func (c *Client) Use(mw ...Middleware) {
 
 // ProgressEvent reports execution progress to the caller.
 type ProgressEvent struct {
-	Phase   string        // "submitted", "polling", "completed"
-	Attempt int           // poll attempt number (0 for non-polling phases)
-	Elapsed time.Duration // wall-clock time since execution start
+	Phase      string        // "submitted", "polling", "completed"
+	Attempt    int           // poll attempt number (0 for non-polling phases)
+	Elapsed    time.Duration // wall-clock time since execution start
+	Percent    float64       // 0~1, actual progress from upstream API (0 if unavailable)
+	PreviewURL string        // intermediate preview URL (e.g. video first frame)
 }
 
 // ExecuteOption configures optional Execute behavior.
@@ -405,8 +407,14 @@ func (c *Client) Execute(ctx context.Context, engineName string, graph workflow.
 		cfg.onProgress(ProgressEvent{Phase: "submitted"})
 		// Inject progress callback into context so engines' internal poll.Poll
 		// calls can surface polling progress without changing engine signatures.
-		ctx = poll.WithOnProgress(ctx, func(attempt int, elapsed time.Duration) {
-			cfg.onProgress(ProgressEvent{Phase: "polling", Attempt: attempt, Elapsed: elapsed})
+		ctx = poll.WithOnProgressV2(ctx, func(info poll.ProgressInfo) {
+			cfg.onProgress(ProgressEvent{
+				Phase:      "polling",
+				Attempt:    info.Attempt,
+				Elapsed:    info.Elapsed,
+				Percent:    info.Percent,
+				PreviewURL: info.PreviewURL,
+			})
 		})
 	}
 
