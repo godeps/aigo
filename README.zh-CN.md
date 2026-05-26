@@ -413,14 +413,39 @@ mediaTools := tooldef.ToolsFor("video", "audio", "music")
 
 ### 进度上报
 
-监控长时间运行的任务：
+监控长时间运行的任务，支持实时进度百分比：
 
 ```go
 result, err := client.Execute(ctx, "video", graph, aigo.WithProgress(func(e aigo.ProgressEvent) {
-    fmt.Printf("[%s] elapsed=%s\n", e.Phase, e.Elapsed)
-    // Phase: "submitted", "completed"
+    switch e.Phase {
+    case "submitted":
+        fmt.Println("任务已提交")
+    case "polling":
+        fmt.Printf("第 %d 次轮询, 已耗时 %s", e.Attempt, e.Elapsed)
+        if e.Percent > 0 {
+            fmt.Printf(", 进度 %.0f%%", e.Percent*100)
+        }
+        if e.PreviewURL != "" {
+            fmt.Printf(", 预览: %s", e.PreviewURL)
+        }
+        fmt.Println()
+    case "completed":
+        fmt.Printf("完成，耗时 %s\n", e.Elapsed)
+    }
 }))
 ```
+
+`ProgressEvent` 字段：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| Phase | string | "submitted"、"polling"、"completed" |
+| Attempt | int | 轮询次数（非轮询阶段为 0） |
+| Elapsed | time.Duration | 从执行开始的耗时 |
+| Percent | float64 | 0~1，上游 API 返回的实际进度（不可用时为 0） |
+| PreviewURL | string | 中间预览 URL，如视频首帧（不可用时为空） |
+
+Percent 从上游 API 响应中提取（如 DashScope 的 `task_metrics.SUCCEEDED / task_metrics.TOTAL`）。
 
 ### 结果缓存
 
@@ -602,11 +627,34 @@ result, err := client.Execute(ctx, "img", graph)
 |----|------|
 | `workflow` | 工作流图类型与校验 |
 | `workflow/resolve` | 图解析（提示词提取、选项辅助函数、链接跟随） |
-| `engine/poll` | 统一轮询（退避、进度回调、状态映射） |
+| `engine/poll` | 统一轮询（退避、`PollV2` + `FetcherV2` 扩展进度回调、状态映射） |
 | `engine/httpx` | HTTP 客户端默认值、重试传输层、限流、文件上传 |
 | `engine/aigoerr` | 结构化错误分类，用于 Agent 重试逻辑 |
 | `engine/embed` | 向量嵌入引擎（OpenAI、Gemini、Jina、Voyage、Aliyun） |
 | `tooldef` | JSON Schema 工具定义，适配各类 Agent 框架 |
+
+### 高级轮询（PollV2）
+
+对于支持进度百分比或中间预览的引擎，使用 `PollV2` 配合 `FetcherV2`：
+
+```go
+import "github.com/godeps/aigo/engine/poll"
+
+result, err := poll.PollV2(ctx, poll.Config{
+    Interval: 3 * time.Second,
+    Backoff:  1.5,
+}, func(ctx context.Context) (poll.FetchResult, error) {
+    // 查询上游任务状态
+    status := fetchTaskStatus(ctx, taskID)
+    return poll.FetchResult{
+        Result:  status.URL,
+        Done:    status.IsComplete,
+        Percent: status.Progress, // 0~1，从上游 task_metrics 解析
+    }, nil
+})
+```
+
+`ProgressInfo` 结构体（传递给 `OnProgressV2` 回调）在 `OnProgress` 基础上扩展了 `Percent` 和 `PreviewURL` 字段。
 
 ## 示例
 

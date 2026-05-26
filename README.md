@@ -413,14 +413,39 @@ mediaTools := tooldef.ToolsFor("video", "audio", "music")
 
 ### Progress reporting
 
-Monitor long-running tasks:
+Monitor long-running tasks with real-time progress:
 
 ```go
 result, err := client.Execute(ctx, "video", graph, aigo.WithProgress(func(e aigo.ProgressEvent) {
-    fmt.Printf("[%s] elapsed=%s\n", e.Phase, e.Elapsed)
-    // Phase: "submitted", "completed"
+    switch e.Phase {
+    case "submitted":
+        fmt.Println("Task submitted")
+    case "polling":
+        fmt.Printf("Attempt %d, %s elapsed", e.Attempt, e.Elapsed)
+        if e.Percent > 0 {
+            fmt.Printf(", %.0f%% complete", e.Percent*100)
+        }
+        if e.PreviewURL != "" {
+            fmt.Printf(", preview: %s", e.PreviewURL)
+        }
+        fmt.Println()
+    case "completed":
+        fmt.Printf("Done in %s\n", e.Elapsed)
+    }
 }))
 ```
+
+`ProgressEvent` fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| Phase | string | "submitted", "polling", "completed" |
+| Attempt | int | Poll attempt number (0 for non-polling phases) |
+| Elapsed | time.Duration | Wall-clock time since execution start |
+| Percent | float64 | 0~1, actual progress from upstream API (0 if unavailable) |
+| PreviewURL | string | Intermediate preview URL, e.g. video first frame (empty if unavailable) |
+
+Percent is extracted from upstream API responses (e.g. DashScope `task_metrics.SUCCEEDED / task_metrics.TOTAL`) when available.
 
 ### Result caching
 
@@ -602,11 +627,34 @@ result, err := client.Execute(ctx, "img", graph)
 |---------|---------|
 | `workflow` | Workflow graph types and validation |
 | `workflow/resolve` | Graph resolution (prompt extraction, option helpers, link following) |
-| `engine/poll` | Unified polling with backoff, progress callbacks, and status mapping |
+| `engine/poll` | Unified polling with backoff, progress callbacks (`PollV2` + `FetcherV2`), and status mapping |
 | `engine/httpx` | HTTP client defaults, retry transport, rate limiting, file upload |
 | `engine/aigoerr` | Structured error classification for agent retry logic |
 | `engine/embed` | Embedding engine implementations (OpenAI, Gemini, Jina, Voyage, Aliyun) |
 | `tooldef` | JSON Schema tool definitions for agent frameworks |
+
+### Advanced Polling (PollV2)
+
+For engines that support progress percentage or intermediate previews, use `PollV2` with `FetcherV2`:
+
+```go
+import "github.com/godeps/aigo/engine/poll"
+
+result, err := poll.PollV2(ctx, poll.Config{
+    Interval: 3 * time.Second,
+    Backoff:  1.5,
+}, func(ctx context.Context) (poll.FetchResult, error) {
+    // Query upstream task status
+    status := fetchTaskStatus(ctx, taskID)
+    return poll.FetchResult{
+        Result:  status.URL,
+        Done:    status.IsComplete,
+        Percent: status.Progress, // 0~1 from upstream task_metrics
+    }, nil
+})
+```
+
+The `ProgressInfo` struct (passed to `OnProgressV2` callbacks) extends `OnProgress` with `Percent` and `PreviewURL`.
 
 ## Examples
 
