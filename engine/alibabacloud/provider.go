@@ -27,6 +27,7 @@ func init() {
 // the auto-registered factory path produces the same behavior as the curated
 // preset path.
 func defaultWaitForModel(model string) bool {
+	model = ResolveModel(model)
 	if model == "" {
 		return false
 	}

@@ -995,6 +995,76 @@ func TestExecuteMultimodalImage_MultiResult(t *testing.T) {
 	}
 }
 
+func TestResolveModelAliases(t *testing.T) {
+	t.Parallel()
+	cases := []struct{ input, want string }{
+		{"qwen-image-2.0-i2i", ModelQwenImage2},
+		{"qwen-image-2.0-t2i", ModelQwenImage2},
+		{"qwen-image-i2i", ModelQwenImage},
+		{"wan2.7-image-i2i", ModelWanImage},
+		{"z-image-turbo-t2i", ModelZImageTurbo},
+		{"wan2.7-style", ModelWanVideoEdit},
+		{"happyhorse-1.0-style", ModelHappyHorseVideoEdit},
+		{"Tripo/Tripo-P1.0-i23d", ModelTripoP1},
+		{"Tripo/Tripo-P1.0-mv23d", ModelTripoP1},
+		{"Tripo/Tripo-H3.1-t23d", ModelTripoH31},
+		{"Tripo/Tripo-H3.1-mv23d", ModelTripoH31},
+		// Non-aliases pass through unchanged.
+		{ModelWanTextToVideo, ModelWanTextToVideo},
+		{ModelQwenImage2, ModelQwenImage2},
+		{ModelTripoP1, ModelTripoP1},
+		{"", ""},
+		{"unknown-model", "unknown-model"},
+	}
+	for _, tc := range cases {
+		if got := ResolveModel(tc.input); got != tc.want {
+			t.Errorf("ResolveModel(%q) = %q, want %q", tc.input, got, tc.want)
+		}
+	}
+}
+
+func TestExecuteWithModelAlias(t *testing.T) {
+	t.Parallel()
+
+	var payload map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/services/aigc/multimodal-generation/generation" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Errorf("decode body: %v", err)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"output":{"choices":[{"message":{"content":[{"type":"image","image":"https://img.example.com/alias.png"}]}}]}}`))
+	}))
+	defer server.Close()
+
+	eng := New(Config{
+		APIKey:  "test-key",
+		BaseURL: server.URL + "/api/v1",
+		Model:   "qwen-image-2.0-i2i",
+	})
+
+	graph := workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "alias test"}},
+	}
+
+	got, err := eng.Execute(context.Background(), graph)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if got.Value != "https://img.example.com/alias.png" {
+		t.Fatalf("Execute() = %q", got.Value)
+	}
+	if payload["model"] != ModelQwenImage2 {
+		t.Fatalf("API model = %v, want %v (canonical)", payload["model"], ModelQwenImage2)
+	}
+}
+
 // TestExecuteMultimodalImage_SingleResultLeavesResultsNil verifies the n=1
 // case keeps Result.Results nil (single-result callers should rely on Value).
 func TestExecuteMultimodalImage_SingleResultLeavesResultsNil(t *testing.T) {
@@ -1027,5 +1097,147 @@ func TestExecuteMultimodalImage_SingleResultLeavesResultsNil(t *testing.T) {
 	}
 	if got.Results != nil {
 		t.Errorf("Results should be nil when only one item; got %d items", len(got.Results))
+	}
+}
+
+func TestDefaultWaitForModelWithAlias(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		model string
+		want  bool
+	}{
+		{"qwen-image-2.0-i2i", true},
+		{"wan2.7-image-t2i", false},
+		{"wan2.7-style", true},
+		{"happyhorse-1.0-style", true},
+		{"Tripo/Tripo-P1.0-i23d", true},
+		{"Tripo/Tripo-H3.1-mv23d", true},
+		// Non-alias should still work.
+		{ModelWanTextToVideo, true},
+		{ModelQwenTTSFlash, false},
+		{"", false},
+	}
+	for _, tc := range cases {
+		if got := defaultWaitForModel(tc.model); got != tc.want {
+			t.Errorf("defaultWaitForModel(%q) = %v, want %v", tc.model, got, tc.want)
+		}
+	}
+}
+
+func TestExecuteWithVideoEditStyleAlias(t *testing.T) {
+	t.Parallel()
+
+	var payload map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/services/aigc/video-generation/video-synthesis":
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				t.Errorf("decode body: %v", err)
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"output":{"task_id":"style-task","task_status":"PENDING"}}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/tasks/style-task":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"output":{"task_id":"style-task","task_status":"SUCCEEDED","video_url":"https://video.example.com/style.mp4"}}`))
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+		}
+	}))
+	defer server.Close()
+
+	eng := New(Config{
+		APIKey:            "test-key",
+		BaseURL:           server.URL + "/api/v1",
+		Model:             "wan2.7-style",
+		WaitForCompletion: true,
+		PollInterval:      5 * time.Millisecond,
+	})
+
+	graph := workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "将风格迁移到视频"}},
+		"2": {ClassType: "LoadVideo", Inputs: map[string]any{"url": "https://assets.example.com/input.mp4"}},
+		"3": {ClassType: "LoadImage", Inputs: map[string]any{"url": "https://assets.example.com/style.png"}},
+	}
+
+	got, err := eng.Execute(context.Background(), graph)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if got.Value != "https://video.example.com/style.mp4" {
+		t.Fatalf("Execute() = %q", got.Value)
+	}
+	if payload["model"] != ModelWanVideoEdit {
+		t.Fatalf("API model = %v, want %v (canonical)", payload["model"], ModelWanVideoEdit)
+	}
+}
+
+func TestExecuteWith3DAlias(t *testing.T) {
+	t.Parallel()
+
+	var payload map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/services/aigc/video-generation/3d-generation":
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				t.Errorf("decode body: %v", err)
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"output":{"task_id":"3d-task","task_status":"PENDING"}}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/tasks/3d-task":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"output":{"task_id":"3d-task","task_status":"SUCCEEDED","results":{"pbr_model_url":"https://3d.example.com/model.glb"}}}`))
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+		}
+	}))
+	defer server.Close()
+
+	eng := New(Config{
+		APIKey:            "test-key",
+		BaseURL:           server.URL + "/api/v1",
+		Model:             "Tripo/Tripo-P1.0-i23d",
+		WaitForCompletion: true,
+		PollInterval:      5 * time.Millisecond,
+	})
+
+	graph := workflow.Graph{
+		"1": {ClassType: "LoadImage", Inputs: map[string]any{"url": "https://assets.example.com/chair.png"}},
+	}
+
+	got, err := eng.Execute(context.Background(), graph)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if got.Value != "https://3d.example.com/model.glb" {
+		t.Fatalf("Execute() = %q", got.Value)
+	}
+	if payload["model"] != ModelTripoP1 {
+		t.Fatalf("API model = %v, want %v (canonical)", payload["model"], ModelTripoP1)
+	}
+}
+
+func TestCapabilitiesWithAlias(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		alias     string
+		wantMedia string
+	}{
+		{"qwen-image-2.0-i2i", "image"},
+		{"wan2.7-style", "video"},
+		{"Tripo/Tripo-P1.0-i23d", "3d"},
+		{"happyhorse-1.0-style", "video"},
+	}
+	for _, tc := range cases {
+		eng := New(Config{Model: tc.alias})
+		cap := eng.Capabilities()
+		if len(cap.MediaTypes) == 0 || cap.MediaTypes[0] != tc.wantMedia {
+			t.Errorf("Capabilities(%q).MediaTypes = %v, want [%s]", tc.alias, cap.MediaTypes, tc.wantMedia)
+		}
 	}
 }

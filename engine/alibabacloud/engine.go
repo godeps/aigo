@@ -56,6 +56,43 @@ const (
 	ModelFunMusic = "fun-music-v1"
 )
 
+// modelAliases maps routing-suffixed model names to their canonical
+// DashScope model name. The suffix is a saker-level routing convention
+// (e.g. "-i2i" for image-to-image); the canonical name is what the
+// DashScope API actually expects.
+var modelAliases = map[string]string{
+	// Image: -t2i / -i2i → same multimodal handler
+	"qwen-image-t2i":     ModelQwenImage,
+	"qwen-image-i2i":     ModelQwenImage,
+	"qwen-image-2.0-t2i": ModelQwenImage2,
+	"qwen-image-2.0-i2i": ModelQwenImage2,
+	"wan2.7-image-t2i":   ModelWanImage,
+	"wan2.7-image-i2i":   ModelWanImage,
+	"z-image-turbo-t2i":  ModelZImageTurbo,
+	"z-image-turbo-i2i":  ModelZImageTurbo,
+
+	// Video edit: -style → same RunVideoEdit handler
+	"wan2.7-style":          ModelWanVideoEdit,
+	"happyhorse-1.0-style":  ModelHappyHorseVideoEdit,
+
+	// 3D: -t23d / -i23d / -mv23d → same RunTripo3D handler
+	"Tripo/Tripo-P1.0-t23d":  ModelTripoP1,
+	"Tripo/Tripo-P1.0-i23d":  ModelTripoP1,
+	"Tripo/Tripo-P1.0-mv23d": ModelTripoP1,
+	"Tripo/Tripo-H3.1-t23d":  ModelTripoH31,
+	"Tripo/Tripo-H3.1-i23d":  ModelTripoH31,
+	"Tripo/Tripo-H3.1-mv23d": ModelTripoH31,
+}
+
+// ResolveModel maps a routing-suffixed model name to its canonical
+// DashScope model name. Returns the input unchanged if not an alias.
+func ResolveModel(model string) string {
+	if canonical, ok := modelAliases[model]; ok {
+		return canonical
+	}
+	return model
+}
+
 // 与 internal/ierr 中哨兵为同一指针，便于 errors.Is。
 var (
 	ErrMissingPrompt      = ierr.ErrMissingPrompt
@@ -110,6 +147,7 @@ func New(cfg Config) *Engine {
 	if model == "" {
 		model = ModelQwenImage
 	}
+	model = ResolveModel(model)
 
 	pollInterval := cfg.PollInterval
 	if pollInterval <= 0 {
