@@ -6,96 +6,44 @@ import "github.com/godeps/aigo/engine"
 // Model names are prefixed with "newapi/" to avoid conflicts with native engine registrations.
 func ModelInfos() []engine.ModelInfo {
 	return []engine.ModelInfo{
-		{
-			Name:        "newapi/gpt-image-2",
-			Provider:    "newapi",
-			DisplayName: engine.DisplayName{"en": "GPT Image 2 (NewAPI)", "zh": "GPT Image 2 (NewAPI)"},
-			Description: engine.DisplayName{"en": "OpenAI gpt-image-2 image generation via NewAPI", "zh": "通过 NewAPI 调用 OpenAI gpt-image-2 图片生成"},
-			Capability:  "image",
-		},
-		{
-			Name:        "newapi/kling-v2-master",
-			Provider:    "newapi",
-			DisplayName: engine.DisplayName{"en": "Kling V2 Master (NewAPI)", "zh": "可灵 V2 大师版 (NewAPI)"},
-			Description: engine.DisplayName{"en": "Kling text-to-video via NewAPI gateway", "zh": "通过 NewAPI 网关调用可灵文生视频"},
-			Capability:  "video",
-		},
-		{
-			Name:        "newapi/kling-v1-6-pro",
-			Provider:    "newapi",
-			DisplayName: engine.DisplayName{"en": "Kling V1.6 Pro (NewAPI)", "zh": "可灵 V1.6 专业版 (NewAPI)"},
-			Description: engine.DisplayName{"en": "Kling image-to-video via NewAPI gateway", "zh": "通过 NewAPI 网关调用可灵图生视频"},
-			Capability:  "video",
-		},
-		{
-			Name:        "newapi/jimeng-2.1-pro",
-			Provider:    "newapi",
-			DisplayName: engine.DisplayName{"en": "Jimeng 2.1 Pro (NewAPI)", "zh": "即梦 2.1 专业版 (NewAPI)"},
-			Description: engine.DisplayName{"en": "Jimeng video generation via NewAPI gateway", "zh": "通过 NewAPI 网关调用即梦视频生成"},
-			Capability:  "video",
-		},
-		{
-			Name:        "newapi/sora",
-			Provider:    "newapi",
-			DisplayName: engine.DisplayName{"en": "Sora (NewAPI)", "zh": "Sora (NewAPI)"},
-			Description: engine.DisplayName{"en": "OpenAI Sora video generation via NewAPI", "zh": "通过 NewAPI 调用 OpenAI Sora 视频生成"},
-			Capability:  "video",
-		},
-		{
-			Name:        "newapi/qwen-max-vl",
-			Provider:    "newapi",
-			DisplayName: engine.DisplayName{"en": "Qwen Max VL (NewAPI)", "zh": "通义千问 VL (NewAPI)"},
-			Description: engine.DisplayName{"en": "Qwen image generation via NewAPI gateway", "zh": "通过 NewAPI 网关调用通义图片生成"},
-			Capability:  "image",
-		},
-		{
-			Name:        "newapi/gemini-2.0-flash",
-			Provider:    "newapi",
-			DisplayName: engine.DisplayName{"en": "Gemini 2.0 Flash (NewAPI)", "zh": "Gemini 2.0 Flash (NewAPI)"},
-			Description: engine.DisplayName{"en": "Gemini image generation via NewAPI gateway", "zh": "通过 NewAPI 网关调用 Gemini 图片生成"},
-			Capability:  "image",
-		},
-		{
-			Name:        "newapi/tts-1",
-			Provider:    "newapi",
-			DisplayName: engine.DisplayName{"en": "TTS-1 (NewAPI)", "zh": "TTS-1 (NewAPI)"},
-			Description: engine.DisplayName{"en": "OpenAI TTS via NewAPI gateway", "zh": "通过 NewAPI 网关调用 OpenAI 语音合成"},
-			Capability:  "tts",
-		},
-		{
-			Name:        "newapi/tts-1-hd",
-			Provider:    "newapi",
-			DisplayName: engine.DisplayName{"en": "TTS-1 HD (NewAPI)", "zh": "TTS-1 HD (NewAPI)"},
-			Description: engine.DisplayName{"en": "OpenAI high-definition TTS via NewAPI", "zh": "通过 NewAPI 调用 OpenAI 高清语音合成"},
-			Capability:  "tts",
-		},
-		{
-			Name:        "newapi/whisper-1",
-			Provider:    "newapi",
-			DisplayName: engine.DisplayName{"en": "Whisper 1 (NewAPI)", "zh": "Whisper 1 (NewAPI)"},
-			Description: engine.DisplayName{"en": "OpenAI Whisper ASR via NewAPI gateway", "zh": "通过 NewAPI 网关调用 OpenAI Whisper 语音识别"},
-			Capability:  "asr",
-		},
-		{
-			Name:        "newapi/doubao-seedance-2-0-260128",
-			Provider:    "newapi",
-			DisplayName: engine.DisplayName{"en": "Seedance 2.0 (NewAPI)", "zh": "Seedance 2.0 (NewAPI)"},
-			Description: engine.DisplayName{"en": "Doubao Seedance 2.0 video generation via NewAPI", "zh": "通过 NewAPI 调用豆包 Seedance 2.0 视频生成"},
-			Capability:  "video",
-		},
-		{
-			Name:        "newapi/doubao-seedance-2-0-fast-260128",
-			Provider:    "newapi",
-			DisplayName: engine.DisplayName{"en": "Seedance 2.0 Fast (NewAPI)", "zh": "Seedance 2.0 快速版 (NewAPI)"},
-			Description: engine.DisplayName{"en": "Doubao Seedance 2.0 Fast video generation via NewAPI", "zh": "通过 NewAPI 调用豆包 Seedance 2.0 快速版视频生成"},
-			Capability:  "video",
-		},
-		{
-			Name:        "newapi/whisper-large-v3",
-			Provider:    "newapi",
-			DisplayName: engine.DisplayName{"en": "Whisper Large V3 (NewAPI)", "zh": "Whisper Large V3 (NewAPI)"},
-			Description: engine.DisplayName{"en": "Whisper Large V3 ASR via NewAPI gateway", "zh": "通过 NewAPI 网关调用 Whisper Large V3 语音识别"},
-			Capability:  "asr",
-		},
+		// ── Image ──
+		{Name: "newapi/gpt-image-2", Provider: "newapi", DisplayName: engine.DisplayName{"en": "GPT Image 2", "zh": "GPT Image 2"}, Capability: "image"},
+		{Name: "newapi/gpt-image-1", Provider: "newapi", DisplayName: engine.DisplayName{"en": "GPT Image 1", "zh": "GPT Image 1"}, Capability: "image"},
+		{Name: "newapi/dall-e-3", Provider: "newapi", DisplayName: engine.DisplayName{"en": "DALL-E 3", "zh": "DALL-E 3"}, Capability: "image"},
+		{Name: "newapi/dall-e-2", Provider: "newapi", DisplayName: engine.DisplayName{"en": "DALL-E 2", "zh": "DALL-E 2"}, Capability: "image"},
+		{Name: "newapi/qwen-max-vl", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Qwen Max VL", "zh": "通义千问 VL"}, Capability: "image"},
+		{Name: "newapi/qwen-image", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Qwen Image", "zh": "通义万相文生图"}, Capability: "image"},
+		{Name: "newapi/z-image", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Z-Image", "zh": "Z-Image"}, Capability: "image"},
+		{Name: "newapi/qwen-image-edit", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Qwen Image Edit", "zh": "通义万相图像编辑"}, Capability: "image_edit"},
+		{Name: "newapi/qwen-image-edit-max", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Qwen Image Edit Max", "zh": "通义万相图像编辑 Max"}, Capability: "image_edit"},
+		{Name: "newapi/gemini-2.0-flash", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Gemini 2.0 Flash", "zh": "Gemini 2.0 Flash"}, Capability: "image"},
+
+		// ── Video ──
+		{Name: "newapi/kling-v2-master", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Kling V2 Master", "zh": "可灵 V2 大师版"}, Capability: "video"},
+		{Name: "newapi/kling-v1-6-pro", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Kling V1.6 Pro", "zh": "可灵 V1.6 专业版"}, Capability: "video"},
+		{Name: "newapi/kling-v1", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Kling V1", "zh": "可灵 V1"}, Capability: "video"},
+		{Name: "newapi/jimeng-2.1-pro", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Jimeng 2.1 Pro", "zh": "即梦 2.1 专业版"}, Capability: "video"},
+		{Name: "newapi/sora", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Sora", "zh": "Sora"}, Capability: "video"},
+		{Name: "newapi/sora-2", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Sora 2", "zh": "Sora 2"}, Capability: "video"},
+		{Name: "newapi/sora-2-pro", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Sora 2 Pro", "zh": "Sora 2 Pro"}, Capability: "video"},
+		{Name: "newapi/doubao-seedance-2-0-260128", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Seedance 2.0", "zh": "Seedance 2.0"}, Capability: "video"},
+		{Name: "newapi/doubao-seedance-2-0-fast-260128", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Seedance 2.0 Fast", "zh": "Seedance 2.0 快速版"}, Capability: "video"},
+		{Name: "newapi/wan2.5-i2v-preview", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Wan 2.5 I2V Preview", "zh": "万相 2.5 图生视频 Preview"}, Capability: "video"},
+		{Name: "newapi/wan2.2-i2v-flash", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Wan 2.2 I2V Flash", "zh": "万相 2.2 图生视频极速版"}, Capability: "video"},
+		{Name: "newapi/viduq2", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Vidu Q2", "zh": "Vidu Q2"}, Capability: "video"},
+		{Name: "newapi/vidu2.0", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Vidu 2.0", "zh": "Vidu 2.0"}, Capability: "video"},
+		{Name: "newapi/MiniMax-Hailuo-2.3", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Hailuo 2.3", "zh": "海螺 2.3"}, Capability: "video"},
+		{Name: "newapi/veo-3.0-generate-001", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Veo 3.0", "zh": "Veo 3.0"}, Capability: "video"},
+
+		// ── TTS ──
+		{Name: "newapi/tts-1", Provider: "newapi", DisplayName: engine.DisplayName{"en": "TTS-1", "zh": "TTS-1"}, Capability: "tts"},
+		{Name: "newapi/tts-1-hd", Provider: "newapi", DisplayName: engine.DisplayName{"en": "TTS-1 HD", "zh": "TTS-1 HD"}, Capability: "tts"},
+
+		// ── ASR ──
+		{Name: "newapi/whisper-1", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Whisper 1", "zh": "Whisper 1"}, Capability: "asr"},
+		{Name: "newapi/whisper-large-v3", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Whisper Large V3", "zh": "Whisper Large V3"}, Capability: "asr"},
+
+		// ── Music ──
+		{Name: "newapi/suno_music", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Suno Music", "zh": "Suno 音乐生成"}, Capability: "music"},
 	}
 }

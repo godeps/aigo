@@ -132,6 +132,7 @@ func AllTools() []ToolDef {
 		EditVideo(),
 		TranscribeAudio(),
 		GenerateMusic(),
+		UnderstandImage(),
 	}
 }
 
@@ -511,6 +512,30 @@ func GenerateMusic() ToolDef {
 				},
 			},
 			Required: []string{"prompt"},
+		},
+	}
+}
+
+// UnderstandImage returns the tool definition for image understanding / vision analysis.
+func UnderstandImage() ToolDef {
+	return ToolDef{
+		Name:        "understand_image",
+		Description: "Analyze and describe an image using a vision-capable model. Returns a text description of the image content. Use this to understand images when the primary model does not support vision input.",
+		Category:    "vision",
+		Parameters: Schema{
+			Type: "object",
+			Properties: map[string]Schema{
+				"image_url": {
+					Type:        "string",
+					Description: "URL of the image to analyze, or a base64 data URI (data:image/...;base64,...)",
+				},
+				"prompt": {
+					Type:        "string",
+					Description: "Instructions for the analysis. Default: describe the image in detail",
+					Default:     "Describe this image in detail. Include: scene description, visible objects, any text, people and their actions, lighting/mood, and any notable elements.",
+				},
+			},
+			Required: []string{"image_url"},
 		},
 	}
 }

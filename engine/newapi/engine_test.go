@@ -216,12 +216,15 @@ func TestExecuteGPTImage2OmitsResponseFormatAndStyle(t *testing.T) {
 func TestLookupRouteGPTImage2(t *testing.T) {
 	t.Parallel()
 
-	route, kind := LookupRoute("gpt-image-2")
+	route, kind, cap := LookupRoute("gpt-image-2", "")
 	if route != RouteOpenAIImagesGenerations {
 		t.Errorf("route = %q, want %q", route, RouteOpenAIImagesGenerations)
 	}
 	if kind != KindImage {
 		t.Errorf("kind = %q, want %q", kind, KindImage)
+	}
+	if cap != "image" {
+		t.Errorf("cap = %q, want %q", cap, "image")
 	}
 }
 

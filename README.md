@@ -84,7 +84,7 @@ AgentTask ──► BuildGraph() ──► workflow.Graph (DAG)
 
 | Engine | Backend | Env Var |
 |--------|---------|---------|
-| `newapi` | Multi-route gateway (OpenAI, Kling, Jimeng, Sora, Qwen, Gemini, Seedance) | `NEWAPI_API_KEY` |
+| `newapi` | Multi-route gateway — 80+ models across OpenAI, Kling, Jimeng, Sora, Qwen, Gemini, Seedance, Hailuo/MiniMax, Vidu, Veo, Wan, Imagen; supports `/v1/models` auto-discovery | `NEWAPI_API_KEY` |
 | `openrouter` | OpenRouter (multi-provider routing) | `OPENROUTER_API_KEY` |
 | `fal` | Fal.ai (generic model runner) | `FAL_KEY` |
 | `replicate` | Replicate (generic model runner) | `REPLICATE_API_TOKEN` |
@@ -631,6 +631,7 @@ result, err := client.Execute(ctx, "img", graph)
 | `engine/httpx` | HTTP client defaults, retry transport, rate limiting, file upload |
 | `engine/aigoerr` | Structured error classification for agent retry logic |
 | `engine/embed` | Embedding engine implementations (OpenAI, Gemini, Jina, Voyage, Aliyun) |
+| `engine/newapi` | Multi-route gateway engine — three-tier route resolution (knownModels → name inference → capability fallback), `/v1/models` dynamic discovery |
 | `tooldef` | JSON Schema tool definitions for agent frameworks |
 
 ### Advanced Polling (PollV2)
@@ -679,6 +680,30 @@ go run ./examples/newapi_seedance_video
 # Auto-routing
 go run ./examples/agent_auto_router
 ```
+
+## Testing
+
+```bash
+go test ./... -cover
+```
+
+Core packages maintain high test coverage with `httptest`-based integration tests and table-driven unit tests. Key coverage highlights:
+
+| Package | Coverage |
+|---------|----------|
+| `engine/newapi/internal/poll` | 100% |
+| `engine/alibabacloud/internal/graphx` | 95% |
+| `workflow/resolve` | 91% |
+| `engine/alibabacloud/internal/imggen` | 91% |
+| `engine/embed/jina` | 88% |
+| `engine/embed/voyage` | 86% |
+| `engine/embed/openai` | 85% |
+| `engine/alibabacloud/internal/audiogen` | 85% |
+| `workflow` | 84% |
+| `engine/alibabacloud/internal/vidgen` | 83% |
+| `engine/newapi/internal/graph` | 82% |
+| `engine/newapi` | 73% |
+| `engine/poll` | 90% |
 
 ## Notes
 

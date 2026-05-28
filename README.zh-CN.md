@@ -84,7 +84,7 @@ AgentTask ──► BuildGraph() ──► workflow.Graph (DAG)
 
 | 引擎 | 后端 | 环境变量 |
 |------|------|---------|
-| `newapi` | 多路网关（OpenAI、可灵、即梦、Sora、通义、Gemini、Seedance） | `NEWAPI_API_KEY` |
+| `newapi` | 多路网关 — 80+ 模型覆盖 OpenAI、可灵、即梦、Sora、通义、Gemini、Seedance、海螺/MiniMax、Vidu、Veo、万相、Imagen；支持 `/v1/models` 自动发现 | `NEWAPI_API_KEY` |
 | `openrouter` | OpenRouter（多供应商路由） | `OPENROUTER_API_KEY` |
 | `fal` | Fal.ai（通用模型运行器） | `FAL_KEY` |
 | `replicate` | Replicate（通用模型运行器） | `REPLICATE_API_TOKEN` |
@@ -631,6 +631,7 @@ result, err := client.Execute(ctx, "img", graph)
 | `engine/httpx` | HTTP 客户端默认值、重试传输层、限流、文件上传 |
 | `engine/aigoerr` | 结构化错误分类，用于 Agent 重试逻辑 |
 | `engine/embed` | 向量嵌入引擎（OpenAI、Gemini、Jina、Voyage、Aliyun） |
+| `engine/newapi` | 多路网关引擎 — 三层路由决策（knownModels → 名称推断 → Capability 回退）、`/v1/models` 动态发现 |
 | `tooldef` | JSON Schema 工具定义，适配各类 Agent 框架 |
 
 ### 高级轮询（PollV2）
@@ -679,6 +680,30 @@ go run ./examples/newapi_seedance_video
 # 自动路由
 go run ./examples/agent_auto_router
 ```
+
+## 测试
+
+```bash
+go test ./... -cover
+```
+
+核心包保持高测试覆盖率，使用 `httptest` 集成测试和表驱动单元测试。关键覆盖率：
+
+| 包 | 覆盖率 |
+|----|--------|
+| `engine/newapi/internal/poll` | 100% |
+| `engine/alibabacloud/internal/graphx` | 95% |
+| `workflow/resolve` | 91% |
+| `engine/alibabacloud/internal/imggen` | 91% |
+| `engine/embed/jina` | 88% |
+| `engine/embed/voyage` | 86% |
+| `engine/embed/openai` | 85% |
+| `engine/alibabacloud/internal/audiogen` | 85% |
+| `workflow` | 84% |
+| `engine/alibabacloud/internal/vidgen` | 83% |
+| `engine/newapi/internal/graph` | 82% |
+| `engine/newapi` | 73% |
+| `engine/poll` | 90% |
 
 ## 说明
 

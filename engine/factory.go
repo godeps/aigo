@@ -16,6 +16,12 @@ type EngineConfig struct {
 	Enabled  *bool             `json:"enabled,omitempty"`    // default true; set false to skip
 	Metadata map[string]string `json:"metadata,omitempty"`   // provider-specific fields (e.g. voiceId, endpoint)
 
+	// Capability tells the factory what media capability this engine serves
+	// ("image", "video", "tts", "asr", "music", "3d"). Used by engines that
+	// support multiple capabilities (e.g. newapi) to select the correct route
+	// when the model is not in the known catalog.
+	Capability string `json:"capability,omitempty"`
+
 	// WaitForCompletion controls async-task polling on backends that submit
 	// asynchronous jobs (DashScope X-DashScope-Async, etc.). nil = use the
 	// engine's smart default; *true = always poll until SUCCEEDED/FAILED;
