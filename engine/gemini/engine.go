@@ -207,5 +207,11 @@ func ModelsByCapability() map[string][]string {
 			ModelGemini15Pro,
 			ModelGemini15Flash,
 		},
+		"vision": {
+			ModelGemini20Flash,
+			ModelGemini15Pro,
+			ModelGemini20FlashLite,
+			ModelGemini15Flash,
+		},
 	}
 }

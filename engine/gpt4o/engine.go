@@ -204,7 +204,8 @@ func ConfigSchema() []engine.ConfigField {
 // ModelsByCapability returns known GPT-4o models grouped by capability.
 func ModelsByCapability() map[string][]string {
 	return map[string][]string{
-		"text":  {ModelGPT4o, ModelGPT4oMini, ModelGPT4Turbo},
-		"image": {ModelGPT4o, ModelGPT4oMini, ModelGPT4Turbo},
+		"text":   {ModelGPT4o, ModelGPT4oMini, ModelGPT4Turbo},
+		"image":  {ModelGPT4o, ModelGPT4oMini, ModelGPT4Turbo},
+		"vision": {ModelGPT4o, ModelGPT4oMini, ModelGPT4Turbo},
 	}
 }

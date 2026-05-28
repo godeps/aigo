@@ -7,7 +7,7 @@ import (
 )
 
 // DefaultTimeout 为未显式配置 Timeout 时的默认请求超时（含连接+TLS+首包+整体）。
-const DefaultTimeout = 3 * time.Minute
+const DefaultTimeout = 90 * time.Second
 
 // OrDefault 返回可用的 *http.Client：nil 或 Timeout==0 时使用 defaultTimeout。
 // 若 c 已有 Timeout>0，原样返回 c。

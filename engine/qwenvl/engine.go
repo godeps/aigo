@@ -307,9 +307,10 @@ func ConfigSchema() []engine.ConfigField {
 // ModelsByCapability returns known Qwen-VL models grouped by capability.
 func ModelsByCapability() map[string][]string {
 	return map[string][]string{
-		"text":  {ModelQwen36Plus, ModelQwenVLMax, ModelQwenVLPlus},
-		"image": {ModelQwen36Plus, ModelQwenVLMax, ModelQwenVLPlus},
-		"video": {ModelQwen36Plus, ModelQwenVLMax, ModelQwenVLPlus},
+		"text":   {ModelQwen36Plus, ModelQwenVLMax, ModelQwenVLPlus},
+		"image":  {ModelQwen36Plus, ModelQwenVLMax, ModelQwenVLPlus},
+		"video":  {ModelQwen36Plus, ModelQwenVLMax, ModelQwenVLPlus},
+		"vision": {ModelQwen36Plus, ModelQwenVLMax, ModelQwenVLPlus},
 	}
 }
 

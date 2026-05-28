@@ -58,8 +58,8 @@ func onProgressFromContext(ctx context.Context) OnProgress {
 	return fn
 }
 
-// onProgressV2FromContext extracts the extended progress callback from context.
-func onProgressV2FromContext(ctx context.Context) OnProgressV2 {
+// OnProgressV2FromContext extracts the extended progress callback from context.
+func OnProgressV2FromContext(ctx context.Context) OnProgressV2 {
 	fn, _ := ctx.Value(progressV2CtxKey{}).(OnProgressV2)
 	return fn
 }
@@ -102,7 +102,7 @@ func PollV2(ctx context.Context, cfg Config, fetch FetcherV2) (string, error) {
 	if onProgress == nil {
 		onProgress = onProgressFromContext(ctx)
 	}
-	onProgressV2 := onProgressV2FromContext(ctx)
+	onProgressV2 := OnProgressV2FromContext(ctx)
 
 	start := time.Now()
 	cur := interval

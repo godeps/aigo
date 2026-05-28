@@ -3,8 +3,11 @@
 package aigoerr
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -65,11 +68,36 @@ func FromHTTPResponse(resp *http.Response, body []byte, prefix string) *Error {
 	}
 }
 
-// IsRetryable checks the error chain for a retryable *Error.
+// IsRetryable checks the error chain for a retryable *Error. When no
+// structured *Error is found, it falls back to IsTransientNative to
+// detect Go-native transient errors (timeouts, network failures).
 func IsRetryable(err error) bool {
 	var ae *Error
 	if errors.As(err, &ae) {
 		return ae.Retryable
+	}
+	return IsTransientNative(err)
+}
+
+// IsTransientNative reports whether err is a Go-native transient error
+// that is safe to retry (timeout, network failure, unexpected EOF).
+// It does NOT check for *aigoerr.Error — use IsRetryable for that.
+func IsTransientNative(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+	if errors.Is(err, io.ErrUnexpectedEOF) {
+		return true
 	}
 	return false
 }

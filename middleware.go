@@ -2,13 +2,16 @@ package aigo
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math"
+	"math/rand/v2"
 	"time"
 
 	"github.com/godeps/aigo/engine"
 	"github.com/godeps/aigo/engine/aigoerr"
+	"github.com/godeps/aigo/engine/poll"
 	"github.com/godeps/aigo/workflow"
 )
 
@@ -51,6 +54,8 @@ type retryEngine struct {
 }
 
 func (e *retryEngine) Execute(ctx context.Context, graph workflow.Graph) (engine.Result, error) {
+	onRetry := poll.OnProgressV2FromContext(ctx)
+	start := time.Now()
 	var lastErr error
 	for attempt := 0; attempt <= e.maxRetries; attempt++ {
 		r, err := e.next.Execute(ctx, graph)
@@ -64,9 +69,14 @@ func (e *retryEngine) Execute(ctx context.Context, graph workflow.Graph) (engine
 		if ctx.Err() != nil {
 			return engine.Result{}, ctx.Err()
 		}
-		// Exponential backoff: 1s, 2s, 4s, ...
+		if onRetry != nil {
+			onRetry(poll.ProgressInfo{
+				Attempt: attempt + 1,
+				Percent: -1,
+			})
+		}
 		if attempt < e.maxRetries {
-			delay := time.Duration(math.Pow(2, float64(attempt))) * time.Second
+			delay := retryDelay(err, attempt)
 			timer := time.NewTimer(delay)
 			select {
 			case <-ctx.Done():
@@ -76,5 +86,19 @@ func (e *retryEngine) Execute(ctx context.Context, graph workflow.Graph) (engine
 			}
 		}
 	}
-	return engine.Result{}, lastErr
+	return engine.Result{}, fmt.Errorf("all %d retries exhausted in %s: %w",
+		e.maxRetries, time.Since(start).Truncate(time.Millisecond), lastErr)
+}
+
+// retryDelay returns the wait duration before the next retry attempt.
+// It respects Retry-After from server responses; otherwise uses exponential
+// backoff with ±25% jitter to avoid thundering herd on concurrent retries.
+func retryDelay(err error, attempt int) time.Duration {
+	var ae *aigoerr.Error
+	if errors.As(err, &ae) && ae.RetryAfter > 0 {
+		return ae.RetryAfter
+	}
+	base := time.Duration(math.Pow(2, float64(attempt))) * time.Second
+	jitter := time.Duration(float64(base) * (0.75 + rand.Float64()*0.5))
+	return jitter
 }
