@@ -81,13 +81,19 @@ func TestRunQwenASR(t *testing.T) {
 				srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					var payload map[string]any
 					if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-						t.Fatalf("decode request: %v", err)
+						t.Errorf("decode request: %v", err)
+						http.Error(w, "test assertion failed", http.StatusInternalServerError)
+						return
 					}
 					if payload["model"] != "qwen3-asr-flash" {
-						t.Fatalf("expected model qwen3-asr-flash, got %v", payload["model"])
+						t.Errorf("expected model qwen3-asr-flash, got %v", payload["model"])
+						http.Error(w, "test assertion failed", http.StatusInternalServerError)
+						return
 					}
 					if r.Header.Get("Authorization") != "Bearer test-key" {
-						t.Fatalf("missing auth header")
+						t.Errorf("missing auth header")
+						http.Error(w, "test assertion failed", http.StatusInternalServerError)
+						return
 					}
 
 					w.WriteHeader(tt.respCode)

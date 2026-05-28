@@ -18,7 +18,9 @@ func TestExecuteImagineWithPoll(t *testing.T) {
 	var pollCount int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.Header.Get("X-API-Key"); got != "test-key" {
-			t.Fatalf("X-API-Key = %q, want %q", got, "test-key")
+			t.Errorf("X-API-Key = %q, want %q", got, "test-key")
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 
@@ -27,10 +29,14 @@ func TestExecuteImagineWithPoll(t *testing.T) {
 
 		if r.URL.Path == "/mj/v2/imagine" {
 			if body["prompt"] != "a beautiful sunset" {
-				t.Fatalf("prompt = %v", body["prompt"])
+				t.Errorf("prompt = %v", body["prompt"])
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			if body["process_mode"] != "fast" {
-				t.Fatalf("process_mode = %v", body["process_mode"])
+				t.Errorf("process_mode = %v", body["process_mode"])
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			w.Write([]byte(`{"task_id":"task-abc-123"}`))
 			return
@@ -38,7 +44,9 @@ func TestExecuteImagineWithPoll(t *testing.T) {
 
 		if r.URL.Path == "/mj/v2/fetch" {
 			if body["task_id"] != "task-abc-123" {
-				t.Fatalf("task_id = %v", body["task_id"])
+				t.Errorf("task_id = %v", body["task_id"])
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			count := atomic.AddInt32(&pollCount, 1)
 			if count < 2 {
@@ -49,7 +57,9 @@ func TestExecuteImagineWithPoll(t *testing.T) {
 			return
 		}
 
-		t.Fatalf("unexpected path: %s", r.URL.Path)
+		t.Errorf("unexpected path: %s", r.URL.Path)
+		http.Error(w, "test assertion failed", http.StatusInternalServerError)
+		return
 	}))
 	defer server.Close()
 
@@ -191,7 +201,9 @@ func TestMissingPrompt(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("server should not be called")
+		t.Error("server should not be called")
+		http.Error(w, "test assertion failed", http.StatusInternalServerError)
+		return
 	}))
 	defer server.Close()
 

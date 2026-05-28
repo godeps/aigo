@@ -17,13 +17,19 @@ func TestExecute_TextOnly(t *testing.T) {
 	var gotPayload map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/chat/completions" {
-			t.Fatalf("path = %q, want /chat/completions", r.URL.Path)
+			t.Errorf("path = %q, want /chat/completions", r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		if got := r.Header.Get("Authorization"); got != "Bearer test-key" {
-			t.Fatalf("Authorization = %q", got)
+			t.Errorf("Authorization = %q", got)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		if err := json.NewDecoder(r.Body).Decode(&gotPayload); err != nil {
-			t.Fatalf("decode body: %v", err)
+			t.Errorf("decode body: %v", err)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"This is a description."}}]}`))
@@ -71,7 +77,9 @@ func TestExecute_WithImage(t *testing.T) {
 	var gotPayload map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := json.NewDecoder(r.Body).Decode(&gotPayload); err != nil {
-			t.Fatalf("decode body: %v", err)
+			t.Errorf("decode body: %v", err)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"The image shows a cat."}}]}`))

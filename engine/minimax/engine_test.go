@@ -108,10 +108,14 @@ func TestRunMusic_RequestFormat(t *testing.T) {
 		json.NewDecoder(r.Body).Decode(&gotPayload)
 
 		if r.Header.Get("Authorization") != "Bearer test-key" {
-			t.Fatal("missing or incorrect auth header")
+			t.Error("missing or incorrect auth header")
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		if r.Header.Get("Content-Type") != "application/json" {
-			t.Fatal("missing content-type header")
+			t.Error("missing content-type header")
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 
 		w.WriteHeader(200)

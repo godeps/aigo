@@ -16,21 +16,31 @@ func TestExecuteCallsAPI(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/images/generations" {
-			t.Fatalf("path = %q", r.URL.Path)
+			t.Errorf("path = %q", r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		if got := r.Header.Get("Authorization"); got != "Bearer test-key" {
-			t.Fatalf("Authorization = %q", got)
+			t.Errorf("Authorization = %q", got)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		var body map[string]any
 		json.NewDecoder(r.Body).Decode(&body)
 		if body["prompt"] != "a futuristic cityscape" {
-			t.Fatalf("prompt = %v", body["prompt"])
+			t.Errorf("prompt = %v", body["prompt"])
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		if body["model"] != ModelRecraftV3 {
-			t.Fatalf("model = %v", body["model"])
+			t.Errorf("model = %v", body["model"])
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		if body["style"] != StyleRealisticImage {
-			t.Fatalf("style = %v", body["style"])
+			t.Errorf("style = %v", body["style"])
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"data":[{"url":"https://recraft.ai/image.png"}]}`))
@@ -61,7 +71,9 @@ func TestExecuteGraphStyleOverride(t *testing.T) {
 		var body map[string]any
 		json.NewDecoder(r.Body).Decode(&body)
 		if body["style"] != StyleVectorIllustration {
-			t.Fatalf("style = %v, want %v", body["style"], StyleVectorIllustration)
+			t.Errorf("style = %v, want %v", body["style"], StyleVectorIllustration)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"data":[{"url":"https://recraft.ai/vec.png"}]}`))

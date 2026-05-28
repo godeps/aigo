@@ -219,13 +219,19 @@ func TestRunGeminiGenerateContent(t *testing.T) {
 	var gotPayload map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.Contains(r.URL.Path, ":generateContent") {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		if r.Method != http.MethodPost {
-			t.Fatalf("unexpected method: %s", r.Method)
+			t.Errorf("unexpected method: %s", r.Method)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		if err := json.NewDecoder(r.Body).Decode(&gotPayload); err != nil {
-			t.Fatalf("decode body: %v", err)
+			t.Errorf("decode body: %v", err)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"candidates":[{"content":{"parts":[{"inlineData":{"mimeType":"image/png","data":"AAEC"}}]}}]}`))

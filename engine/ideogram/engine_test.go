@@ -18,10 +18,14 @@ func TestExecuteSuccess(t *testing.T) {
 	var gotPayload map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/generate" {
-			t.Fatalf("unexpected %s %s", r.Method, r.URL.Path)
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		if got := r.Header.Get("Api-Key"); got != "test-key" {
-			t.Fatalf("Api-Key = %q", got)
+			t.Errorf("Api-Key = %q", got)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		json.NewDecoder(r.Body).Decode(&gotPayload)
 		w.Header().Set("Content-Type", "application/json")

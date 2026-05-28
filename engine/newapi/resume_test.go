@@ -14,7 +14,9 @@ func TestResumeOpenAIVideo(t *testing.T) {
 	var calls int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			t.Fatalf("unexpected method: %s", r.Method)
+			t.Errorf("unexpected method: %s", r.Method)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		calls++
 		w.Header().Set("Content-Type", "application/json")

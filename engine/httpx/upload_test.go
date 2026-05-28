@@ -26,7 +26,9 @@ func TestUploadReader(t *testing.T) {
 		}
 
 		if err := r.ParseMultipartForm(10 << 20); err != nil {
-			t.Fatalf("ParseMultipartForm: %v", err)
+			t.Errorf("ParseMultipartForm: %v", err)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 
 		// Check extra field.
@@ -37,7 +39,9 @@ func TestUploadReader(t *testing.T) {
 		// Check file field.
 		file, header, err := r.FormFile("image")
 		if err != nil {
-			t.Fatalf("FormFile: %v", err)
+			t.Errorf("FormFile: %v", err)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		defer file.Close()
 		if header.Filename != "photo.jpg" {
@@ -80,11 +84,15 @@ func TestUploadFile(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseMultipartForm(10 << 20); err != nil {
-			t.Fatalf("ParseMultipartForm: %v", err)
+			t.Errorf("ParseMultipartForm: %v", err)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		file, header, err := r.FormFile("file")
 		if err != nil {
-			t.Fatalf("FormFile: %v", err)
+			t.Errorf("FormFile: %v", err)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		defer file.Close()
 		if header.Filename != "test.txt" {
@@ -102,6 +110,82 @@ func TestUploadFile(t *testing.T) {
 		"",
 		"file",
 		path,
+		nil,
+		"test",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != "ok" {
+		t.Errorf("unexpected response: %s", body)
+	}
+}
+
+func TestUploadFile_NotFound(t *testing.T) {
+	t.Parallel()
+	_, err := UploadFile(
+		context.Background(),
+		http.DefaultClient,
+		"http://localhost",
+		"",
+		"file",
+		"/nonexistent/path/to/file.txt",
+		nil,
+		"test",
+	)
+	if err == nil {
+		t.Fatal("expected error for nonexistent file")
+	}
+	if !strings.Contains(err.Error(), "open file") {
+		t.Errorf("expected open file error, got: %v", err)
+	}
+}
+
+func TestUploadReader_CancelledContext(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+	}))
+	defer srv.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := UploadReader(
+		ctx,
+		http.DefaultClient,
+		srv.URL,
+		"key",
+		"file",
+		"test.txt",
+		strings.NewReader("data"),
+		nil,
+		"test",
+	)
+	if err == nil {
+		t.Fatal("expected error from cancelled context")
+	}
+}
+
+func TestUploadReader_NoAuth(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if auth := r.Header.Get("Authorization"); auth != "" {
+			t.Errorf("expected no auth header, got %q", auth)
+		}
+		w.WriteHeader(200)
+		w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+
+	body, err := UploadReader(
+		context.Background(),
+		http.DefaultClient,
+		srv.URL,
+		"",
+		"file",
+		"test.txt",
+		strings.NewReader("data"),
 		nil,
 		"test",
 	)

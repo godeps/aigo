@@ -16,7 +16,9 @@ func TestExecuteImage(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/images/generations" || r.Method != http.MethodPost {
-			t.Fatalf("unexpected %s %s", r.Method, r.URL.Path)
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"data":[{"url":"https://cdn.example.com/1.png"}]}`))
@@ -60,7 +62,9 @@ func TestExecuteVideoPoll(t *testing.T) {
 				_, _ = w.Write([]byte(`{"task_id":"t1","status":"completed","url":"https://v.example.com/out.mp4"}`))
 			}
 		default:
-			t.Fatalf("unexpected %s %s", r.Method, r.URL.Path)
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 	}))
 	defer server.Close()
@@ -105,7 +109,9 @@ func TestExecuteKlingText2Video(t *testing.T) {
 				_, _ = w.Write([]byte(`{"task_id":"kt1","status":"completed","url":"https://v.example.com/k.mp4"}`))
 			}
 		default:
-			t.Fatalf("unexpected %s %s", r.Method, r.URL.Path)
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 	}))
 	defer server.Close()
@@ -136,7 +142,9 @@ func TestExecuteSpeechDataURI(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/audio/speech" {
-			t.Fatalf("path %s", r.URL.Path)
+			t.Errorf("path %s", r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		w.Header().Set("Content-Type", "audio/mpeg")
 		_, _ = w.Write([]byte{0xff, 0xf3, 0x90, 0x00})
@@ -169,10 +177,14 @@ func TestExecuteGPTImage2OmitsResponseFormatAndStyle(t *testing.T) {
 	var gotPayload map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/images/generations" || r.Method != http.MethodPost {
-			t.Fatalf("unexpected %s %s", r.Method, r.URL.Path)
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		if err := json.NewDecoder(r.Body).Decode(&gotPayload); err != nil {
-			t.Fatalf("decode body: %v", err)
+			t.Errorf("decode body: %v", err)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"data":[{"b64_json":"AAECAw=="}]}`))
@@ -234,7 +246,9 @@ func TestExecuteGPTImage2OutputFormatDrivesDataURIMIME(t *testing.T) {
 	var gotPayload map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := json.NewDecoder(r.Body).Decode(&gotPayload); err != nil {
-			t.Fatalf("decode body: %v", err)
+			t.Errorf("decode body: %v", err)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"data":[{"b64_json":"AAECAw=="}]}`))

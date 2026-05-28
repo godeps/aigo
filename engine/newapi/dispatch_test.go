@@ -108,12 +108,16 @@ func TestExecuteImageEdits(t *testing.T) {
 			w.Write(pngData)
 		case r.URL.Path == "/v1/images/edits":
 			if r.Method != http.MethodPost {
-				t.Fatalf("unexpected method: %s", r.Method)
+				t.Errorf("unexpected method: %s", r.Method)
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			w.Header().Set("Content-Type", "application/json")
 			w.Write([]byte(`{"data":[{"url":"https://cdn.example.com/edited.png"}]}`))
 		default:
-			t.Fatalf("unexpected %s %s", r.Method, r.URL.Path)
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 	}))
 	defer server.Close()

@@ -164,3 +164,152 @@ func TestNewRetryClient(t *testing.T) {
 		t.Error("expected RetryTransport")
 	}
 }
+
+func TestNewRetryClient_DefaultTimeout(t *testing.T) {
+	t.Parallel()
+	c := NewRetryClient(1, 0)
+	if c.Timeout != DefaultTimeout {
+		t.Errorf("expected DefaultTimeout %v, got %v", DefaultTimeout, c.Timeout)
+	}
+}
+
+func TestRetryTransport_RetryAfterPositiveSeconds(t *testing.T) {
+	t.Parallel()
+	var count atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := count.Add(1)
+		if n == 1 {
+			w.Header().Set("Retry-After", "1")
+			w.WriteHeader(429)
+			return
+		}
+		w.WriteHeader(200)
+	}))
+	defer srv.Close()
+
+	client := &http.Client{
+		Transport: &RetryTransport{MaxRetries: 2, BaseDelay: time.Millisecond},
+	}
+	start := time.Now()
+	resp, err := client.Get(srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	elapsed := time.Since(start)
+	if resp.StatusCode != 200 {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+	// Should wait ~1s due to Retry-After: 1
+	if elapsed < 900*time.Millisecond {
+		t.Errorf("expected >=900ms wait for Retry-After, got %v", elapsed)
+	}
+}
+
+func TestRetryTransport_NetworkError(t *testing.T) {
+	t.Parallel()
+	// Use a server that closes immediately to produce network errors.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+	}))
+	// Close server immediately so all connections fail.
+	srv.Close()
+
+	client := &http.Client{
+		Transport: &RetryTransport{MaxRetries: 1, BaseDelay: time.Millisecond},
+	}
+	_, err := client.Get(srv.URL)
+	if err == nil {
+		t.Fatal("expected error for closed server")
+	}
+}
+
+func TestRetryTransport_MaxDelayClamp(t *testing.T) {
+	t.Parallel()
+	var count atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := count.Add(1)
+		if n <= 3 {
+			w.WriteHeader(500)
+			return
+		}
+		w.WriteHeader(200)
+	}))
+	defer srv.Close()
+
+	client := &http.Client{
+		Transport: &RetryTransport{
+			MaxRetries: 4,
+			BaseDelay:  time.Millisecond,
+			MaxDelay:   2 * time.Millisecond,
+		},
+	}
+	resp, err := client.Get(srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+	if got := count.Load(); got != 4 {
+		t.Errorf("expected 4 attempts, got %d", got)
+	}
+}
+
+func TestParseRetryAfterHeader(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		val  string
+		want bool // true if duration should be > 0
+	}{
+		{"empty", "", false},
+		{"zero", "0", false},
+		{"positive_seconds", "2", true},
+		{"negative_seconds", "-5", false},
+		{"invalid", "not-a-number", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := parseRetryAfterHeader(tt.val)
+			if tt.want && got <= 0 {
+				t.Errorf("parseRetryAfterHeader(%q) = %v, want > 0", tt.val, got)
+			}
+			if !tt.want && got > 0 {
+				t.Errorf("parseRetryAfterHeader(%q) = %v, want <= 0", tt.val, got)
+			}
+		})
+	}
+}
+
+func TestRetryTransport_HeadMethod(t *testing.T) {
+	t.Parallel()
+	var count atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := count.Add(1)
+		if n == 1 {
+			w.WriteHeader(500)
+			return
+		}
+		w.WriteHeader(200)
+	}))
+	defer srv.Close()
+
+	client := &http.Client{
+		Transport: &RetryTransport{MaxRetries: 2, BaseDelay: time.Millisecond},
+	}
+	req, _ := http.NewRequest(http.MethodHead, srv.URL, nil)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Errorf("expected 200 after retry, got %d", resp.StatusCode)
+	}
+	if got := count.Load(); got != 2 {
+		t.Errorf("HEAD should retry, expected 2 attempts, got %d", got)
+	}
+}

@@ -23,13 +23,19 @@ func TestExecuteTripoP1TextTo3D(t *testing.T) {
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == tripoEndpoint:
 			if got := r.Header.Get("Authorization"); got != "Bearer test-key" {
-				t.Fatalf("Authorization header = %q", got)
+				t.Errorf("Authorization header = %q", got)
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			if got := r.Header.Get("X-DashScope-Async"); got != "enable" {
-				t.Fatalf("X-DashScope-Async header = %q", got)
+				t.Errorf("X-DashScope-Async header = %q", got)
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			if err := json.NewDecoder(r.Body).Decode(&createPayload); err != nil {
-				t.Fatalf("decode body: %v", err)
+				t.Errorf("decode body: %v", err)
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"output":{"task_id":"tripo-t-task","task_status":"PENDING"}}`))
@@ -37,7 +43,9 @@ func TestExecuteTripoP1TextTo3D(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"output":{"task_id":"tripo-t-task","task_status":"SUCCEEDED","results":[{"pbr_model_url":"https://cdn.tripo3d.com/cat.glb","rendered_image_url":"https://cdn.tripo3d.com/cat.webp"}]}}`))
 		default:
-			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 	}))
 	defer server.Close()
@@ -97,7 +105,9 @@ func TestExecuteTripoP1SingleImageTo3D(t *testing.T) {
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == tripoEndpoint:
 			if err := json.NewDecoder(r.Body).Decode(&createPayload); err != nil {
-				t.Fatalf("decode body: %v", err)
+				t.Errorf("decode body: %v", err)
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"output":{"task_id":"tripo-i-task","task_status":"PENDING"}}`))
@@ -105,7 +115,9 @@ func TestExecuteTripoP1SingleImageTo3D(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"output":{"task_id":"tripo-i-task","task_status":"SUCCEEDED","results":[{"pbr_model_url":"https://cdn.tripo3d.com/single.glb"}]}}`))
 		default:
-			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 	}))
 	defer server.Close()
@@ -151,7 +163,9 @@ func TestExecuteTripoH31MultiImageTo3D(t *testing.T) {
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == tripoEndpoint:
 			if err := json.NewDecoder(r.Body).Decode(&createPayload); err != nil {
-				t.Fatalf("decode body: %v", err)
+				t.Errorf("decode body: %v", err)
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"output":{"task_id":"tripo-m-task","task_status":"PENDING"}}`))
@@ -159,7 +173,9 @@ func TestExecuteTripoH31MultiImageTo3D(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"output":{"task_id":"tripo-m-task","task_status":"SUCCEEDED","results":[{"pbr_model_url":"https://cdn.tripo3d.com/multi.glb"}]}}`))
 		default:
-			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 	}))
 	defer server.Close()
@@ -226,7 +242,9 @@ func TestExecuteTripoP1OmitsParametersWhenEmpty(t *testing.T) {
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == tripoEndpoint:
 			if err := json.NewDecoder(r.Body).Decode(&createPayload); err != nil {
-				t.Fatalf("decode body: %v", err)
+				t.Errorf("decode body: %v", err)
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"output":{"task_id":"tripo-x-task","task_status":"PENDING"}}`))
@@ -263,7 +281,9 @@ func TestExecuteTripoRejectsTooManyImages(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("unexpected upstream call: %s %s", r.Method, r.URL.Path)
+		t.Errorf("unexpected upstream call: %s %s", r.Method, r.URL.Path)
+		http.Error(w, "test assertion failed", http.StatusInternalServerError)
+		return
 	}))
 	defer server.Close()
 
@@ -298,7 +318,9 @@ func TestExecuteTripoRejectsLongPrompt(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("unexpected upstream call: %s %s", r.Method, r.URL.Path)
+		t.Errorf("unexpected upstream call: %s %s", r.Method, r.URL.Path)
+		http.Error(w, "test assertion failed", http.StatusInternalServerError)
+		return
 	}))
 	defer server.Close()
 
@@ -325,7 +347,9 @@ func TestExecuteTripoMissingInputs(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("unexpected upstream call: %s %s", r.Method, r.URL.Path)
+		t.Errorf("unexpected upstream call: %s %s", r.Method, r.URL.Path)
+		http.Error(w, "test assertion failed", http.StatusInternalServerError)
+		return
 	}))
 	defer server.Close()
 

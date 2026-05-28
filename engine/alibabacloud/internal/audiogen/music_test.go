@@ -30,10 +30,14 @@ func TestRunMusic_PromptOnly(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		json.NewDecoder(r.Body).Decode(&gotPayload)
 		if r.Header.Get("Authorization") != "Bearer test-key" {
-			t.Fatal("missing auth header")
+			t.Error("missing auth header")
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		if r.URL.Path != "/services/audio/music/generation" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		w.WriteHeader(200)
 		w.Write([]byte(`{"output":{"audio":{"url":"https://example.com/song.mp3"}}}`))

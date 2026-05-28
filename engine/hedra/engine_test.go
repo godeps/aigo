@@ -18,7 +18,9 @@ func TestExecuteWithPoll(t *testing.T) {
 	var pollCount int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.Header.Get("X-API-KEY"); got != "test-key" {
-			t.Fatalf("X-API-KEY = %q", got)
+			t.Errorf("X-API-KEY = %q", got)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 
@@ -26,16 +28,24 @@ func TestExecuteWithPoll(t *testing.T) {
 			var body map[string]any
 			json.NewDecoder(r.Body).Decode(&body)
 			if body["text"] != "Hello world" {
-				t.Fatalf("text = %v", body["text"])
+				t.Errorf("text = %v", body["text"])
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			if body["avatarImage"] != "https://example.com/face.png" {
-				t.Fatalf("avatarImage = %v", body["avatarImage"])
+				t.Errorf("avatarImage = %v", body["avatarImage"])
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			if body["voiceUrl"] != "https://example.com/audio.mp3" {
-				t.Fatalf("voiceUrl = %v", body["voiceUrl"])
+				t.Errorf("voiceUrl = %v", body["voiceUrl"])
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			if body["audioSource"] != "audio" {
-				t.Fatalf("audioSource = %v", body["audioSource"])
+				t.Errorf("audioSource = %v", body["audioSource"])
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			w.Write([]byte(`{"jobId":"proj-abc"}`))
 			return
@@ -250,13 +260,19 @@ func TestExecuteTTS(t *testing.T) {
 			var body map[string]any
 			json.NewDecoder(r.Body).Decode(&body)
 			if body["voiceId"] != "voice-123" {
-				t.Fatalf("voiceId = %v", body["voiceId"])
+				t.Errorf("voiceId = %v", body["voiceId"])
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			if body["audioSource"] != "tts" {
-				t.Fatalf("audioSource = %v, want tts", body["audioSource"])
+				t.Errorf("audioSource = %v, want tts", body["audioSource"])
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			if body["aspectRatio"] != "16:9" {
-				t.Fatalf("aspectRatio = %v", body["aspectRatio"])
+				t.Errorf("aspectRatio = %v", body["aspectRatio"])
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			w.Write([]byte(`{"jobId":"proj-tts"}`))
 			return

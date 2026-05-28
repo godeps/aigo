@@ -18,24 +18,34 @@ func TestExecute_TextOnly(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			t.Fatalf("method = %q, want POST", r.Method)
+			t.Errorf("method = %q, want POST", r.Method)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		if !strings.Contains(r.URL.Path, "generateContent") {
-			t.Fatalf("path = %q, want contains generateContent", r.URL.Path)
+			t.Errorf("path = %q, want contains generateContent", r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		if ct := r.Header.Get("Content-Type"); !strings.Contains(ct, "application/json") {
-			t.Fatalf("Content-Type = %q", ct)
+			t.Errorf("Content-Type = %q", ct)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		// Verify no API key in URL
 		if r.URL.Query().Get("key") != "" {
-			t.Fatal("API key should not be in URL query params")
+			t.Error("API key should not be in URL query params")
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 
 		var body map[string]any
 		json.NewDecoder(r.Body).Decode(&body)
 		contents, _ := body["contents"].([]any)
 		if len(contents) == 0 {
-			t.Fatal("empty contents")
+			t.Error("empty contents")
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -76,7 +86,9 @@ func TestExecute_WithImage(t *testing.T) {
 
 		contents, _ := body["contents"].([]any)
 		if len(contents) == 0 {
-			t.Fatal("empty contents")
+			t.Error("empty contents")
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -120,7 +132,9 @@ func TestExecute_MissingPrompt(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("should not reach server")
+		t.Error("should not reach server")
+		http.Error(w, "test assertion failed", http.StatusInternalServerError)
+		return
 	}))
 	defer server.Close()
 
@@ -318,3 +332,93 @@ func TestBuildSDKPart_CustomMimeURL(t *testing.T) {
 		t.Fatalf("MIMEType = %q, want video/webm", p.FileData.MIMEType)
 	}
 }
+
+func TestDefaultProvider(t *testing.T) {
+	t.Setenv("GEMINI_API_KEY", "test-dp-key")
+
+	p := DefaultProvider()
+	if p.Name != "gemini" {
+		t.Fatalf("Name = %q, want gemini", p.Name)
+	}
+	if len(p.Configs) != 1 {
+		t.Fatalf("len(Configs) = %d, want 1", len(p.Configs))
+	}
+	cfg := p.Configs[0]
+	if cfg.Name != "gemini" {
+		t.Fatalf("Config.Name = %q, want gemini", cfg.Name)
+	}
+	if len(cfg.EnvVars) != 1 || cfg.EnvVars[0] != "GEMINI_API_KEY" {
+		t.Fatalf("EnvVars = %v", cfg.EnvVars)
+	}
+}
+
+func TestNew_GoogleAPIKeyFallback(t *testing.T) {
+	t.Setenv("GEMINI_API_KEY", "")
+	t.Setenv("GOOGLE_API_KEY", "google-fallback-key")
+
+	e, err := New(Config{})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if e == nil {
+		t.Fatal("expected non-nil engine")
+	}
+}
+
+func TestNew_BaseURLFromEnv(t *testing.T) {
+	t.Setenv("GEMINI_API_KEY", "env-key")
+	t.Setenv("GEMINI_BASE_URL", "https://custom.example.com/api")
+
+	e, err := New(Config{})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if e.model != ModelGemini20Flash {
+		t.Fatalf("model = %q, want %q", e.model, ModelGemini20Flash)
+	}
+}
+
+func TestExecute_WithVideo(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"candidates":[{"content":{"parts":[{"text":"A rocket launching into space."}]}}]}`))
+	}))
+	defer server.Close()
+
+	e, err := New(Config{
+		APIKey:  "test-key",
+		BaseURL: server.URL,
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	graph := workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "describe this video"}},
+		"2": {ClassType: "LoadVideo", Inputs: map[string]any{"url": "https://example.com/vid.mp4"}},
+	}
+
+	result, err := e.Execute(context.Background(), graph)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if result.Value != "A rocket launching into space." {
+		t.Fatalf("Value = %q", result.Value)
+	}
+}
+
+func TestModelInfos(t *testing.T) {
+	t.Parallel()
+	infos := ModelInfos()
+	if len(infos) == 0 {
+		t.Fatal("ModelInfos() returned empty")
+	}
+	for _, info := range infos {
+		if info.Provider != "gemini" {
+			t.Errorf("Provider = %q, want gemini", info.Provider)
+		}
+	}
+}
+

@@ -687,23 +687,65 @@ go run ./examples/agent_auto_router
 go test ./... -cover
 ```
 
-Core packages maintain high test coverage with `httptest`-based integration tests and table-driven unit tests. Key coverage highlights:
+All 51 packages achieve 80%+ statement coverage with `httptest`-based integration tests and table-driven unit tests. Coverage overview:
 
 | Package | Coverage |
 |---------|----------|
 | `engine/newapi/internal/poll` | 100% |
+| `engine/alibabacloud/internal/threedgen` | 100% |
+| `engine/embed/gemini` | 98% |
+| `engine/embed` | 97% |
 | `engine/alibabacloud/internal/graphx` | 95% |
+| `aigo` (root) | 93% |
+| `engine/google` | 93% |
+| `engine/luma` | 92% |
+| `engine/ark` | 92% |
+| `engine/openrouter` | 92% |
+| `engine/liblib` | 92% |
 | `workflow/resolve` | 91% |
+| `engine/httpx` | 91% |
+| `engine/runninghub` | 91% |
+| `engine/comfyui` | 91% |
 | `engine/alibabacloud/internal/imggen` | 91% |
-| `engine/embed/jina` | 88% |
-| `engine/embed/voyage` | 86% |
-| `engine/embed/openai` | 85% |
-| `engine/alibabacloud/internal/audiogen` | 85% |
-| `workflow` | 84% |
-| `engine/alibabacloud/internal/vidgen` | 83% |
-| `engine/newapi/internal/graph` | 82% |
-| `engine/newapi` | 73% |
+| `engine/alibabacloud/internal/async` | 91% |
+| `engine/comfydeploy` | 91% |
+| `engine/volcvoice` | 90% |
+| `engine/fal` | 90% |
 | `engine/poll` | 90% |
+| `engine/newapi` | 90% |
+| `tooldef` | 90% |
+| `engine/jimeng` | 90% |
+| `engine/openai` | 89% |
+| `engine/flux` | 89% |
+| `engine/embed/jina` | 88% |
+| `engine/newapi/internal/rt` | 88% |
+| `engine/minimax` | 86% |
+| `engine/ideogram` | 86% |
+| `engine/elevenlabs` | 86% |
+| `engine/stability` | 86% |
+| `engine/embed/voyage` | 86% |
+| `engine/aigoerr` | 86% |
+| `engine/gemini` | 86% |
+| `engine/hedra` | 86% |
+| `engine/pika` | 85% |
+| `engine/alibabacloud/internal/audiogen` | 85% |
+| `engine/runway` | 85% |
+| `engine/embed/openai` | 85% |
+| `workflow` | 84% |
+| `engine/suno` | 84% |
+| `engine/meshy` | 84% |
+| `engine/kling` | 84% |
+| `engine/embed/alibabacloud` | 84% |
+| `engine/hailuo` | 84% |
+| `engine/alibabacloud` | 83% |
+| `engine/replicate` | 83% |
+| `engine/gpt4o` | 83% |
+| `engine/alibabacloud/internal/vidgen` | 83% |
+| `engine/qwenvl` | 83% |
+| `engine/newapi/internal/graph` | 82% |
+| `engine/recraft` | 81% |
+| `engine` | 81% |
+| `engine/midjourney` | 80% |
 
 ## Notes
 

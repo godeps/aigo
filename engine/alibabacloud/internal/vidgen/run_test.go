@@ -21,7 +21,9 @@ func newTestServer(t *testing.T, taskID string) *httptest.Server {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(resp); err != nil {
-			t.Fatalf("failed to encode response: %v", err)
+			t.Errorf("failed to encode response: %v", err)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 	}))
 }

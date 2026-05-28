@@ -9,8 +9,8 @@ import (
 func TestAllTools(t *testing.T) {
 	t.Parallel()
 	tools := AllTools()
-	if len(tools) != 9 {
-		t.Fatalf("expected 9 tools, got %d", len(tools))
+	if len(tools) != 10 {
+		t.Fatalf("expected 10 tools, got %d", len(tools))
 	}
 
 	names := map[string]bool{}

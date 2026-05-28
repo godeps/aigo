@@ -36,7 +36,9 @@ func TestRunSoraVideoFullFlow(t *testing.T) {
 			}
 
 		default:
-			t.Fatalf("unexpected %s %s", r.Method, r.URL.Path)
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 	}))
 	defer server.Close()
@@ -78,7 +80,9 @@ func TestRunSoraVideoNoWait(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/v1/videos" {
-			t.Fatalf("unexpected %s %s", r.Method, r.URL.Path)
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"id":"sora-id-123","status":"queued"}`))
@@ -119,7 +123,9 @@ func TestRunSoraVideoFailed(t *testing.T) {
 			w.Write([]byte(`{"id":"sora-fail","status":"failed","error":{"message":"content policy violation"}}`))
 
 		default:
-			t.Fatalf("unexpected %s %s", r.Method, r.URL.Path)
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 	}))
 	defer server.Close()

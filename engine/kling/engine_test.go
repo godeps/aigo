@@ -19,28 +19,41 @@ func TestExecuteText2Video(t *testing.T) {
 	var pollCount int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.Header.Get("Authorization"); got != "Bearer test-key" {
-			t.Fatalf("Authorization = %q", got)
+			t.Errorf("Authorization = %q", got)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 
 		if r.Method == http.MethodPost {
 			if !strings.HasSuffix(r.URL.Path, "/v1/videos/text2video") {
-				t.Fatalf("unexpected POST path: %s", r.URL.Path)
+				t.Errorf("unexpected POST path: %s", r.URL.Path)
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			var body map[string]any
-			json.NewDecoder(r.Body).Decode(&body)
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Errorf("decode: %v", err)
+				return
+			}
 			if body["prompt"] != "a rocket launch" {
-				t.Fatalf("prompt = %v", body["prompt"])
+				t.Errorf("prompt = %v", body["prompt"])
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			if body["model_name"] != ModelKlingV2 {
-				t.Fatalf("model_name = %v", body["model_name"])
+				t.Errorf("model_name = %v", body["model_name"])
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			w.Write([]byte(`{"data":{"task_id":"task-123"}}`))
 			return
 		}
 		// GET poll
 		if !strings.Contains(r.URL.Path, "task-123") {
-			t.Fatalf("unexpected poll path: %s", r.URL.Path)
+			t.Errorf("unexpected poll path: %s", r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		count := atomic.AddInt32(&pollCount, 1)
 		if count < 2 {
@@ -81,12 +94,19 @@ func TestExecuteImage2Video(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.Method == http.MethodPost {
 			if !strings.HasSuffix(r.URL.Path, "/v1/videos/image2video") {
-				t.Fatalf("expected image2video endpoint, got %s", r.URL.Path)
+				t.Errorf("expected image2video endpoint, got %s", r.URL.Path)
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			var body map[string]any
-			json.NewDecoder(r.Body).Decode(&body)
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Errorf("decode: %v", err)
+				return
+			}
 			if body["image"] != "https://example.com/img.png" {
-				t.Fatalf("image = %v", body["image"])
+				t.Errorf("image = %v", body["image"])
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			w.Write([]byte(`{"data":{"task_id":"task-i2v"}}`))
 			return
@@ -123,13 +143,17 @@ func TestExecuteImage(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.Method == http.MethodPost {
 			if !strings.HasSuffix(r.URL.Path, "/v1/images/generations") {
-				t.Fatalf("expected images endpoint, got %s", r.URL.Path)
+				t.Errorf("expected images endpoint, got %s", r.URL.Path)
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			w.Write([]byte(`{"data":{"task_id":"img-001"}}`))
 			return
 		}
 		if !strings.Contains(r.URL.Path, "/v1/images/") {
-			t.Fatalf("expected image poll path, got %s", r.URL.Path)
+			t.Errorf("expected image poll path, got %s", r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		w.Write([]byte(`{"data":{"task_status":"succeed","task_result":{"images":[{"url":"https://cdn.klingai.com/photo.png"}]}}}`))
 	}))
@@ -229,7 +253,9 @@ func TestResume(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if !strings.Contains(r.URL.Path, "task-resume") {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		w.Write([]byte(`{"data":{"task_status":"completed","task_result":{"videos":[{"url":"https://cdn.klingai.com/resumed.mp4"}]}}}`))
 	}))
@@ -324,5 +350,93 @@ func TestCapabilitiesImage(t *testing.T) {
 	}
 	if cap.MaxDuration != 0 {
 		t.Fatalf("MaxDuration = %d, want 0 for image", cap.MaxDuration)
+	}
+}
+
+func TestDefaultProvider(t *testing.T) {
+	t.Parallel()
+	p := DefaultProvider()
+	if p.Name != "kling" {
+		t.Fatalf("Name = %q, want kling", p.Name)
+	}
+	if len(p.Configs) != 2 {
+		t.Fatalf("len(Configs) = %d, want 2", len(p.Configs))
+	}
+	if p.Configs[0].Name != "kling-video" {
+		t.Fatalf("Configs[0].Name = %q, want kling-video", p.Configs[0].Name)
+	}
+	if p.Configs[1].Name != "kling-image" {
+		t.Fatalf("Configs[1].Name = %q, want kling-image", p.Configs[1].Name)
+	}
+	for _, cfg := range p.Configs {
+		if len(cfg.EnvVars) != 1 || cfg.EnvVars[0] != "KLING_API_KEY" {
+			t.Fatalf("EnvVars = %v", cfg.EnvVars)
+		}
+		if cfg.Engine == nil {
+			t.Fatalf("Engine is nil for %s", cfg.Name)
+		}
+	}
+}
+
+func TestExecuteImageWithOptions(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodPost {
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Errorf("decode: %v", err)
+				return
+			}
+			if body["negative_prompt"] != "blurry" {
+				t.Errorf("negative_prompt = %v, want blurry", body["negative_prompt"])
+			}
+			if body["aspect_ratio"] != "16:9" {
+				t.Errorf("aspect_ratio = %v, want 16:9", body["aspect_ratio"])
+			}
+			if body["image"] != "https://example.com/ref.png" {
+				t.Errorf("image = %v", body["image"])
+			}
+			w.Write([]byte(`{"data":{"task_id":"img-opts"}}`))
+			return
+		}
+		w.Write([]byte(`{"data":{"task_status":"succeed","task_result":{"images":[{"url":"https://cdn.klingai.com/opts.png"}]}}}`))
+	}))
+	defer server.Close()
+
+	e := New(Config{
+		APIKey:            "test-key",
+		BaseURL:           server.URL,
+		Endpoint:          EndpointImage,
+		WaitForCompletion: true,
+		PollInterval:      1,
+	})
+
+	graph := workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "a sunset"}},
+		"2": {ClassType: "Options", Inputs: map[string]any{"negative_prompt": "blurry", "aspect_ratio": "16:9"}},
+		"3": {ClassType: "LoadImage", Inputs: map[string]any{"url": "https://example.com/ref.png"}},
+	}
+
+	result, err := e.Execute(context.Background(), graph)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if result.Value != "https://cdn.klingai.com/opts.png" {
+		t.Fatalf("Value = %q", result.Value)
+	}
+}
+
+func TestModelInfos(t *testing.T) {
+	t.Parallel()
+	infos := ModelInfos()
+	if len(infos) == 0 {
+		t.Fatal("ModelInfos() returned empty")
+	}
+	for _, info := range infos {
+		if info.Provider != "kling" {
+			t.Errorf("Provider = %q, want kling", info.Provider)
+		}
 	}
 }

@@ -20,7 +20,9 @@ func TestExecuteWithPoll(t *testing.T) {
 	var pollCount int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.Header.Get("Authorization"); got != "Bearer test-key" {
-			t.Fatalf("Authorization = %q", got)
+			t.Errorf("Authorization = %q", got)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 
@@ -28,10 +30,14 @@ func TestExecuteWithPoll(t *testing.T) {
 			var body map[string]any
 			json.NewDecoder(r.Body).Decode(&body)
 			if body["promptText"] != "a flying car" {
-				t.Fatalf("promptText = %v", body["promptText"])
+				t.Errorf("promptText = %v", body["promptText"])
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			if body["model"] != ModelPika22 {
-				t.Fatalf("model = %v", body["model"])
+				t.Errorf("model = %v", body["model"])
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			w.Write([]byte(`{"id":"pika-001"}`))
 			return

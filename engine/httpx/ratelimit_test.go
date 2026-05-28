@@ -106,3 +106,46 @@ func TestNewRateLimitedClient(t *testing.T) {
 		t.Error("expected non-nil limiter")
 	}
 }
+
+func TestNewRateLimitedClient_DefaultTimeout(t *testing.T) {
+	t.Parallel()
+	c := NewRateLimitedClient(10, 5, 0)
+	if c.Timeout != DefaultTimeout {
+		t.Errorf("expected DefaultTimeout %v, got %v", DefaultTimeout, c.Timeout)
+	}
+}
+
+func TestNewRateLimitedClient_DefaultBurst(t *testing.T) {
+	t.Parallel()
+	c := NewRateLimitedClient(10, 0, time.Second)
+	if c.Timeout != time.Second {
+		t.Errorf("expected 1s timeout, got %v", c.Timeout)
+	}
+	rt, ok := c.Transport.(*RateLimitTransport)
+	if !ok {
+		t.Fatal("expected RateLimitTransport")
+	}
+	if rt.Limiter == nil {
+		t.Error("expected non-nil limiter")
+	}
+}
+
+func TestRateLimitTransport_NilLimiter(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+	}))
+	defer srv.Close()
+
+	client := &http.Client{
+		Transport: &RateLimitTransport{Limiter: nil},
+	}
+	resp, err := client.Get(srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+}

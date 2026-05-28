@@ -30,6 +30,7 @@ var routeTable = map[Route]routeExec{
 	RouteSoraVideos:             (*Engine).runSoraVideo,
 	RouteQwenImagesGenerations:  (*Engine).runQwenImageGenerations,
 	RouteGeminiGenerateContent:  (*Engine).runGeminiGenerateContent,
+	RouteChatCompletions:        (*Engine).runChatCompletions,
 }
 
 func (e *Engine) dispatch(ctx context.Context, apiKey string, g workflow.Graph) (string, error) {

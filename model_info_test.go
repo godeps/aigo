@@ -34,6 +34,7 @@ import (
 	_ "github.com/godeps/aigo/engine/minimax"
 	_ "github.com/godeps/aigo/engine/newapi"
 	_ "github.com/godeps/aigo/engine/openai"
+	_ "github.com/godeps/aigo/engine/qwenvl"
 	_ "github.com/godeps/aigo/engine/openrouter"
 	_ "github.com/godeps/aigo/engine/pika"
 	_ "github.com/godeps/aigo/engine/recraft"
@@ -158,6 +159,7 @@ func TestModelInfoCapabilities(t *testing.T) {
 		"image": true, "image_edit": true, "video": true, "video_edit": true,
 		"tts": true, "asr": true, "music": true, "3d": true,
 		"text": true, "voice_design": true, "embedding": true,
+		"video_understanding": true,
 	}
 
 	client := NewClient()

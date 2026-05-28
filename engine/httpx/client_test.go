@@ -34,3 +34,19 @@ func TestOrDefaultFillsZeroTimeout(t *testing.T) {
 		t.Fatal("expected cloned client")
 	}
 }
+
+func TestOrDefaultNegativeDefaultTimeout(t *testing.T) {
+	t.Parallel()
+	c := OrDefault(nil, -1)
+	if c.Timeout != DefaultTimeout {
+		t.Fatalf("expected DefaultTimeout %v, got %v", DefaultTimeout, c.Timeout)
+	}
+}
+
+func TestOrDefaultZeroDefaultTimeout(t *testing.T) {
+	t.Parallel()
+	c := OrDefault(nil, 0)
+	if c.Timeout != DefaultTimeout {
+		t.Fatalf("expected DefaultTimeout %v, got %v", DefaultTimeout, c.Timeout)
+	}
+}

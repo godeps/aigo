@@ -16,13 +16,19 @@ func TestRunQwenImageGenerations(t *testing.T) {
 	var gotPayload map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/images/generations" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		if r.Method != http.MethodPost {
-			t.Fatalf("unexpected method: %s", r.Method)
+			t.Errorf("unexpected method: %s", r.Method)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		if err := json.NewDecoder(r.Body).Decode(&gotPayload); err != nil {
-			t.Fatalf("decode: %v", err)
+			t.Errorf("decode: %v", err)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"data":[{"url":"https://cdn.example.com/qwen.png"}]}`))

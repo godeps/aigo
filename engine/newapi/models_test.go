@@ -211,10 +211,14 @@ func TestDiscoverModels_Success(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/models" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		if r.Header.Get("Authorization") != "Bearer test-key" {
-			t.Fatalf("unexpected auth: %s", r.Header.Get("Authorization"))
+			t.Errorf("unexpected auth: %s", r.Header.Get("Authorization"))
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		resp := modelsResponse{

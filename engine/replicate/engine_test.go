@@ -18,7 +18,9 @@ func TestExecuteWithPoll(t *testing.T) {
 	var pollCount int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.Header.Get("Authorization"); got != "Bearer test-key" {
-			t.Fatalf("Authorization = %q", got)
+			t.Errorf("Authorization = %q", got)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		if r.Method == http.MethodPost {
@@ -417,7 +419,9 @@ func TestExecuteWithImageAndOptions(t *testing.T) {
 			json.NewDecoder(r.Body).Decode(&body)
 			input, _ := body["input"].(map[string]any)
 			if input["image"] != "https://example.com/ref.jpg" {
-				t.Fatalf("image = %v", input["image"])
+				t.Errorf("image = %v", input["image"])
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			w.Write([]byte(`{"id":"pred-opts","status":"starting"}`))
 			return

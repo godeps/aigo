@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -182,7 +183,10 @@ func TestBuildPayload(t *testing.T) {
 	var captured map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewDecoder(r.Body).Decode(&captured)
+		if err := json.NewDecoder(r.Body).Decode(&captured); err != nil {
+			t.Errorf("decode: %v", err)
+			return
+		}
 		w.Write([]byte(`{"taskId":"t1"}`))
 	}))
 	defer server.Close()
@@ -241,5 +245,391 @@ func TestConfigSchema(t *testing.T) {
 		if !keys[required] {
 			t.Errorf("ConfigSchema missing required field %q", required)
 		}
+	}
+}
+
+func TestCapabilities(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		model        string
+		waitResult   bool
+		wantPoll     bool
+		wantSync     bool
+		wantModelLen int
+	}{
+		{
+			name:         "with wait and model",
+			model:        "flux-dev",
+			waitResult:   true,
+			wantPoll:     true,
+			wantSync:     false,
+			wantModelLen: 1,
+		},
+		{
+			name:         "without wait",
+			model:        "kling-v2.5",
+			waitResult:   false,
+			wantPoll:     false,
+			wantSync:     true,
+			wantModelLen: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			e := New(Config{
+				APIKey:            "k",
+				Endpoint:          "generate/video",
+				Model:             tt.model,
+				WaitForCompletion: tt.waitResult,
+			})
+			caps := e.Capabilities()
+			if caps.SupportsPoll != tt.wantPoll {
+				t.Errorf("SupportsPoll = %v, want %v", caps.SupportsPoll, tt.wantPoll)
+			}
+			if caps.SupportsSync != tt.wantSync {
+				t.Errorf("SupportsSync = %v, want %v", caps.SupportsSync, tt.wantSync)
+			}
+			if len(caps.Models) != tt.wantModelLen {
+				t.Errorf("len(Models) = %d, want %d", len(caps.Models), tt.wantModelLen)
+			}
+			if caps.Models[0] != tt.model {
+				t.Errorf("Models[0] = %q, want %q", caps.Models[0], tt.model)
+			}
+			if len(caps.MediaTypes) == 0 {
+				t.Error("MediaTypes is empty")
+			}
+		})
+	}
+}
+
+func TestModelsByCapability(t *testing.T) {
+	t.Parallel()
+
+	m := ModelsByCapability()
+	if len(m) == 0 {
+		t.Fatal("ModelsByCapability() returned empty map")
+	}
+	for _, cap := range []string{"image", "video"} {
+		models, ok := m[cap]
+		if !ok {
+			t.Errorf("missing capability %q", cap)
+			continue
+		}
+		if len(models) == 0 {
+			t.Errorf("capability %q has no models", cap)
+		}
+	}
+}
+
+func TestDefaultProvider(t *testing.T) {
+	t.Parallel()
+
+	p := DefaultProvider()
+	if p.Name != "runninghub" {
+		t.Errorf("Name = %q, want runninghub", p.Name)
+	}
+	if len(p.Configs) == 0 {
+		t.Fatal("Configs is empty")
+	}
+	cfg := p.Configs[0]
+	if cfg.Name != "runninghub" {
+		t.Errorf("Config.Name = %q, want runninghub", cfg.Name)
+	}
+	if cfg.Engine == nil {
+		t.Error("Config.Engine is nil")
+	}
+	if len(cfg.EnvVars) == 0 {
+		t.Error("Config.EnvVars is empty")
+	}
+}
+
+func TestExecute_ValidationError(t *testing.T) {
+	t.Parallel()
+
+	e := New(Config{
+		APIKey:   "test-key",
+		Endpoint: "generate/image",
+	})
+
+	// Empty graph fails validation.
+	_, err := e.Execute(context.Background(), workflow.Graph{})
+	if err == nil {
+		t.Fatal("expected validation error, got nil")
+	}
+}
+
+func TestExecute_MissingEndpoint(t *testing.T) {
+	t.Parallel()
+
+	e := New(Config{
+		APIKey: "test-key",
+		// Endpoint intentionally omitted
+	})
+
+	graph := workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "test"}},
+	}
+
+	_, err := e.Execute(context.Background(), graph)
+	if err != ErrMissingEndpoint {
+		t.Fatalf("error = %v, want ErrMissingEndpoint", err)
+	}
+}
+
+func TestExecute_MissingAPIKey(t *testing.T) {
+	// t.Setenv is incompatible with t.Parallel.
+	t.Setenv("RH_API_KEY", "")
+
+	e := New(Config{
+		Endpoint: "generate/image",
+	})
+
+	graph := workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "test"}},
+	}
+
+	_, err := e.Execute(context.Background(), graph)
+	if err == nil {
+		t.Fatal("expected API key error, got nil")
+	}
+}
+
+func TestExecute_EmptyTaskID(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"taskId":""}`))
+	}))
+	defer server.Close()
+
+	e := New(Config{
+		APIKey:   "test-key",
+		BaseURL:  server.URL,
+		Endpoint: "generate/image",
+	})
+
+	graph := workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "test"}},
+	}
+
+	_, err := e.Execute(context.Background(), graph)
+	if err == nil {
+		t.Fatal("expected empty taskId error, got nil")
+	}
+}
+
+func TestPoll_CancelStatus(t *testing.T) {
+	t.Parallel()
+
+	server := submitAndPollServer(t, "generate/video",
+		`{"taskId":"task-cancel"}`,
+		[]string{
+			`{"status":"CANCEL"}`,
+		},
+	)
+	defer server.Close()
+
+	e := New(Config{
+		APIKey:            "test-key",
+		BaseURL:           server.URL,
+		Endpoint:          "generate/video",
+		WaitForCompletion: true,
+		PollInterval:      1,
+	})
+
+	graph := workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "test"}},
+	}
+
+	_, err := e.Execute(context.Background(), graph)
+	if err == nil {
+		t.Fatal("expected cancel error, got nil")
+	}
+}
+
+func TestPoll_FailedWithErrorCodeOnly(t *testing.T) {
+	t.Parallel()
+
+	server := submitAndPollServer(t, "generate/video",
+		`{"taskId":"task-errcode"}`,
+		[]string{
+			`{"status":"FAILED","errorCode":"ERR_QUOTA","errorMessage":""}`,
+		},
+	)
+	defer server.Close()
+
+	e := New(Config{
+		APIKey:            "test-key",
+		BaseURL:           server.URL,
+		Endpoint:          "generate/video",
+		WaitForCompletion: true,
+		PollInterval:      1,
+	})
+
+	graph := workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "test"}},
+	}
+
+	_, err := e.Execute(context.Background(), graph)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "ERR_QUOTA") {
+		t.Fatalf("expected ERR_QUOTA in error, got: %v", err)
+	}
+}
+
+func TestPoll_SuccessWithTextResult(t *testing.T) {
+	t.Parallel()
+
+	server := submitAndPollServer(t, "generate/text",
+		`{"taskId":"task-text"}`,
+		[]string{
+			`{"status":"SUCCESS","results":[{"url":"","text":"generated text content"}]}`,
+		},
+	)
+	defer server.Close()
+
+	e := New(Config{
+		APIKey:            "test-key",
+		BaseURL:           server.URL,
+		Endpoint:          "generate/text",
+		WaitForCompletion: true,
+		PollInterval:      1,
+	})
+
+	graph := workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "test"}},
+	}
+
+	result, err := e.Execute(context.Background(), graph)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if result.Value != "generated text content" {
+		t.Errorf("Value = %q, want %q", result.Value, "generated text content")
+	}
+}
+
+func TestPoll_SuccessEmptyResults(t *testing.T) {
+	t.Parallel()
+
+	server := submitAndPollServer(t, "generate/video",
+		`{"taskId":"task-empty"}`,
+		[]string{
+			`{"status":"SUCCESS","results":[]}`,
+		},
+	)
+	defer server.Close()
+
+	e := New(Config{
+		APIKey:            "test-key",
+		BaseURL:           server.URL,
+		Endpoint:          "generate/video",
+		WaitForCompletion: true,
+		PollInterval:      1,
+	})
+
+	graph := workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "test"}},
+	}
+
+	_, err := e.Execute(context.Background(), graph)
+	if err == nil {
+		t.Fatal("expected empty results error, got nil")
+	}
+}
+
+func TestResume_MissingAPIKey(t *testing.T) {
+	t.Setenv("RH_API_KEY", "")
+
+	e := New(Config{
+		Endpoint: "generate/video",
+	})
+
+	_, err := e.Resume(context.Background(), "task-123")
+	if err == nil {
+		t.Fatal("expected API key error, got nil")
+	}
+}
+
+func TestBuildPayload_LoadVideo(t *testing.T) {
+	t.Parallel()
+
+	var captured map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewDecoder(r.Body).Decode(&captured); err != nil {
+			t.Errorf("decode: %v", err)
+			return
+		}
+		w.Write([]byte(`{"taskId":"t1"}`))
+	}))
+	defer server.Close()
+
+	e := New(Config{
+		APIKey:   "test-key",
+		BaseURL:  server.URL,
+		Endpoint: "generate/video",
+	})
+
+	graph := workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "enhance video"}},
+		"2": {ClassType: "LoadVideo", Inputs: map[string]any{"url": "https://example.com/input.mp4"}},
+	}
+
+	_, err := e.Execute(context.Background(), graph)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if captured["videoUrl"] != "https://example.com/input.mp4" {
+		t.Errorf("videoUrl = %v, want https://example.com/input.mp4", captured["videoUrl"])
+	}
+}
+
+func TestNew_BaseURLFromEnv(t *testing.T) {
+	t.Setenv("RH_BASE_URL", "https://custom.example.com/api")
+
+	e := New(Config{
+		APIKey:   "test-key",
+		Endpoint: "generate/image",
+	})
+
+	if e.baseURL != "https://custom.example.com/api" {
+		t.Errorf("baseURL = %q, want https://custom.example.com/api", e.baseURL)
+	}
+}
+
+func TestNew_DefaultBaseURL(t *testing.T) {
+	t.Setenv("RH_BASE_URL", "")
+
+	e := New(Config{
+		APIKey:   "test-key",
+		Endpoint: "generate/image",
+	})
+
+	if e.baseURL != defaultBaseURL {
+		t.Errorf("baseURL = %q, want %q", e.baseURL, defaultBaseURL)
+	}
+}
+
+func TestModelInfos(t *testing.T) {
+	t.Parallel()
+
+	infos := ModelInfos()
+	if len(infos) == 0 {
+		t.Fatal("ModelInfos() returned empty slice")
+	}
+	info := infos[0]
+	if info.Provider != "runninghub" {
+		t.Errorf("Provider = %q, want runninghub", info.Provider)
+	}
+	if info.Name == "" {
+		t.Error("Name is empty")
 	}
 }

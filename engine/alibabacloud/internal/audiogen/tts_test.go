@@ -91,13 +91,19 @@ func TestRunTTS_Success(t *testing.T) {
 	var gotPayload map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			t.Fatalf("expected POST, got %s", r.Method)
+			t.Errorf("expected POST, got %s", r.Method)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		if r.URL.Path != "/services/aigc/multimodal-generation/generation" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		if r.Header.Get("Authorization") != "Bearer test-key" {
-			t.Fatal("missing auth header")
+			t.Error("missing auth header")
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		json.NewDecoder(r.Body).Decode(&gotPayload)
 		w.WriteHeader(200)

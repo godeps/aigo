@@ -20,13 +20,19 @@ func TestExecuteQwenImageAsync(t *testing.T) {
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/services/aigc/text2image/image-synthesis":
 			if got := r.Header.Get("Authorization"); got != "Bearer test-key" {
-				t.Fatalf("Authorization header = %q", got)
+				t.Errorf("Authorization header = %q", got)
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			if got := r.Header.Get("X-DashScope-Async"); got != "enable" {
-				t.Fatalf("X-DashScope-Async header = %q", got)
+				t.Errorf("X-DashScope-Async header = %q", got)
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			if err := json.NewDecoder(r.Body).Decode(&createPayload); err != nil {
-				t.Fatalf("decode body: %v", err)
+				t.Errorf("decode body: %v", err)
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"output":{"task_id":"img-task","task_status":"PENDING"}}`))
@@ -34,7 +40,9 @@ func TestExecuteQwenImageAsync(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"output":{"task_id":"img-task","task_status":"SUCCEEDED","results":[{"url":"https://img.example.com/qwen.png"}]}}`))
 		default:
-			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 	}))
 	defer server.Close()
@@ -84,10 +92,14 @@ func TestExecuteWanImageSync(t *testing.T) {
 	var payload map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/services/aigc/multimodal-generation/generation" {
-			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			t.Fatalf("decode body: %v", err)
+			t.Errorf("decode body: %v", err)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"output":{"choices":[{"message":{"content":[{"type":"image","image":"https://img.example.com/wan.png"}]}}],"finished":true}}`))
@@ -130,10 +142,14 @@ func TestExecuteZImageSync(t *testing.T) {
 	var payload map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/services/aigc/multimodal-generation/generation" {
-			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			t.Fatalf("decode body: %v", err)
+			t.Errorf("decode body: %v", err)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"output":{"choices":[{"message":{"content":[{"image":"https://img.example.com/zimage.png"}]}}]}}`))
@@ -183,10 +199,14 @@ func TestExecuteQwenImage2Sync(t *testing.T) {
 	var payload map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/services/aigc/multimodal-generation/generation" {
-			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			t.Fatalf("decode body: %v", err)
+			t.Errorf("decode body: %v", err)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"output":{"choices":[{"message":{"content":[{"type":"image","image":"https://img.example.com/qwen2.png"}]}}]}}`))
@@ -229,10 +249,14 @@ func TestExecuteQwenImageEditPlusSync(t *testing.T) {
 	var payload map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/services/aigc/multimodal-generation/generation" {
-			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			t.Fatalf("decode body: %v", err)
+			t.Errorf("decode body: %v", err)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"output":{"choices":[{"message":{"content":[{"type":"image","image":"https://img.example.com/edited.png"}]}}]}}`))
@@ -283,10 +307,14 @@ func TestExecuteWanVideoT2VAsync(t *testing.T) {
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/services/aigc/video-generation/video-synthesis":
 			if got := r.Header.Get("X-DashScope-Async"); got != "enable" {
-				t.Fatalf("X-DashScope-Async header = %q", got)
+				t.Errorf("X-DashScope-Async header = %q", got)
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			if err := json.NewDecoder(r.Body).Decode(&createPayload); err != nil {
-				t.Fatalf("decode body: %v", err)
+				t.Errorf("decode body: %v", err)
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"output":{"task_id":"video-task","task_status":"PENDING"}}`))
@@ -294,7 +322,9 @@ func TestExecuteWanVideoT2VAsync(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"output":{"task_id":"video-task","task_status":"SUCCEEDED","video_url":"https://video.example.com/t2v.mp4"}}`))
 		default:
-			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 	}))
 	defer server.Close()
@@ -344,7 +374,9 @@ func TestExecuteWanImageToVideoAsync(t *testing.T) {
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/services/aigc/video-generation/video-synthesis":
 			if err := json.NewDecoder(r.Body).Decode(&createPayload); err != nil {
-				t.Fatalf("decode body: %v", err)
+				t.Errorf("decode body: %v", err)
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"output":{"task_id":"i2v-task","task_status":"PENDING"}}`))
@@ -352,7 +384,9 @@ func TestExecuteWanImageToVideoAsync(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"output":{"task_id":"i2v-task","task_status":"SUCCEEDED","video_url":"https://video.example.com/i2v.mp4"}}`))
 		default:
-			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 	}))
 	defer server.Close()
@@ -401,7 +435,9 @@ func TestExecuteWanReferenceVideoAsync(t *testing.T) {
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/services/aigc/video-generation/video-synthesis":
 			if err := json.NewDecoder(r.Body).Decode(&createPayload); err != nil {
-				t.Fatalf("decode body: %v", err)
+				t.Errorf("decode body: %v", err)
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"output":{"task_id":"r2v-task","task_status":"PENDING"}}`))
@@ -409,7 +445,9 @@ func TestExecuteWanReferenceVideoAsync(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"output":{"task_id":"r2v-task","task_status":"SUCCEEDED","video_url":"https://video.example.com/r2v.mp4"}}`))
 		default:
-			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 	}))
 	defer server.Close()
@@ -460,7 +498,9 @@ func TestExecuteWanVideoEditAsync(t *testing.T) {
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/services/aigc/video-generation/video-synthesis":
 			if err := json.NewDecoder(r.Body).Decode(&createPayload); err != nil {
-				t.Fatalf("decode body: %v", err)
+				t.Errorf("decode body: %v", err)
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"output":{"task_id":"edit-task","task_status":"PENDING"}}`))
@@ -468,7 +508,9 @@ func TestExecuteWanVideoEditAsync(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"output":{"task_id":"edit-task","task_status":"SUCCEEDED","video_url":"https://video.example.com/edit.mp4"}}`))
 		default:
-			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 	}))
 	defer server.Close()
@@ -516,7 +558,9 @@ func TestExecuteWanVideoEditAsyncWithMultipleReferenceImages(t *testing.T) {
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/services/aigc/video-generation/video-synthesis":
 			if err := json.NewDecoder(r.Body).Decode(&createPayload); err != nil {
-				t.Fatalf("decode body: %v", err)
+				t.Errorf("decode body: %v", err)
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"output":{"task_id":"edit-task","task_status":"PENDING"}}`))
@@ -524,7 +568,9 @@ func TestExecuteWanVideoEditAsyncWithMultipleReferenceImages(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"output":{"task_id":"edit-task","task_status":"SUCCEEDED","video_url":"https://video.example.com/edit.mp4"}}`))
 		default:
-			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 	}))
 	defer server.Close()
@@ -575,10 +621,14 @@ func TestExecuteQwenTTSNonStream(t *testing.T) {
 	var payload map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/services/aigc/multimodal-generation/generation" {
-			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			t.Fatalf("decode body: %v", err)
+			t.Errorf("decode body: %v", err)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"output":{"audio":{"url":"https://audio.example.com/out.wav","data":""}}}`))
@@ -622,10 +672,14 @@ func TestExecuteQwenVoiceDesign(t *testing.T) {
 	var payload map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/services/audio/tts/customization" {
-			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			t.Fatalf("decode body: %v", err)
+			t.Errorf("decode body: %v", err)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"output":{"voice":"qwen-tts-vd-test-voice","target_model":"qwen3-tts-vd-2026-01-26","preview_audio":{"data":"ZmFrZQ==","sample_rate":24000,"response_format":"wav"}}}`))
@@ -683,10 +737,14 @@ func TestExecuteKlingV3TextToVideoAsync(t *testing.T) {
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/services/aigc/video-generation/video-synthesis":
 			if got := r.Header.Get("X-DashScope-Async"); got != "enable" {
-				t.Fatalf("X-DashScope-Async header = %q", got)
+				t.Errorf("X-DashScope-Async header = %q", got)
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			if err := json.NewDecoder(r.Body).Decode(&createPayload); err != nil {
-				t.Fatalf("decode body: %v", err)
+				t.Errorf("decode body: %v", err)
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"output":{"task_id":"kling-t2v-task","task_status":"PENDING"}}`))
@@ -694,7 +752,9 @@ func TestExecuteKlingV3TextToVideoAsync(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"output":{"task_id":"kling-t2v-task","task_status":"SUCCEEDED","video_url":"https://video.example.com/kling-t2v.mp4"}}`))
 		default:
-			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 	}))
 	defer server.Close()
@@ -751,7 +811,9 @@ func TestExecuteKlingV3ImageToVideoAsync(t *testing.T) {
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/services/aigc/video-generation/video-synthesis":
 			if err := json.NewDecoder(r.Body).Decode(&createPayload); err != nil {
-				t.Fatalf("decode body: %v", err)
+				t.Errorf("decode body: %v", err)
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"output":{"task_id":"kling-i2v-task","task_status":"PENDING"}}`))
@@ -759,7 +821,9 @@ func TestExecuteKlingV3ImageToVideoAsync(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"output":{"task_id":"kling-i2v-task","task_status":"SUCCEEDED","video_url":"https://video.example.com/kling-i2v.mp4"}}`))
 		default:
-			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 	}))
 	defer server.Close()
@@ -812,7 +876,9 @@ func TestExecuteKlingV3OmniReferenceVideoAsync(t *testing.T) {
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/services/aigc/video-generation/video-synthesis":
 			if err := json.NewDecoder(r.Body).Decode(&createPayload); err != nil {
-				t.Fatalf("decode body: %v", err)
+				t.Errorf("decode body: %v", err)
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"output":{"task_id":"kling-omni-task","task_status":"PENDING"}}`))
@@ -820,7 +886,9 @@ func TestExecuteKlingV3OmniReferenceVideoAsync(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"output":{"task_id":"kling-omni-task","task_status":"SUCCEEDED","video_url":"https://video.example.com/kling-omni.mp4"}}`))
 		default:
-			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 	}))
 	defer server.Close()
@@ -878,7 +946,9 @@ func TestExecuteMultimodalImage_MultiResult(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/services/aigc/multimodal-generation/generation" {
-			t.Fatalf("unexpected path %s", r.URL.Path)
+			t.Errorf("unexpected path %s", r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"output":{"choices":[{"message":{"content":[

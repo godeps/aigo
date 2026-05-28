@@ -349,3 +349,425 @@ func TestModelsByCapability(t *testing.T) {
 		t.Error("expected video models")
 	}
 }
+
+func TestDefaultProvider(t *testing.T) {
+	t.Parallel()
+	p := DefaultProvider()
+	if p.Name != "liblib" {
+		t.Errorf("expected provider name 'liblib', got %q", p.Name)
+	}
+	if len(p.Configs) == 0 {
+		t.Fatal("expected at least one provider config")
+	}
+	cfg := p.Configs[0]
+	if cfg.Name != "liblib-image" {
+		t.Errorf("expected config name 'liblib-image', got %q", cfg.Name)
+	}
+	if cfg.Engine == nil {
+		t.Error("expected non-nil engine")
+	}
+	if len(cfg.EnvVars) != 2 {
+		t.Errorf("expected 2 env vars, got %d", len(cfg.EnvVars))
+	}
+}
+
+func TestModelInfos(t *testing.T) {
+	t.Parallel()
+	infos := ModelInfos()
+	if len(infos) == 0 {
+		t.Fatal("expected at least one model info")
+	}
+	info := infos[0]
+	if info.Provider != "liblib" {
+		t.Errorf("expected provider 'liblib', got %q", info.Provider)
+	}
+	if info.Capability != "image" {
+		t.Errorf("expected capability 'image', got %q", info.Capability)
+	}
+	if info.Name != "liblib-comfyui" {
+		t.Errorf("expected name 'liblib-comfyui', got %q", info.Name)
+	}
+}
+
+func TestExecute_EmptyGenerateUUID(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{
+			"code": 0,
+			"data": map[string]any{"generateUuid": ""},
+		})
+	}))
+	defer srv.Close()
+
+	eng := New(Config{
+		AccessKey: "ak",
+		SecretKey: "sk",
+		BaseURL:   srv.URL,
+		Endpoint:  "/api/generate/webui/text2img/ultra",
+	})
+
+	g := workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "test"}},
+	}
+
+	_, err := eng.Execute(context.Background(), g)
+	if err == nil {
+		t.Fatal("expected error for empty generateUuid")
+	}
+	if !strings.Contains(err.Error(), "empty generateUuid") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestExecute_HTTPError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "server error", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	eng := New(Config{
+		AccessKey: "ak",
+		SecretKey: "sk",
+		BaseURL:   srv.URL,
+		Endpoint:  "/api/generate/webui/text2img/ultra",
+	})
+
+	g := workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "test"}},
+	}
+
+	_, err := eng.Execute(context.Background(), g)
+	if err == nil {
+		t.Fatal("expected error for HTTP 500")
+	}
+}
+
+func TestExecute_WithLoadImage(t *testing.T) {
+	t.Parallel()
+
+	var gotBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/status") {
+			json.NewEncoder(w).Encode(map[string]any{
+				"code": 0,
+				"data": map[string]any{
+					"generateStatus": float64(5),
+					"images":         []any{map[string]any{"imageUrl": "https://cdn.liblib.art/out.png"}},
+				},
+			})
+			return
+		}
+		json.NewDecoder(r.Body).Decode(&gotBody)
+		json.NewEncoder(w).Encode(map[string]any{
+			"code": 0,
+			"data": map[string]any{"generateUuid": "img-uuid"},
+		})
+	}))
+	defer srv.Close()
+
+	eng := New(Config{
+		AccessKey:         "ak",
+		SecretKey:         "sk",
+		BaseURL:           srv.URL,
+		Endpoint:          "/api/generate/webui/img2img/ultra",
+		TemplateUUID:      TemplateImg2ImgUltra,
+		WaitForCompletion: true,
+		PollInterval:      10 * time.Millisecond,
+	})
+
+	g := workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "enhance this"}},
+		"2": {ClassType: "LoadImage", Inputs: map[string]any{"url": "https://example.com/input.png"}},
+	}
+
+	result, err := eng.Execute(context.Background(), g)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if result.Value != "https://cdn.liblib.art/out.png" {
+		t.Errorf("expected output URL, got %q", result.Value)
+	}
+	// Verify sourceImage was included in the request body.
+	if gotBody != nil {
+		params, _ := gotBody["generateParams"].(map[string]any)
+		if params != nil {
+			if si, ok := params["sourceImage"].(string); !ok || si != "https://example.com/input.png" {
+				t.Errorf("expected sourceImage in params, got %v", params["sourceImage"])
+			}
+		}
+	}
+}
+
+func TestExecute_WithGraphOptions(t *testing.T) {
+	t.Parallel()
+
+	var gotBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewDecoder(r.Body).Decode(&gotBody)
+		json.NewEncoder(w).Encode(map[string]any{
+			"code": 0,
+			"data": map[string]any{"generateUuid": "opts-uuid"},
+		})
+	}))
+	defer srv.Close()
+
+	eng := New(Config{
+		AccessKey:         "ak",
+		SecretKey:         "sk",
+		BaseURL:           srv.URL,
+		Endpoint:          "/api/generate/webui/text2img/ultra",
+		WaitForCompletion: false,
+	})
+
+	g := workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "a cat"}},
+		"2": {ClassType: "AigoOptions", Inputs: map[string]any{
+			"width":           1024,
+			"height":          768,
+			"aspect_ratio":    "16:9",
+			"img_count":       2,
+			"duration":        5,
+			"negative_prompt": "ugly",
+			"model":           "custom-model",
+		}},
+	}
+
+	_, err := eng.Execute(context.Background(), g)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if gotBody == nil {
+		t.Fatal("expected request body")
+	}
+	params, _ := gotBody["generateParams"].(map[string]any)
+	if params == nil {
+		t.Fatal("expected generateParams in body")
+	}
+	if params["aspectRatio"] != "16:9" {
+		t.Errorf("expected aspectRatio '16:9', got %v", params["aspectRatio"])
+	}
+	if params["negativePrompt"] != "ugly" {
+		t.Errorf("expected negativePrompt 'ugly', got %v", params["negativePrompt"])
+	}
+	if params["model"] != "custom-model" {
+		t.Errorf("expected model 'custom-model', got %v", params["model"])
+	}
+}
+
+func TestResume_MissingKeys(t *testing.T) {
+	t.Parallel()
+
+	eng := New(Config{})
+	_, err := eng.Resume(context.Background(), "some-uuid")
+	if err == nil {
+		t.Fatal("expected error for missing keys")
+	}
+}
+
+func TestPoll_SuccessNoOutputURL(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/status") {
+			// Status 5 (success) but no images or videos.
+			json.NewEncoder(w).Encode(map[string]any{
+				"code": 0,
+				"data": map[string]any{"generateStatus": float64(5)},
+			})
+		} else {
+			json.NewEncoder(w).Encode(map[string]any{
+				"code": 0,
+				"data": map[string]any{"generateUuid": "empty-result-uuid"},
+			})
+		}
+	}))
+	defer srv.Close()
+
+	eng := New(Config{
+		AccessKey:         "ak",
+		SecretKey:         "sk",
+		BaseURL:           srv.URL,
+		Endpoint:          "/api/generate/webui/text2img/ultra",
+		WaitForCompletion: true,
+		PollInterval:      10 * time.Millisecond,
+	})
+
+	g := workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "test"}},
+	}
+
+	_, err := eng.Execute(context.Background(), g)
+	if err == nil {
+		t.Fatal("expected error for success with no output URL")
+	}
+	if !strings.Contains(err.Error(), "no output URL") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestPoll_APIErrorCode(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/status") {
+			json.NewEncoder(w).Encode(map[string]any{
+				"code": 500,
+				"msg":  "internal error",
+			})
+		} else {
+			json.NewEncoder(w).Encode(map[string]any{
+				"code": 0,
+				"data": map[string]any{"generateUuid": "err-uuid"},
+			})
+		}
+	}))
+	defer srv.Close()
+
+	eng := New(Config{
+		AccessKey:         "ak",
+		SecretKey:         "sk",
+		BaseURL:           srv.URL,
+		Endpoint:          "/api/generate/webui/text2img/ultra",
+		WaitForCompletion: true,
+		PollInterval:      10 * time.Millisecond,
+	})
+
+	g := workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "test"}},
+	}
+
+	_, err := eng.Execute(context.Background(), g)
+	if err == nil {
+		t.Fatal("expected error for poll API error code")
+	}
+	if !strings.Contains(err.Error(), "poll error") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestExecute_ContextCancelled(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/status") {
+			// Always return "still running" so we rely on ctx cancel.
+			json.NewEncoder(w).Encode(map[string]any{
+				"code": 0,
+				"data": map[string]any{"generateStatus": float64(1)},
+			})
+		} else {
+			json.NewEncoder(w).Encode(map[string]any{
+				"code": 0,
+				"data": map[string]any{"generateUuid": "cancel-uuid"},
+			})
+		}
+	}))
+	defer srv.Close()
+
+	eng := New(Config{
+		AccessKey:         "ak",
+		SecretKey:         "sk",
+		BaseURL:           srv.URL,
+		Endpoint:          "/api/generate/webui/text2img/ultra",
+		WaitForCompletion: true,
+		PollInterval:      10 * time.Millisecond,
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	g := workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "test"}},
+	}
+
+	_, err := eng.Execute(ctx, g)
+	if err == nil {
+		t.Fatal("expected error from context cancellation")
+	}
+}
+
+func TestNew_Defaults(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		cfg      Config
+		wantBase string
+		wantEP   string
+	}{
+		{
+			name:     "all defaults",
+			cfg:      Config{},
+			wantBase: defaultBaseURL,
+			wantEP:   "/api/generate/webui/text2img/ultra",
+		},
+		{
+			name:     "custom base with trailing slash",
+			cfg:      Config{BaseURL: "https://custom.api.com/"},
+			wantBase: "https://custom.api.com",
+			wantEP:   "/api/generate/webui/text2img/ultra",
+		},
+		{
+			name:     "custom endpoint",
+			cfg:      Config{Endpoint: "/api/generate/video/kling/text2video"},
+			wantBase: defaultBaseURL,
+			wantEP:   "/api/generate/video/kling/text2video",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			eng := New(tt.cfg)
+			if eng.baseURL != tt.wantBase {
+				t.Errorf("baseURL = %q, want %q", eng.baseURL, tt.wantBase)
+			}
+			if eng.endpoint != tt.wantEP {
+				t.Errorf("endpoint = %q, want %q", eng.endpoint, tt.wantEP)
+			}
+		})
+	}
+}
+
+func TestCapabilities_NoWait(t *testing.T) {
+	t.Parallel()
+	eng := New(Config{WaitForCompletion: false})
+	cap := eng.Capabilities()
+	if cap.SupportsPoll {
+		t.Error("expected SupportsPoll=false when WaitForCompletion=false")
+	}
+	if !cap.SupportsSync {
+		t.Error("expected SupportsSync=true when WaitForCompletion=false")
+	}
+}
+
+func TestExecute_InvalidSubmitJSON(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("not json"))
+	}))
+	defer srv.Close()
+
+	eng := New(Config{
+		AccessKey: "ak",
+		SecretKey: "sk",
+		BaseURL:   srv.URL,
+		Endpoint:  "/api/generate/webui/text2img/ultra",
+	})
+
+	g := workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "test"}},
+	}
+
+	_, err := eng.Execute(context.Background(), g)
+	if err == nil {
+		t.Fatal("expected error for invalid JSON response")
+	}
+	if !strings.Contains(err.Error(), "decode submit response") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}

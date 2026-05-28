@@ -134,6 +134,42 @@ var knownModels = map[string]knownModel{
 	"veo-3.1-generate-preview":      {route: RouteOpenAIVideoGenerations, kind: KindVideo, cap: "video"},
 	"veo-3.1-fast-generate-preview": {route: RouteOpenAIVideoGenerations, kind: KindVideo, cap: "video"},
 
+	// ═══ Vision Understanding (/v1/chat/completions) ════════
+
+	// Qwen-VL (DashScope OpenAI-compatible)
+	"qwen3.6-plus":        {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+	"qwen-vl-max":         {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+	"qwen-vl-plus":        {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+	"qwen-vl-max-latest":  {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+	"qwen-vl-plus-latest": {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+
+	// GLM-4V (ZhiPu)
+	"glm-4v":      {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+	"glm-4v-plus": {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+	"glm-4.6v":    {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+
+	// Yi Vision (Lingyiwanwu)
+	"yi-vision": {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+	"yi-vl-plus": {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+
+	// Grok Vision (xAI)
+	"grok-2-vision-1212": {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+	"grok-2-vision":      {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+	"grok-vision-beta":   {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+
+	// Doubao Vision (ByteDance)
+	"Doubao-vision-lite-32k":     {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+	"Doubao-vision-pro-32k":      {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+	"Doubao-1.5-pro-vision-32k":  {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+
+	// Step Vision (StepFun)
+	"step-1v-8k":    {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+	"step-1.5v-mini": {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+
+	// GPT-4V (OpenAI legacy vision)
+	"gpt-4-vision-preview":      {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+	"gpt-4-1106-vision-preview": {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+
 	// ═══ TTS (/v1/audio/speech) ══════════════════════════════
 
 	"tts-1":    {route: RouteOpenAISpeech, kind: KindSpeech, cap: "tts"},
@@ -217,6 +253,27 @@ type inferRule struct {
 }
 
 var inferRules = []inferRule{
+	// Vision understanding patterns — before video to avoid false positives on "vl"
+	{match: func(s string) bool {
+		return strings.Contains(s, "-vl-") || strings.Contains(s, "-vl") || strings.HasSuffix(s, "-vl")
+	}, route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+	{match: func(s string) bool {
+		if strings.Contains(s, "-vision") {
+			return true
+		}
+		// GLM-4V style: "glm-4v", "glm-4.6v", "step-1v", "step-1.5v"
+		// Match [- or .] + digit + "v" at end or before dash.
+		// Excludes "i2v", "t2v", "s2v" where a letter precedes the digit.
+		for i := 2; i < len(s); i++ {
+			if s[i] == 'v' && s[i-1] >= '0' && s[i-1] <= '9' &&
+				(s[i-2] == '-' || s[i-2] == '.') &&
+				(i+1 >= len(s) || s[i+1] == '-') {
+				return true
+			}
+		}
+		return false
+	}, route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+
 	// Video patterns — ordered by specificity
 	{match: func(s string) bool { return strings.Contains(s, "t2v") || strings.Contains(s, "text2video") }, route: RouteOpenAIVideoGenerations, kind: KindVideo, cap: "video"},
 	{match: func(s string) bool { return strings.Contains(s, "i2v") || strings.Contains(s, "image2video") }, route: RouteOpenAIVideoGenerations, kind: KindVideo, cap: "video"},
@@ -263,6 +320,8 @@ func capToKindAndRoute(capability string) (MediaKind, Route) {
 		return KindSpeech, RouteOpenAISpeech
 	case "asr":
 		return KindSpeech, RouteOpenAITranscriptions
+	case "video_understanding", "vision":
+		return KindVision, RouteChatCompletions
 	default:
 		return KindImage, RouteOpenAIImagesGenerations
 	}

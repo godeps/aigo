@@ -29,6 +29,9 @@ const (
 
 	// Gemini 原生 generateContent（图/音等）
 	RouteGeminiGenerateContent Route = "gemini_generate_content"
+
+	// OpenAI 兼容 chat completions（多模态理解：文本+图片+视频）
+	RouteChatCompletions Route = "chat_completions"
 )
 
 func defaultRouteForKind(k MediaKind) Route {
@@ -39,6 +42,8 @@ func defaultRouteForKind(k MediaKind) Route {
 		return RouteOpenAIVideoGenerations
 	case KindSpeech:
 		return RouteOpenAISpeech
+	case KindVision:
+		return RouteChatCompletions
 	default:
 		return RouteOpenAIImagesGenerations
 	}

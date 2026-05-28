@@ -18,14 +18,20 @@ func TestExecuteCallsAPI(t *testing.T) {
 	fakeImage := base64.StdEncoding.EncodeToString([]byte("fake-png-data"))
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasPrefix(r.URL.Path, "/v2beta/stable-image/generate/") {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		if got := r.Header.Get("Authorization"); got != "Bearer test-key" {
-			t.Fatalf("Authorization = %q", got)
+			t.Errorf("Authorization = %q", got)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		ct := r.Header.Get("Content-Type")
 		if !strings.HasPrefix(ct, "multipart/form-data") {
-			t.Fatalf("Content-Type = %q, want multipart", ct)
+			t.Errorf("Content-Type = %q, want multipart", ct)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"image":"` + fakeImage + `","finish_reason":"SUCCESS"}`))
@@ -56,7 +62,9 @@ func TestExecuteWithNegativePrompt(t *testing.T) {
 		r.ParseMultipartForm(1 << 20)
 		negPrompt := r.FormValue("negative_prompt")
 		if negPrompt != "blurry, low quality" {
-			t.Fatalf("negative_prompt = %q, want 'blurry, low quality'", negPrompt)
+			t.Errorf("negative_prompt = %q, want 'blurry, low quality'", negPrompt)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		fakeImage := base64.StdEncoding.EncodeToString([]byte("img"))
@@ -111,7 +119,9 @@ func TestExecuteModelCoreEndpoint(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v2beta/stable-image/generate/core" {
-			t.Fatalf("path = %q, want /v2beta/stable-image/generate/core", r.URL.Path)
+			t.Errorf("path = %q, want /v2beta/stable-image/generate/core", r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		fakeImage := base64.StdEncoding.EncodeToString([]byte("core-img"))
@@ -138,7 +148,9 @@ func TestExecuteModelUltraEndpoint(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v2beta/stable-image/generate/ultra" {
-			t.Fatalf("path = %q, want /v2beta/stable-image/generate/ultra", r.URL.Path)
+			t.Errorf("path = %q, want /v2beta/stable-image/generate/ultra", r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		fakeImage := base64.StdEncoding.EncodeToString([]byte("ultra-img"))

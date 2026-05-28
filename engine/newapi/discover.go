@@ -107,6 +107,8 @@ func classifyModel(m ModelEntry) string {
 var endpointTypeCapMap = map[string]string{
 	"image-generation": "image",
 	"openai-video":     "video",
+	"vision":           "video_understanding",
+	"multimodal":       "video_understanding",
 }
 
 // capFromEndpointTypes extracts aigo capability from new-api endpoint types.

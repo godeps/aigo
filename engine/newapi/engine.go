@@ -23,6 +23,7 @@ const (
 	KindImage  MediaKind = "image"
 	KindVideo  MediaKind = "video"
 	KindSpeech MediaKind = "speech"
+	KindVision MediaKind = "vision"
 )
 
 const (
@@ -188,6 +189,9 @@ func (e *Engine) Capabilities() engine.Capability {
 		cap.SupportsSync = !e.waitVideo
 	case KindSpeech:
 		cap.MediaTypes = []string{"audio"}
+		cap.SupportsSync = true
+	case KindVision:
+		cap.MediaTypes = []string{"text", "image", "video"}
 		cap.SupportsSync = true
 	default:
 		cap.MediaTypes = []string{"image"}

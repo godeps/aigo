@@ -35,6 +35,28 @@ func ModelInfos() []engine.ModelInfo {
 		{Name: "newapi/MiniMax-Hailuo-2.3", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Hailuo 2.3", "zh": "海螺 2.3"}, Capability: "video"},
 		{Name: "newapi/veo-3.0-generate-001", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Veo 3.0", "zh": "Veo 3.0"}, Capability: "video"},
 
+		// ── Vision Understanding ──
+		{Name: "newapi/qwen3.6-plus", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Qwen 3.6 Plus", "zh": "通义千问 3.6 Plus"}, Capability: "video_understanding"},
+		{Name: "newapi/qwen-vl-max", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Qwen-VL Max", "zh": "通义千问 VL Max"}, Capability: "video_understanding"},
+		{Name: "newapi/qwen-vl-plus", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Qwen-VL Plus", "zh": "通义千问 VL Plus"}, Capability: "video_understanding"},
+		{Name: "newapi/qwen-vl-max-latest", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Qwen-VL Max Latest", "zh": "通义千问 VL Max 最新版"}, Capability: "video_understanding"},
+		{Name: "newapi/qwen-vl-plus-latest", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Qwen-VL Plus Latest", "zh": "通义千问 VL Plus 最新版"}, Capability: "video_understanding"},
+		{Name: "newapi/glm-4v", Provider: "newapi", DisplayName: engine.DisplayName{"en": "GLM-4V", "zh": "智谱 GLM-4V"}, Capability: "video_understanding"},
+		{Name: "newapi/glm-4v-plus", Provider: "newapi", DisplayName: engine.DisplayName{"en": "GLM-4V Plus", "zh": "智谱 GLM-4V Plus"}, Capability: "video_understanding"},
+		{Name: "newapi/glm-4.6v", Provider: "newapi", DisplayName: engine.DisplayName{"en": "GLM-4.6V", "zh": "智谱 GLM-4.6V"}, Capability: "video_understanding"},
+		{Name: "newapi/yi-vision", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Yi Vision", "zh": "零一万物 Yi Vision"}, Capability: "video_understanding"},
+		{Name: "newapi/yi-vl-plus", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Yi VL Plus", "zh": "零一万物 Yi VL Plus"}, Capability: "video_understanding"},
+		{Name: "newapi/grok-2-vision-1212", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Grok 2 Vision", "zh": "Grok 2 Vision"}, Capability: "video_understanding"},
+		{Name: "newapi/grok-2-vision", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Grok 2 Vision", "zh": "Grok 2 Vision"}, Capability: "video_understanding"},
+		{Name: "newapi/grok-vision-beta", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Grok Vision Beta", "zh": "Grok Vision Beta"}, Capability: "video_understanding"},
+		{Name: "newapi/Doubao-vision-lite-32k", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Doubao Vision Lite", "zh": "豆包视觉理解 Lite"}, Capability: "video_understanding"},
+		{Name: "newapi/Doubao-vision-pro-32k", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Doubao Vision Pro", "zh": "豆包视觉理解 Pro"}, Capability: "video_understanding"},
+		{Name: "newapi/Doubao-1.5-pro-vision-32k", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Doubao 1.5 Pro Vision", "zh": "豆包 1.5 Pro 视觉理解"}, Capability: "video_understanding"},
+		{Name: "newapi/step-1v-8k", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Step 1V", "zh": "阶跃星辰 Step 1V"}, Capability: "video_understanding"},
+		{Name: "newapi/step-1.5v-mini", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Step 1.5V Mini", "zh": "阶跃星辰 Step 1.5V Mini"}, Capability: "video_understanding"},
+		{Name: "newapi/gpt-4-vision-preview", Provider: "newapi", DisplayName: engine.DisplayName{"en": "GPT-4 Vision", "zh": "GPT-4 Vision"}, Capability: "video_understanding"},
+		{Name: "newapi/gpt-4-1106-vision-preview", Provider: "newapi", DisplayName: engine.DisplayName{"en": "GPT-4 Vision 1106", "zh": "GPT-4 Vision 1106"}, Capability: "video_understanding"},
+
 		// ── TTS ──
 		{Name: "newapi/tts-1", Provider: "newapi", DisplayName: engine.DisplayName{"en": "TTS-1", "zh": "TTS-1"}, Capability: "tts"},
 		{Name: "newapi/tts-1-hd", Provider: "newapi", DisplayName: engine.DisplayName{"en": "TTS-1 HD", "zh": "TTS-1 HD"}, Capability: "tts"},

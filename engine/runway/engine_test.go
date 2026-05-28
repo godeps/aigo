@@ -18,10 +18,14 @@ func TestExecuteTextToVideo(t *testing.T) {
 	var pollCount int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.Header.Get("Authorization"); got != "Bearer test-key" {
-			t.Fatalf("Authorization = %q", got)
+			t.Errorf("Authorization = %q", got)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		if got := r.Header.Get("X-Runway-Version"); got != defaultAPIVersion {
-			t.Fatalf("X-Runway-Version = %q", got)
+			t.Errorf("X-Runway-Version = %q", got)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 
@@ -29,10 +33,14 @@ func TestExecuteTextToVideo(t *testing.T) {
 			var body map[string]any
 			json.NewDecoder(r.Body).Decode(&body)
 			if body["promptText"] != "a rocket launch" {
-				t.Fatalf("promptText = %v", body["promptText"])
+				t.Errorf("promptText = %v", body["promptText"])
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			if body["promptImage"] != nil {
-				t.Fatalf("promptImage should be absent for text-to-video, got %v", body["promptImage"])
+				t.Errorf("promptImage should be absent for text-to-video, got %v", body["promptImage"])
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			w.Write([]byte(`{"id":"run-123"}`))
 			return
@@ -77,12 +85,16 @@ func TestExecuteImageToVideo(t *testing.T) {
 
 		if r.Method == http.MethodPost {
 			if r.URL.Path != "/v1/image_to_video" {
-				t.Fatalf("path = %q, want /v1/image_to_video", r.URL.Path)
+				t.Errorf("path = %q, want /v1/image_to_video", r.URL.Path)
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			var body map[string]any
 			json.NewDecoder(r.Body).Decode(&body)
 			if body["promptImage"] != "https://example.com/frame.jpg" {
-				t.Fatalf("promptImage = %v", body["promptImage"])
+				t.Errorf("promptImage = %v", body["promptImage"])
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			w.Write([]byte(`{"id":"run-img-456"}`))
 			return
@@ -396,11 +408,15 @@ func TestExecuteWithOptions(t *testing.T) {
 			var body map[string]any
 			json.NewDecoder(r.Body).Decode(&body)
 			if body["ratio"] != "16:9" {
-				t.Fatalf("ratio = %v, want 16:9", body["ratio"])
+				t.Errorf("ratio = %v, want 16:9", body["ratio"])
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			dur, ok := body["duration"].(float64)
 			if !ok || dur != 10 {
-				t.Fatalf("duration = %v, want 10", body["duration"])
+				t.Errorf("duration = %v, want 10", body["duration"])
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			w.Write([]byte(`{"id":"run-opts"}`))
 			return

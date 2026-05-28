@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -18,7 +19,9 @@ func TestExecuteTextTo3DWithPoll(t *testing.T) {
 	var pollCount int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.Header.Get("Authorization"); got != "Bearer test-key" {
-			t.Fatalf("Authorization = %q", got)
+			t.Errorf("Authorization = %q", got)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 
@@ -26,7 +29,9 @@ func TestExecuteTextTo3DWithPoll(t *testing.T) {
 			var body map[string]any
 			json.NewDecoder(r.Body).Decode(&body)
 			if body["prompt"] != "a medieval castle" {
-				t.Fatalf("prompt = %v", body["prompt"])
+				t.Errorf("prompt = %v", body["prompt"])
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			w.Write([]byte(`{"result":"task-abc"}`))
 			return
@@ -101,12 +106,16 @@ func TestExecuteImageTo3D(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.Method == http.MethodPost {
 			if r.URL.Path != "/openapi/v2/image-to-3d" {
-				t.Fatalf("path = %q, want /openapi/v2/image-to-3d", r.URL.Path)
+				t.Errorf("path = %q, want /openapi/v2/image-to-3d", r.URL.Path)
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			var body map[string]any
 			json.NewDecoder(r.Body).Decode(&body)
 			if body["image_url"] != "https://example.com/chair.png" {
-				t.Fatalf("image_url = %v", body["image_url"])
+				t.Errorf("image_url = %v", body["image_url"])
+				http.Error(w, "test assertion failed", http.StatusInternalServerError)
+				return
 			}
 			w.Write([]byte(`{"result":"task-img"}`))
 			return
@@ -167,7 +176,7 @@ func TestPollFailure(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for failed task")
 	}
-	if got := err.Error(); got == "" || !contains(got, "invalid mesh topology") {
+	if got := err.Error(); got == "" || !strings.Contains(got, "invalid mesh topology") {
 		t.Fatalf("error = %q, want to contain 'invalid mesh topology'", got)
 	}
 }
@@ -178,7 +187,9 @@ func TestResume(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path != "/openapi/v2/text-to-3d/task-resume" {
-			t.Fatalf("path = %q", r.URL.Path)
+			t.Errorf("path = %q", r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
 		}
 		w.Write([]byte(`{"status":"SUCCEEDED","model_urls":{"glb":"https://cdn.meshy.ai/resumed.glb"}}`))
 	}))
@@ -324,15 +335,102 @@ func TestPollHTTPError(t *testing.T) {
 	}
 }
 
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && searchString(s, substr)
+func TestDefaultProvider(t *testing.T) {
+	t.Parallel()
+	p := DefaultProvider()
+	if p.Name != "meshy" {
+		t.Fatalf("Name = %q, want meshy", p.Name)
+	}
+	if len(p.Configs) != 1 {
+		t.Fatalf("len(Configs) = %d, want 1", len(p.Configs))
+	}
+	cfg := p.Configs[0]
+	if cfg.Name != "meshy-3d" {
+		t.Fatalf("Config.Name = %q, want meshy-3d", cfg.Name)
+	}
+	if len(cfg.EnvVars) != 1 || cfg.EnvVars[0] != "MESHY_API_KEY" {
+		t.Fatalf("EnvVars = %v", cfg.EnvVars)
+	}
+	if cfg.Engine == nil {
+		t.Fatal("Engine is nil")
+	}
 }
 
-func searchString(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
+func TestExecuteWithOptions(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodPost {
+			var body map[string]any
+			json.NewDecoder(r.Body).Decode(&body)
+			if body["negative_prompt"] != "low quality" {
+				t.Errorf("negative_prompt = %v", body["negative_prompt"])
+			}
+			if body["art_style"] != "realistic" {
+				t.Errorf("art_style = %v", body["art_style"])
+			}
+			if body["topology"] != "quad" {
+				t.Errorf("topology = %v", body["topology"])
+			}
+			w.Write([]byte(`{"result":"task-opts"}`))
+			return
+		}
+		w.Write([]byte(`{"status":"SUCCEEDED","model_urls":{"glb":"https://cdn.meshy.ai/opts.glb"}}`))
+	}))
+	defer server.Close()
+
+	e := New(Config{
+		APIKey:            "test-key",
+		BaseURL:           server.URL,
+		WaitForCompletion: true,
+		PollInterval:      1,
+	})
+
+	graph := workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "a dragon"}},
+		"2": {ClassType: "Options", Inputs: map[string]any{
+			"negative_prompt": "low quality",
+			"art_style":       "realistic",
+			"topology":        "quad",
+		}},
+	}
+
+	result, err := e.Execute(context.Background(), graph)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if result.Value != "https://cdn.meshy.ai/opts.glb" {
+		t.Fatalf("Value = %q", result.Value)
+	}
+}
+
+func TestMissingPrompt(t *testing.T) {
+	t.Parallel()
+	e := New(Config{APIKey: "key"})
+	g := workflow.Graph{
+		"1": {ClassType: "Options", Inputs: map[string]any{"mode": "preview"}},
+	}
+	_, err := e.Execute(context.Background(), g)
+	if err == nil {
+		t.Fatal("expected error for missing prompt")
+	}
+}
+
+func TestModelInfos(t *testing.T) {
+	t.Parallel()
+	infos := ModelInfos()
+	if len(infos) != 2 {
+		t.Fatalf("len(ModelInfos) = %d, want 2", len(infos))
+	}
+	for _, info := range infos {
+		if info.Provider != "meshy" {
+			t.Errorf("Provider = %q, want meshy", info.Provider)
+		}
+		if info.Capability != "3d" {
+			t.Errorf("Capability = %q, want 3d", info.Capability)
 		}
 	}
-	return false
 }
+
+
