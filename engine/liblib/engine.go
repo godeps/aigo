@@ -141,12 +141,17 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 	}
 
 	// Extract common options from graph.
+	sizeSpec := resolve.ExtractImageSizeSpec(g)
 	if w, ok := resolve.IntOption(g, "width"); ok && w > 0 {
 		if h, ok2 := resolve.IntOption(g, "height"); ok2 && h > 0 {
 			params["imageSize"] = map[string]any{"width": w, "height": h}
 		}
+	} else if sizeSpec.Dimensions != nil {
+		params["imageSize"] = map[string]any{"width": sizeSpec.Dimensions.Width, "height": sizeSpec.Dimensions.Height}
 	}
 	if ar, ok := resolve.StringOption(g, "aspect_ratio", "aspectRatio"); ok && ar != "" {
+		params["aspectRatio"] = ar
+	} else if ar := sizeSpec.ToAspectRatio(); ar != "" {
 		params["aspectRatio"] = ar
 	}
 	if n, ok := resolve.IntOption(g, "img_count", "imgCount"); ok && n > 0 {

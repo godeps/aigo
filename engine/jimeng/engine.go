@@ -41,6 +41,8 @@ const (
 
 var ErrMissingPrompt = fmt.Errorf("jimeng: missing prompt in workflow graph")
 
+var jimengVideoRatios = []string{"16:9", "9:16", "1:1", "4:3", "3:4"}
+
 // Config configures the Jimeng engine.
 type Config struct {
 	APIKey            string
@@ -236,10 +238,15 @@ func (e *Engine) executeVideo(ctx context.Context, apiKey, prompt string, g work
 	}
 
 	if d, ok := resolve.IntOption(g, "duration"); ok && d > 0 {
-		payload["duration"] = d
+		payload["duration"] = int(resolve.ClampDuration(float64(d), 0, 10))
 	}
 	if ar, ok := resolve.StringOption(g, "ratio", "aspect_ratio"); ok && ar != "" {
 		payload["ratio"] = ar
+	} else if spec := resolve.ExtractVideoSizeSpec(g); !spec.IsZero() {
+		snapped := spec.SnapTo(jimengVideoRatios)
+		if ar := snapped.ToAspectRatio(); ar != "" {
+			payload["ratio"] = ar
+		}
 	}
 
 	body, err := json.Marshal(payload)
@@ -356,6 +363,7 @@ func (e *Engine) Capabilities() engine.Capability {
 		return engine.Capability{
 			MediaTypes:   []string{"video"},
 			Models:       []string{e.model},
+			Sizes:        []string{"16:9", "9:16", "1:1", "4:3", "3:4"},
 			MaxDuration:  10,
 			SupportsPoll: e.waitResult,
 			SupportsSync: !e.waitResult,
@@ -364,6 +372,7 @@ func (e *Engine) Capabilities() engine.Capability {
 	return engine.Capability{
 		MediaTypes:   []string{"image"},
 		Models:       []string{e.model},
+		Sizes:        []string{"1024x1024", "1024x1536", "1536x1024"},
 		SupportsSync: true,
 	}
 }

@@ -40,6 +40,7 @@ const (
 
 var (
 	ErrMissingPrompt = errors.New("runway: missing prompt in workflow graph")
+	runwayRatios     = []string{"16:9", "9:16", "1:1"}
 )
 
 // Config configures the Runway engine.
@@ -145,10 +146,15 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 	}
 
 	if d, ok := resolve.IntOption(g, "duration"); ok && d > 0 {
-		payload["duration"] = d
+		payload["duration"] = int(resolve.ClampDuration(float64(d), 0, 10))
 	}
 	if ar, ok := resolve.StringOption(g, "ratio", "aspect_ratio"); ok && ar != "" {
 		payload["ratio"] = ar
+	} else if spec := resolve.ExtractVideoSizeSpec(g); !spec.IsZero() {
+		snapped := spec.SnapTo(runwayRatios)
+		if ar := snapped.ToAspectRatio(); ar != "" {
+			payload["ratio"] = ar
+		}
 	}
 	if wm, ok := resolve.BoolOption(g, "watermark"); ok {
 		payload["watermark"] = wm
@@ -279,6 +285,7 @@ func (e *Engine) Capabilities() engine.Capability {
 	return engine.Capability{
 		MediaTypes:   []string{"video"},
 		Models:       []string{e.model},
+		Sizes:        []string{"16:9", "9:16", "1:1"},
 		MaxDuration:  10,
 		SupportsPoll: e.waitVideo,
 		SupportsSync: !e.waitVideo,

@@ -177,18 +177,5 @@ func MergeJSONOption(g workflow.Graph, dst map[string]any, keys ...string) {
 }
 
 func NormalizeOpenAIImageSize(width, height int) string {
-	switch {
-	case width == 1024 && height == 1024:
-		return "1024x1024"
-	case width == 1024 && height == 1536:
-		return "1024x1536"
-	case width == 1536 && height == 1024:
-		return "1536x1024"
-	case width > height:
-		return "1536x1024"
-	case height > width:
-		return "1024x1536"
-	default:
-		return "1024x1024"
-	}
+	return NormalizeImageSize([]string{"1024x1024", "1024x1536", "1536x1024"}, width, height)
 }

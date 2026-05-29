@@ -53,6 +53,8 @@ func runImageGeneration(ctx context.Context, e *Engine, apiKey, model string, gr
 	// Optional size hint.
 	if size, ok := resolve.StringOption(graph, "size"); ok && strings.TrimSpace(size) != "" {
 		payload["size"] = strings.TrimSpace(size)
+	} else if s := resolve.ExtractImageSizeSpec(graph).ToWxH(); s != "" {
+		payload["size"] = s
 	}
 
 	body, err := json.Marshal(payload)

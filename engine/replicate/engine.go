@@ -115,6 +115,9 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 	}
 	if w, ok := resolve.IntOption(g, "width"); ok && w > 0 {
 		input["width"] = w
+	} else if spec := resolve.ExtractImageSizeSpec(g); spec.Dimensions != nil {
+		input["width"] = spec.Dimensions.Width
+		input["height"] = spec.Dimensions.Height
 	}
 	if h, ok := resolve.IntOption(g, "height"); ok && h > 0 {
 		input["height"] = h

@@ -39,19 +39,19 @@ func Float64Option(g workflow.Graph, keys ...string) (float64, bool) {
 	return resolve.Float64Option(g, keys...)
 }
 
-func ExtractImageSizeOpenAI(g workflow.Graph) string {
-	if s, ok := StringOptionFromClassTypes(g, []string{"ImageOptions"}, "size"); ok {
-		return strings.ReplaceAll(s, "*", "x")
-	}
-	if s, ok := StringOption(g, "size"); ok {
-		return strings.ReplaceAll(s, "*", "x")
-	}
-	for _, ref := range g.FindByClassType("EmptyLatentImage") {
-		w, okW := ref.Node.IntInput("width")
-		h, okH := ref.Node.IntInput("height")
-		if okW && okH {
-			return resolve.NormalizeOpenAIImageSize(w, h)
+func ExtractImageSizeOpenAI(g workflow.Graph, supported ...string) string {
+	spec := resolve.ExtractImageSizeSpec(g)
+	if spec.IsZero() {
+		if len(supported) > 0 {
+			return supported[0]
 		}
+		return "1024x1024"
+	}
+	if len(supported) > 0 {
+		spec = spec.SnapTo(supported)
+	}
+	if s := spec.ToWxH(); s != "" {
+		return s
 	}
 	return "1024x1024"
 }
@@ -75,25 +75,16 @@ func FirstImageURL(g workflow.Graph) (string, bool) {
 	return "", false
 }
 
-func ExtractVideoDimensions(g workflow.Graph) (width, height int, ok bool) {
-	for _, ref := range g.FindByClassType("VideoOptions") {
-		w, okW := ref.Node.IntInput("width")
-		h, okH := ref.Node.IntInput("height")
-		if okW && okH {
-			return w, h, true
-		}
+func ExtractVideoDimensions(g workflow.Graph, supported ...string) (width, height int, ok bool) {
+	spec := resolve.ExtractVideoSizeSpec(g)
+	if spec.IsZero() {
+		return 0, 0, false
 	}
-	if w, okW := IntOption(g, "width"); okW {
-		if h, okH := IntOption(g, "height"); okH {
-			return w, h, true
-		}
+	if len(supported) > 0 {
+		spec = spec.SnapTo(supported)
 	}
-	for _, ref := range g.FindByClassType("EmptyLatentImage") {
-		w, okW := ref.Node.IntInput("width")
-		h, okH := ref.Node.IntInput("height")
-		if okW && okH {
-			return w, h, true
-		}
+	if w, h := spec.ToWidthHeight(); w > 0 && h > 0 {
+		return w, h, true
 	}
 	return 0, 0, false
 }

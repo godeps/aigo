@@ -104,6 +104,8 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 	aspectRatio := "1:1"
 	if v, ok := resolve.StringOption(g, "aspect_ratio"); ok && v != "" {
 		aspectRatio = v
+	} else if ar := resolve.ExtractImageSizeSpec(g).ToAspectRatio(); ar != "" {
+		aspectRatio = ar
 	}
 
 	// Build multipart form.
@@ -184,6 +186,7 @@ func (e *Engine) Capabilities() engine.Capability {
 	return engine.Capability{
 		MediaTypes:   []string{"image"},
 		Models:       []string{e.model},
+		Sizes:        []string{"1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "5:4", "4:5", "21:9", "9:21"},
 		SupportsSync: true,
 	}
 }

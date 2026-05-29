@@ -33,7 +33,7 @@ func (e *Engine) runQwenImageGenerations(ctx context.Context, apiKey string, g w
 	if neg, ok := graph.ExtractNegativePrompt(g); ok {
 		params["negative_prompt"] = neg
 	}
-	if s := graph.ExtractImageSizeOpenAI(g); s != "" {
+	if s := graph.ExtractImageSizeOpenAI(g, imageSizesForModel(e.model)...); s != "" {
 		params["size"] = s
 	}
 	if v, ok := graph.StringOption(g, "prompt_extend"); ok {

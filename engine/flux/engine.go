@@ -119,13 +119,19 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 	payload := map[string]any{
 		"prompt": prompt,
 	}
+	sizeSpec := resolve.ExtractImageSizeSpec(g)
 	if w, ok := resolve.IntOption(g, "width"); ok && w > 0 {
 		payload["width"] = w
+	} else if sizeSpec.Dimensions != nil {
+		payload["width"] = sizeSpec.Dimensions.Width
+		payload["height"] = sizeSpec.Dimensions.Height
 	}
 	if h, ok := resolve.IntOption(g, "height"); ok && h > 0 {
 		payload["height"] = h
 	}
 	if ar, ok := resolve.StringOption(g, "aspect_ratio"); ok && ar != "" {
+		payload["aspect_ratio"] = ar
+	} else if ar := sizeSpec.ToAspectRatio(); ar != "" {
 		payload["aspect_ratio"] = ar
 	}
 	if seed, ok := resolve.IntOption(g, "seed"); ok {

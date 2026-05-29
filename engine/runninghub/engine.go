@@ -171,6 +171,8 @@ func (e *Engine) buildPayload(g workflow.Graph) (map[string]any, error) {
 
 	if size, ok := resolve.StringOption(g, "size"); ok && size != "" {
 		payload["size"] = size
+	} else if s := resolve.ExtractImageSizeSpec(g).ToWxH(); s != "" {
+		payload["size"] = s
 	}
 
 	if duration, ok := resolve.IntOption(g, "duration"); ok && duration > 0 {

@@ -37,6 +37,7 @@ const (
 
 var (
 	ErrMissingPrompt = errors.New("pika: missing prompt in workflow graph")
+	pikaRatios       = []string{"16:9", "9:16", "1:1", "4:3", "3:4"}
 )
 
 // Config configures the Pika engine.
@@ -127,10 +128,15 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 	}
 
 	if d, ok := resolve.IntOption(g, "duration"); ok && d > 0 {
-		payload["duration"] = d
+		payload["duration"] = int(resolve.ClampDuration(float64(d), 0, 10))
 	}
 	if ar, ok := resolve.StringOption(g, "aspect_ratio"); ok && ar != "" {
 		payload["aspectRatio"] = ar
+	} else if spec := resolve.ExtractVideoSizeSpec(g); !spec.IsZero() {
+		snapped := spec.SnapTo(pikaRatios)
+		if ar := snapped.ToAspectRatio(); ar != "" {
+			payload["aspectRatio"] = ar
+		}
 	}
 	if res, ok := resolve.StringOption(g, "resolution"); ok && res != "" {
 		payload["resolution"] = res
@@ -236,6 +242,7 @@ func (e *Engine) Capabilities() engine.Capability {
 	return engine.Capability{
 		MediaTypes:   []string{"video"},
 		Models:       []string{e.model},
+		Sizes:        []string{"16:9", "9:16", "1:1", "4:3", "3:4"},
 		MaxDuration:  10,
 		SupportsPoll: e.waitVideo,
 		SupportsSync: !e.waitVideo,

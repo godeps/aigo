@@ -29,6 +29,8 @@ const (
 	defaultPollInterval = 5 * time.Second
 )
 
+var hedraRatios = []string{"1:1", "16:9", "9:16"}
+
 
 // Config configures the Hedra engine.
 type Config struct {
@@ -141,6 +143,11 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 
 	if ar, ok := resolve.StringOption(g, "aspect_ratio", "ratio"); ok && ar != "" {
 		payload["aspectRatio"] = ar
+	} else if spec := resolve.ExtractVideoSizeSpec(g); !spec.IsZero() {
+		snapped := spec.SnapTo(hedraRatios)
+		if ar := snapped.ToAspectRatio(); ar != "" {
+			payload["aspectRatio"] = ar
+		}
 	}
 
 	body, err := json.Marshal(payload)
@@ -263,6 +270,7 @@ func (e *Engine) Resume(ctx context.Context, remoteID string) (engine.Result, er
 func (e *Engine) Capabilities() engine.Capability {
 	return engine.Capability{
 		MediaTypes:   []string{"video"},
+		Sizes:        []string{"1:1", "16:9", "9:16"},
 		SupportsPoll: e.waitVideo,
 		SupportsSync: !e.waitVideo,
 	}

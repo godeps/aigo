@@ -121,6 +121,8 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 
 	if size, ok := resolve.StringOption(g, "size"); ok && size != "" {
 		payload["size"] = size
+	} else if s := resolve.ExtractImageSizeSpec(g).ToWxH(); s != "" {
+		payload["size"] = s
 	}
 	if n, ok := resolve.IntOption(g, "n"); ok && n > 0 {
 		payload["n"] = n
@@ -160,6 +162,7 @@ func (e *Engine) Capabilities() engine.Capability {
 	return engine.Capability{
 		MediaTypes:   []string{"image"},
 		Models:       []string{e.model},
+		Sizes:        []string{"1024x1024", "1365x1024", "1024x1365", "1536x1024", "1024x1536"},
 		SupportsSync: true,
 	}
 }

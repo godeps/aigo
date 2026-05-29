@@ -187,6 +187,7 @@ func (e *Engine) Capabilities() engine.Capability {
 		cap.MediaTypes = []string{"video"}
 		cap.SupportsPoll = e.waitVideo
 		cap.SupportsSync = !e.waitVideo
+		cap.Sizes = videoSizesForModel(e.model)
 	case KindSpeech:
 		cap.MediaTypes = []string{"audio"}
 		cap.SupportsSync = true
@@ -210,6 +211,20 @@ func imageSizesForModel(model string) []string {
 		return []string{"1024x1024", "1024x1792", "1792x1024"}
 	case strings.EqualFold(model, "dall-e-2"):
 		return []string{"256x256", "512x512", "1024x1024"}
+	}
+	return nil
+}
+
+// videoSizesForModel returns the supported video sizes for a known model family.
+func videoSizesForModel(model string) []string {
+	m := strings.ToLower(model)
+	switch {
+	case strings.Contains(m, "sora"):
+		return []string{"1920x1080", "1080x1920", "1280x720", "720x1280"}
+	case strings.Contains(m, "kling"):
+		return []string{"1920x1080", "1080x1920", "1280x720", "720x1280", "960x960"}
+	case strings.Contains(m, "hailuo") || strings.Contains(m, "minimax"):
+		return []string{"1280x720", "720x1280", "960x960"}
 	}
 	return nil
 }

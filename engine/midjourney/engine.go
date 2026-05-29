@@ -119,6 +119,8 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 
 	if ar, ok := resolve.StringOption(g, "aspect_ratio", "ratio"); ok && ar != "" {
 		payload["aspect_ratio"] = ar
+	} else if ar := resolve.ExtractImageSizeSpec(g).ToAspectRatio(); ar != "" {
+		payload["aspect_ratio"] = ar
 	}
 
 	body, err := json.Marshal(payload)
@@ -245,6 +247,7 @@ func (e *Engine) Resume(ctx context.Context, remoteID string) (engine.Result, er
 func (e *Engine) Capabilities() engine.Capability {
 	return engine.Capability{
 		MediaTypes:   []string{"image"},
+		Sizes:        []string{"1:1", "16:9", "9:16", "4:3", "3:4", "2:3", "3:2"},
 		SupportsPoll: e.waitImage,
 		SupportsSync: !e.waitImage,
 	}

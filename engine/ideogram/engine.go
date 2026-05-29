@@ -106,6 +106,8 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 	}
 	if ar, ok := resolve.StringOption(g, "aspect_ratio"); ok && ar != "" {
 		imageReq["aspect_ratio"] = ar
+	} else if ar := resolve.ExtractImageSizeSpec(g).ToAspectRatio(); ar != "" {
+		imageReq["aspect_ratio"] = ar
 	}
 	if style, ok := resolve.StringOption(g, "style_type"); ok && style != "" {
 		imageReq["style_type"] = style
@@ -177,6 +179,7 @@ func (e *Engine) Capabilities() engine.Capability {
 	return engine.Capability{
 		MediaTypes:   []string{"image"},
 		Models:       []string{e.model},
+		Sizes:        []string{"1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "10:16", "16:10"},
 		SupportsSync: true,
 	}
 }

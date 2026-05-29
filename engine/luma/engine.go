@@ -52,6 +52,7 @@ var imageModels = map[string]bool{
 
 var (
 	ErrMissingPrompt = errors.New("luma: missing prompt in workflow graph")
+	lumaRatios       = []string{"1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "21:9", "9:21"}
 )
 
 // Config configures the Luma engine.
@@ -155,9 +156,14 @@ func (e *Engine) runVideo(ctx context.Context, apiKey, prompt string, g workflow
 
 	if ar, ok := resolve.StringOption(g, "aspect_ratio"); ok && ar != "" {
 		payload["aspect_ratio"] = ar
+	} else if spec := resolve.ExtractVideoSizeSpec(g); !spec.IsZero() {
+		snapped := spec.SnapTo(lumaRatios)
+		if ar := snapped.ToAspectRatio(); ar != "" {
+			payload["aspect_ratio"] = ar
+		}
 	}
 	if d, ok := resolve.IntOption(g, "duration"); ok && d > 0 {
-		payload["duration"] = d
+		payload["duration"] = int(resolve.ClampDuration(float64(d), 0, 10))
 	}
 	if loop, ok := resolve.BoolOption(g, "loop"); ok {
 		payload["loop"] = loop
@@ -185,6 +191,11 @@ func (e *Engine) runImage(ctx context.Context, apiKey, prompt string, g workflow
 
 	if ar, ok := resolve.StringOption(g, "aspect_ratio"); ok && ar != "" {
 		payload["aspect_ratio"] = ar
+	} else if spec := resolve.ExtractVideoSizeSpec(g); !spec.IsZero() {
+		snapped := spec.SnapTo(lumaRatios)
+		if ar := snapped.ToAspectRatio(); ar != "" {
+			payload["aspect_ratio"] = ar
+		}
 	}
 
 	// Check for reference image (image editing / style transfer).
@@ -312,9 +323,11 @@ func (e *Engine) Capabilities() engine.Capability {
 	}
 	if imageModels[e.model] {
 		cap.MediaTypes = []string{"image"}
+		cap.Sizes = []string{"1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "21:9", "9:21"}
 	} else {
 		cap.MediaTypes = []string{"video"}
 		cap.MaxDuration = 10
+		cap.Sizes = []string{"16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3", "21:9", "9:21"}
 	}
 	return cap
 }

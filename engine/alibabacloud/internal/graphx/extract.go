@@ -44,17 +44,22 @@ func BoolOption(graph workflow.Graph, keys ...string) (bool, bool) {
 }
 
 func Size(graph workflow.Graph, fallback string) string {
-	if size, ok := StringOption(graph, "size"); ok {
-		return NormalizeSize(size)
+	spec := resolve.ExtractImageSizeSpec(graph)
+	if spec.IsZero() {
+		spec = resolve.ExtractVideoSizeSpec(graph)
 	}
-	if size, ok := WidthHeightSize(graph); ok {
-		return size
+	if s := spec.ToWAsteriskH(); s != "" {
+		return s
 	}
 	return fallback
 }
 
-// NormalizeSize converts "WxH" (letter x) to "W*H" (asterisk) as required by the aliyun API.
+// NormalizeSize converts any size string to "W*H" (asterisk) as required by the aliyun API.
 func NormalizeSize(s string) string {
+	spec := resolve.ParseSize(s)
+	if r := spec.ToWAsteriskH(); r != "" {
+		return r
+	}
 	return strings.Replace(s, "x", "*", 1)
 }
 
@@ -70,36 +75,18 @@ func WidthHeightSize(graph workflow.Graph) (string, bool) {
 }
 
 func Resolution(graph workflow.Graph) (string, bool) {
-	if resolution, ok := StringOption(graph, "resolution"); ok {
-		return resolution, true
+	spec := resolve.ExtractVideoSizeSpec(graph)
+	if spec.Resolution != "" {
+		return spec.Resolution, true
 	}
-	return DeriveResolution(graph)
+	if r := spec.ToResolution(); r != "" {
+		return r, true
+	}
+	return "", false
 }
 
 func DeriveResolution(graph workflow.Graph) (string, bool) {
-	if size, ok := StringOption(graph, "size"); ok {
-		switch NormalizeSize(size) {
-		case "1280*720":
-			return "720P", true
-		case "1920*1080":
-			return "1080P", true
-		}
-	}
-
-	for _, ref := range graph.FindByClassType("EmptyLatentImage") {
-		width, okW := ref.Node.IntInput("width")
-		height, okH := ref.Node.IntInput("height")
-		if !okW || !okH {
-			continue
-		}
-		switch {
-		case width >= 1920 || height >= 1080:
-			return "1080P", true
-		case width >= 1280 || height >= 720:
-			return "720P", true
-		}
-	}
-	return "", false
+	return Resolution(graph)
 }
 
 // appendUnique appends url to urls only if it has not been added before,

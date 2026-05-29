@@ -127,13 +127,13 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 	}
 	if w, ok := resolve.IntOption(g, "width"); ok && w > 0 {
 		input["image_size"] = map[string]any{"width": w}
-	}
-	if h, ok := resolve.IntOption(g, "height"); ok && h > 0 {
-		if m, ok := input["image_size"].(map[string]any); ok {
-			m["height"] = h
-		} else {
-			input["image_size"] = map[string]any{"height": h}
+		if h, ok := resolve.IntOption(g, "height"); ok && h > 0 {
+			input["image_size"].(map[string]any)["height"] = h
 		}
+	} else if h, ok := resolve.IntOption(g, "height"); ok && h > 0 {
+		input["image_size"] = map[string]any{"height": h}
+	} else if spec := resolve.ExtractImageSizeSpec(g); spec.Dimensions != nil {
+		input["image_size"] = map[string]any{"width": spec.Dimensions.Width, "height": spec.Dimensions.Height}
 	}
 	if seed, ok := resolve.IntOption(g, "seed"); ok {
 		input["seed"] = seed

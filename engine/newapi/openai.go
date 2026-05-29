@@ -18,6 +18,7 @@ import (
 	"github.com/godeps/aigo/engine/newapi/internal/graph"
 	"github.com/godeps/aigo/engine/newapi/internal/poll"
 	"github.com/godeps/aigo/workflow"
+	"github.com/godeps/aigo/workflow/resolve"
 )
 
 func (e *Engine) runOpenAIImageGenerations(ctx context.Context, apiKey string, g workflow.Graph) (string, error) {
@@ -30,7 +31,7 @@ func (e *Engine) runOpenAIImageGenerations(ctx context.Context, apiKey string, g
 	payload := map[string]any{
 		"model":  e.model,
 		"prompt": prompt,
-		"size":   graph.ExtractImageSizeOpenAI(g),
+		"size":   graph.ExtractImageSizeOpenAI(g, imageSizesForModel(e.model)...),
 		"n":      1,
 	}
 	if gptImage {
@@ -93,7 +94,7 @@ func (e *Engine) runOpenAIImageEdits(ctx context.Context, apiKey string, g workf
 	} else {
 		_ = w.WriteField("response_format", "url")
 	}
-	if s := graph.ExtractImageSizeOpenAI(g); s != "" {
+	if s := graph.ExtractImageSizeOpenAI(g, imageSizesForModel(e.model)...); s != "" {
 		_ = w.WriteField("size", s)
 	}
 	if n, ok := graph.IntOption(g, "n"); ok && n >= 1 && n <= 10 {
@@ -165,7 +166,7 @@ func (e *Engine) buildStandardVideoPayload(g workflow.Graph) (map[string]any, er
 		payload["image"] = img
 	}
 	if d, ok := graph.ExtractVideoDuration(g); ok {
-		payload["duration"] = d
+		payload["duration"] = resolve.ClampDuration(d, 0, 60)
 	}
 	if w, h, ok := graph.ExtractVideoDimensions(g); ok {
 		payload["width"] = w

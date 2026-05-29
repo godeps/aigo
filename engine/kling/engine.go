@@ -51,6 +51,8 @@ var videoModels = map[string]bool{
 
 var ErrMissingPrompt = fmt.Errorf("kling: missing prompt in workflow graph")
 
+var klingRatios = []string{"1:1", "16:9", "9:16", "4:3", "3:4", "2:3", "3:2"}
+
 // Config configures the Kling engine.
 type Config struct {
 	APIKey            string
@@ -169,10 +171,15 @@ func (e *Engine) runVideo(ctx context.Context, apiKey, prompt string, g workflow
 	}
 
 	if d, ok := resolve.IntOption(g, "duration"); ok && d > 0 {
-		payload["duration"] = d
+		payload["duration"] = int(resolve.ClampDuration(float64(d), 0, 10))
 	}
 	if ar, ok := resolve.StringOption(g, "aspect_ratio"); ok && ar != "" {
 		payload["aspect_ratio"] = ar
+	} else if spec := resolve.ExtractVideoSizeSpec(g); !spec.IsZero() {
+		snapped := spec.SnapTo(klingRatios)
+		if ar := snapped.ToAspectRatio(); ar != "" {
+			payload["aspect_ratio"] = ar
+		}
 	}
 	if neg, ok := resolve.StringOption(g, "negative_prompt"); ok && neg != "" {
 		payload["negative_prompt"] = neg
@@ -203,6 +210,11 @@ func (e *Engine) runImage(ctx context.Context, apiKey, prompt string, g workflow
 
 	if ar, ok := resolve.StringOption(g, "aspect_ratio"); ok && ar != "" {
 		payload["aspect_ratio"] = ar
+	} else if spec := resolve.ExtractVideoSizeSpec(g); !spec.IsZero() {
+		snapped := spec.SnapTo(klingRatios)
+		if ar := snapped.ToAspectRatio(); ar != "" {
+			payload["aspect_ratio"] = ar
+		}
 	}
 	if neg, ok := resolve.StringOption(g, "negative_prompt"); ok && neg != "" {
 		payload["negative_prompt"] = neg
@@ -348,9 +360,11 @@ func (e *Engine) Capabilities() engine.Capability {
 	}
 	if e.endpoint == EndpointImage {
 		cap.MediaTypes = []string{"image"}
+		cap.Sizes = []string{"1:1", "16:9", "9:16", "4:3", "3:4", "2:3", "3:2"}
 	} else {
 		cap.MediaTypes = []string{"video"}
 		cap.MaxDuration = 10
+		cap.Sizes = []string{"16:9", "9:16", "1:1", "4:3", "3:4", "2:3", "3:2"}
 	}
 	return cap
 }

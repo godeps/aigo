@@ -91,6 +91,8 @@ type AgentTask struct {
 	Watermark      *bool
 	References     []ReferenceAsset
 
+	AudioURL string // data URI or URL for ASR transcription input
+
 	TTS         *TTSOptions
 	VoiceDesign *VoiceDesignOptions
 	Music       *MusicOptions
@@ -662,12 +664,20 @@ func BuildGraph(task AgentTask) workflow.Graph {
 	vidDur := task.Duration
 	vidSize := task.Size
 	vidWM := task.Watermark
+	var imgAspectRatio string
+	var imgResolution string
 	var vidAspectRatio string
 	var vidResolution string
 	var vidAudio *bool
 	if task.Structured != nil {
 		if task.Structured.ImageSize != "" {
 			imgSize = task.Structured.ImageSize
+		}
+		if task.Structured.ImageAspectRatio != "" {
+			imgAspectRatio = task.Structured.ImageAspectRatio
+		}
+		if task.Structured.ImageResolution != "" {
+			imgResolution = task.Structured.ImageResolution
 		}
 		if task.Structured.ImageWatermark != nil {
 			imgWM = task.Structured.ImageWatermark
@@ -697,6 +707,12 @@ func BuildGraph(task AgentTask) workflow.Graph {
 
 	if imgSize != "" {
 		imageOptions["size"] = imgSize
+	}
+	if imgAspectRatio != "" {
+		imageOptions["aspect_ratio"] = imgAspectRatio
+	}
+	if imgResolution != "" {
+		imageOptions["resolution"] = imgResolution
 	}
 	if vidSize != "" {
 		videoOptions["size"] = vidSize
@@ -750,6 +766,16 @@ func BuildGraph(task AgentTask) workflow.Graph {
 			ClassType: classType,
 			Inputs: map[string]any{
 				"url": ref.URL,
+			},
+		}
+		nextID++
+	}
+
+	if task.AudioURL != "" {
+		graph[nodeID(nextID)] = workflow.Node{
+			ClassType: "LoadAudio",
+			Inputs: map[string]any{
+				"audio_url": task.AudioURL,
 			},
 		}
 		nextID++

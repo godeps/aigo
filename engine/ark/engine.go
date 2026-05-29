@@ -16,6 +16,7 @@ import (
 	"github.com/godeps/aigo/engine/httpx"
 	epoll "github.com/godeps/aigo/engine/poll"
 	"github.com/godeps/aigo/workflow"
+	"github.com/godeps/aigo/workflow/resolve"
 )
 
 const (
@@ -236,7 +237,7 @@ func (e *Engine) buildPayload(g workflow.Graph) (map[string]any, error) {
 		payload["resolution"] = v
 	}
 	if d := extractDuration(g); d != 0 {
-		payload["duration"] = d
+		payload["duration"] = int(resolve.ClampDuration(float64(d), 0, 15))
 	}
 	if v, ok := intOption(g, "seed"); ok {
 		payload["seed"] = v
