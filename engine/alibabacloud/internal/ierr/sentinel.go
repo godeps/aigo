@@ -10,6 +10,7 @@ var (
 	ErrMissingVoiceDesign = errors.New("aliyun: voice design fields missing (voice_prompt, preview_text, target_model)")
 	ErrMissingAudioURL    = errors.New("aliyun: audio URL not found in workflow graph")
 	ErrUnsupportedModel   = errors.New("aliyun: unsupported model")
+	ErrDataURINotSupported = errors.New("aliyun: data URI not supported, requires HTTP(S) URL")
 
 	// Tripo 3D 专用：必须提供 prompt / image / images 三者之一。
 	ErrMissingTripoInput = errors.New("aliyun tripo: provide one of prompt, image, or images (2-4)")

@@ -3,10 +3,14 @@ package audiogen
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/godeps/aigo/engine/aigoerr"
 	"github.com/godeps/aigo/engine/alibabacloud/internal/ierr"
 	"github.com/godeps/aigo/engine/alibabacloud/internal/runtime"
 	"github.com/godeps/aigo/workflow"
@@ -298,5 +302,148 @@ func TestAudioURL(t *testing.T) {
 				t.Fatalf("got %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestRunQwenASR_404ReturnsNonRetryable(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(`{"error":"model not found"}`))
+	}))
+	defer srv.Close()
+
+	rt := &runtime.RT{BaseURL: srv.URL, HTTPClient: http.DefaultClient}
+	_, err := RunQwenASR(context.Background(), rt, "key", "qwen3-asr-flash", graphWithAudioURL("https://a.wav"))
+	if err == nil {
+		t.Fatal("expected error for 404")
+	}
+	var ae *aigoerr.Error
+	if !errors.As(err, &ae) {
+		t.Fatalf("err = %v, want *aigoerr.Error", err)
+	}
+	if ae.Retryable {
+		t.Error("404 error should be non-retryable")
+	}
+	if ae.Code != aigoerr.CodeInvalidInput {
+		t.Errorf("Code = %v, want CodeInvalidInput", ae.Code)
+	}
+	if !strings.Contains(ae.Message, "qwen3-asr-flash") {
+		t.Errorf("message should mention model name, got %q", ae.Message)
+	}
+}
+
+func TestRunQwenASRFiletrans_DataURIRejected(t *testing.T) {
+	t.Parallel()
+	rt := &runtime.RT{BaseURL: "http://unused", HTTPClient: http.DefaultClient}
+	graph := graphWithAudioURL("data:audio/wav;base64,UklGRi...")
+
+	_, err := RunQwenASRFiletrans(context.Background(), rt, "key", "qwen3-asr-flash-filetrans", graph)
+	if err == nil {
+		t.Fatal("expected error for data URI input")
+	}
+	if !errors.Is(err, ierr.ErrDataURINotSupported) {
+		t.Errorf("err = %v, want ErrDataURINotSupported in chain", err)
+	}
+}
+
+func TestRunQwenASRFiletrans_HTTPURLSubmits(t *testing.T) {
+	t.Parallel()
+	var gotPayload map[string]any
+	var gotHeaders http.Header
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotHeaders = r.Header
+		json.NewDecoder(r.Body).Decode(&gotPayload)
+		// Return a task creation response.
+		json.NewEncoder(w).Encode(map[string]any{
+			"output": map[string]any{"task_id": "asr-task-1"},
+		})
+	}))
+	defer srv.Close()
+
+	rt := &runtime.RT{
+		BaseURL:           srv.URL,
+		HTTPClient:        srv.Client(),
+		WaitForCompletion: false,
+	}
+	graph := graphWithAudioURL("https://oss.aliyun.com/test.wav")
+
+	taskID, err := RunQwenASRFiletrans(context.Background(), rt, "test-key", "qwen3-asr-flash-filetrans", graph)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if taskID != "asr-task-1" {
+		t.Errorf("taskID = %q, want asr-task-1", taskID)
+	}
+
+	// Verify async header.
+	if gotHeaders.Get("X-DashScope-Async") != "enable" {
+		t.Error("missing X-DashScope-Async header")
+	}
+	// Verify model in payload.
+	if gotPayload["model"] != "qwen3-asr-flash-filetrans" {
+		t.Errorf("model = %v, want qwen3-asr-flash-filetrans", gotPayload["model"])
+	}
+	// Verify file_url in input.
+	input, _ := gotPayload["input"].(map[string]any)
+	if input["file_url"] != "https://oss.aliyun.com/test.wav" {
+		t.Errorf("file_url = %v, want https://oss.aliyun.com/test.wav", input["file_url"])
+	}
+}
+
+func TestRunQwenASRFiletrans_WaitForResult(t *testing.T) {
+	t.Parallel()
+	var attempt int
+	var srvURL string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/asr/transcription"):
+			json.NewEncoder(w).Encode(map[string]any{
+				"output": map[string]any{"task_id": "asr-task-2"},
+			})
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/tasks/"):
+			attempt++
+			if attempt < 2 {
+				json.NewEncoder(w).Encode(map[string]any{
+					"output": map[string]any{"task_status": "RUNNING"},
+				})
+				return
+			}
+			json.NewEncoder(w).Encode(map[string]any{
+				"output": map[string]any{
+					"task_status": "SUCCEEDED",
+					"result": map[string]any{
+						"transcription_url": srvURL + "/transcription.json",
+					},
+				},
+			})
+		case r.URL.Path == "/transcription.json":
+			json.NewEncoder(w).Encode(map[string]any{
+				"transcripts": []any{
+					map[string]any{
+						"channel_id": 0,
+						"text":       "这是一段测试文本",
+					},
+				},
+			})
+		}
+	}))
+	defer srv.Close()
+	srvURL = srv.URL
+
+	rt := &runtime.RT{
+		BaseURL:           srv.URL,
+		HTTPClient:        srv.Client(),
+		WaitForCompletion: true,
+		PollInterval:      time.Millisecond,
+	}
+	graph := graphWithAudioURL("https://oss.aliyun.com/test.wav")
+
+	result, err := RunQwenASRFiletrans(context.Background(), rt, "key", "qwen3-asr-flash-filetrans", graph)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != "这是一段测试文本" {
+		t.Errorf("result = %q, want 这是一段测试文本", result)
 	}
 }

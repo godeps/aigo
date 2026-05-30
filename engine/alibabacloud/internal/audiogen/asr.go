@@ -93,7 +93,10 @@ func RunQwenASR(ctx context.Context, rt *runtime.RT, apiKey, model string, graph
 		return "", fmt.Errorf("aliyun: marshal qwen-asr request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, rt.BaseURL+asrSyncEndpoint, bytes.NewReader(body))
+	// The sync ASR endpoint uses /compatible-mode/v1/... which is at the host
+	// root, not under /api/v1. Strip the API version suffix to avoid a doubled path.
+	syncBase := strings.TrimSuffix(rt.BaseURL, "/api/v1")
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, syncBase+asrSyncEndpoint, bytes.NewReader(body))
 	if err != nil {
 		return "", fmt.Errorf("aliyun: build qwen-asr request: %w", err)
 	}
@@ -111,6 +114,14 @@ func RunQwenASR(ctx context.Context, rt *runtime.RT, apiKey, model string, graph
 		return "", fmt.Errorf("aliyun: read qwen-asr response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		if resp.StatusCode == 404 {
+			return "", &aigoerr.Error{
+				Code:       aigoerr.CodeInvalidInput,
+				StatusCode: 404,
+				Message:    fmt.Sprintf("aliyun: qwen-asr model %q not found (404)", model),
+				Retryable:  false,
+			}
+		}
 		return "", aigoerr.FromHTTPResponse(resp, respBody, "aliyun")
 	}
 
@@ -135,6 +146,10 @@ func RunQwenASRFiletrans(ctx context.Context, rt *runtime.RT, apiKey, model stri
 		return "", err
 	}
 
+	if strings.HasPrefix(url, "data:") {
+		return "", fmt.Errorf("filetrans requires HTTP(S) file_url: %w", ierr.ErrDataURINotSupported)
+	}
+
 	input := map[string]any{
 		"file_url": url,
 	}
@@ -152,12 +167,57 @@ func RunQwenASRFiletrans(ctx context.Context, rt *runtime.RT, apiKey, model stri
 		"parameters": parameters,
 	}
 
-	return async.Submit(ctx, rt, apiKey, asrAsyncEndpoint, payload, async.URLExtractor{
+	result, err := async.Submit(ctx, rt, apiKey, asrAsyncEndpoint, payload, async.URLExtractor{
 		URLFields: [][]string{
-			{"results", "transcription_url"},
-			{"results", "text"},
+			{"result", "transcription_url"},
 		},
 	})
+	if err != nil {
+		return "", err
+	}
+
+	if !rt.WaitForCompletion {
+		return result, nil
+	}
+
+	return fetchTranscriptionText(ctx, rt.HTTPClient, result)
+}
+
+// fetchTranscriptionText downloads the transcription JSON from the given URL
+// and extracts the text from transcripts[0].text.
+func fetchTranscriptionText(ctx context.Context, client *http.Client, transcriptionURL string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, transcriptionURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("aliyun: build transcription fetch request: %w", err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("aliyun: fetch transcription json: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("aliyun: read transcription json: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("aliyun: transcription json HTTP %d", resp.StatusCode)
+	}
+
+	var result struct {
+		Transcripts []struct {
+			Text string `json:"text"`
+		} `json:"transcripts"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return "", fmt.Errorf("aliyun: decode transcription json: %w", err)
+	}
+	if len(result.Transcripts) > 0 {
+		if text := strings.TrimSpace(result.Transcripts[0].Text); text != "" {
+			return text, nil
+		}
+	}
+	return "", fmt.Errorf("aliyun: transcription json contained no text")
 }
 
 // extractChatCompletion parses an OpenAI-compatible chat completions response.

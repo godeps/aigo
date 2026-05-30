@@ -77,13 +77,6 @@ func wait(ctx context.Context, rt *runtime.RT, apiKey, taskID string, ex URLExtr
 			return "", false, fmt.Errorf("aliyun: wait for task %q: %w", taskID, err)
 		}
 		if done {
-			if url == "" {
-				return "", true, &aigoerr.Error{
-					Code:      aigoerr.CodeServerError,
-					Message:   fmt.Sprintf("aliyun: task %s SUCCEEDED but no result URL matched extractor paths", taskID),
-					Retryable: false,
-				}
-			}
 			return url, true, nil
 		}
 		return "", false, nil
@@ -146,7 +139,18 @@ func fetch(ctx context.Context, rt *runtime.RT, apiKey, taskID string, ex URLExt
 				return url, true, nil
 			}
 		}
-		return "", true, nil
+		debugSnippet := ""
+		if raw, merr := json.Marshal(output); merr == nil {
+			debugSnippet = string(raw)
+			if len(debugSnippet) > 500 {
+				debugSnippet = debugSnippet[:500] + "..."
+			}
+		}
+		return "", true, &aigoerr.Error{
+			Code:      aigoerr.CodeServerError,
+			Message:   fmt.Sprintf("aliyun: task %s SUCCEEDED but no result matched extractor paths; output=%s", taskID, debugSnippet),
+			Retryable: false,
+		}
 	default:
 		return "", false, nil
 	}

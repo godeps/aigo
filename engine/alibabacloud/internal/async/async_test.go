@@ -92,12 +92,13 @@ func TestNestedString_DeepNesting(t *testing.T) {
 // TestWait_SucceededWithoutURL verifies the bug fix: when the task SUCCEEDS
 // but no extractor path matches, we MUST return a classified error rather
 // than silently returning the taskID as the URL (data corruption risk).
+// The error message should include a debug snippet of the actual output.
 func TestWait_SucceededWithoutURL(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"output": map[string]any{
-				"task_status": "SUCCEEDED",
-				// No matching URL field.
+				"task_status":      "SUCCEEDED",
+				"unexpected_field": "some_value",
 			},
 		})
 	}))
@@ -124,6 +125,43 @@ func TestWait_SucceededWithoutURL(t *testing.T) {
 	}
 	if !strings.Contains(ae.Message, "task-xyz") {
 		t.Errorf("error message should reference taskID; got %q", ae.Message)
+	}
+	if !strings.Contains(ae.Message, "unexpected_field") {
+		t.Errorf("error message should contain output debug snippet; got %q", ae.Message)
+	}
+}
+
+func TestWait_SucceededDebugSnippetTruncated(t *testing.T) {
+	t.Parallel()
+	longValue := strings.Repeat("x", 600)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"output": map[string]any{
+				"task_status": "SUCCEEDED",
+				"long_field":  longValue,
+			},
+		})
+	}))
+	defer srv.Close()
+
+	rt := &runtime.RT{
+		BaseURL:      srv.URL,
+		HTTPClient:   srv.Client(),
+		PollInterval: time.Millisecond,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	_, err := Wait(ctx, rt, "k", "task-trunc", URLExtractor{URLFields: [][]string{{"no_match"}}})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	var ae *aigoerr.Error
+	if !errors.As(err, &ae) {
+		t.Fatalf("err = %v, want *aigoerr.Error", err)
+	}
+	if !strings.Contains(ae.Message, "...") {
+		t.Errorf("long output should be truncated with '...'; got message len=%d", len(ae.Message))
 	}
 }
 
