@@ -160,18 +160,22 @@ func TestPromptToFilter(t *testing.T) {
 		prompt   string
 		contains string
 	}{
-		{"heavy rain", "brown"},
-		{"wind blowing", "pink"},
-		{"beep sound", "sine=frequency=880"},
-		{"explosion boom", "sine=frequency=60"},
-		{"white noise static", "white"},
-		{"bell chime", "sine=frequency=1046"},
-		{"bird chirp", "sine=frequency=3200"},
-		{"laser zap", "sine=frequency=1500"},
-		{"fire crackle", "brown"},
-		{"glitch error", "violet"},
+		{"heavy rain", "tremolo"},
+		{"wind blowing", "bandpass"},
+		{"beep sound", "afade"},
+		{"explosion boom", "aecho"},
+		{"white noise static", "highpass"},
+		{"bell chime", "aecho"},
+		{"bird chirp", "tremolo"},
+		{"laser zap", "aecho"},
+		{"fire crackle", "tremolo=f=8"},
+		{"glitch error", "tremolo=f=20"},
+		{"engine motor", "tremolo"},
+		{"metal clang", "aecho"},
+		{"siren alarm", "tremolo=f=3"},
+		{"bubble pop", "afade"},
 		{"filter:sine=frequency=999", "sine=frequency=999"},
-		{"unknown thing", "pink"},
+		{"unknown thing", "lowpass"},
 	}
 	for _, c := range cases {
 		t.Run(c.prompt, func(t *testing.T) {
