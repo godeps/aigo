@@ -37,7 +37,12 @@ func RunHappyHorseImageToVideo(ctx context.Context, rt *runtime.RT, apiKey, mode
 		return "", ierr.ErrMissingReference
 	}
 
-	media := []map[string]any{{"type": "first_frame", "url": images[0]}}
+	imageURL, err := EnsureRemoteURL(ctx, rt, apiKey, images[0])
+	if err != nil {
+		return "", err
+	}
+
+	media := []map[string]any{{"type": "first_frame", "url": imageURL}}
 	input := map[string]any{"media": media}
 	if prompt, err := graphx.Prompt(graph); err == nil {
 		input["prompt"] = prompt
@@ -70,8 +75,13 @@ func RunHappyHorseReferenceToVideo(ctx context.Context, rt *runtime.RT, apiKey, 
 		return "", ierr.ErrTooManyHappyHorseImages
 	}
 
-	media := make([]map[string]any, 0, len(images))
-	for _, url := range images {
+	remoteImages, err := EnsureRemoteURLs(ctx, rt, apiKey, images)
+	if err != nil {
+		return "", err
+	}
+
+	media := make([]map[string]any, 0, len(remoteImages))
+	for _, url := range remoteImages {
 		media = append(media, map[string]any{"type": "reference_image", "url": url})
 	}
 
@@ -100,6 +110,9 @@ func RunHappyHorseVideoEdit(ctx context.Context, rt *runtime.RT, apiKey, model s
 
 	media := graphx.VideoEditMedia(graph)
 	if err := validateVideoEditMedia(media); err != nil {
+		return "", err
+	}
+	if media, err = ensureRemoteMediaURLs(ctx, rt, apiKey, media); err != nil {
 		return "", err
 	}
 
@@ -152,6 +165,11 @@ func buildHappyHorseParams(graph workflow.Graph, includeRatio, includeAudioSetti
 		}
 	}
 	if duration, ok := graphx.IntOption(graph, "duration"); ok {
+		if duration < 3 {
+			duration = 3
+		} else if duration > 15 {
+			duration = 15
+		}
 		p["duration"] = duration
 	}
 	if watermark, ok := graphx.BoolOption(graph, "watermark"); ok {

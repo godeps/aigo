@@ -46,6 +46,9 @@ func RunVideoEdit(ctx context.Context, rt *runtime.RT, apiKey, model string, gra
 	if err := validateWanVideoEditMedia(media); err != nil {
 		return "", err
 	}
+	if media, err = ensureRemoteMediaURLs(ctx, rt, apiKey, media); err != nil {
+		return "", err
+	}
 
 	input := map[string]any{
 		"prompt": prompt,

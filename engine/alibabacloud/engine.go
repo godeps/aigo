@@ -337,13 +337,20 @@ func ConfigSchema() []engine.ConfigField {
 	}
 }
 
-// modelSortPriority returns 0 for sync models (multiHandler) and 1 for async
-// models (handler). Lower priority sorts first in the routing slice.
+// modelSortPriority returns a numeric priority for sorting models within each
+// capability group. Lower values sort first in the routing slice.
+//   - 0: sync models (multiHandler) — fastest, preferred for image generation
+//   - 1: HappyHorse video models — preferred video engine (newer, better quality)
+//   - 2: other async models (handler) — fallback
 func modelSortPriority(model string) int {
 	if entry, ok := modelTable[model]; ok && entry.multiHandler != nil {
 		return 0
 	}
-	return 1
+	switch model {
+	case ModelHappyHorseT2V, ModelHappyHorseI2V, ModelHappyHorseR2V, ModelHappyHorseVideoEdit:
+		return 1
+	}
+	return 2
 }
 
 // ModelsByCapability returns all supported models grouped by capability key

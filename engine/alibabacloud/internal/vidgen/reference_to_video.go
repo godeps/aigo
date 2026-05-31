@@ -25,7 +25,10 @@ func RunReferenceToVideo(ctx context.Context, rt *runtime.RT, apiKey, model stri
 		return "", err
 	}
 
-	media := buildReferenceMedia(graph)
+	media, err := buildReferenceMedia(ctx, rt, apiKey, graph)
+	if err != nil {
+		return "", err
+	}
 	if len(media) == 0 {
 		return "", ierr.ErrMissingReference
 	}
@@ -52,21 +55,30 @@ func RunReferenceToVideo(ctx context.Context, rt *runtime.RT, apiKey, model stri
 
 // buildReferenceMedia 为 i2v/r2v 构建 media 数组。
 // Wan API 有效类型：first_frame, last_frame, driving_audio, first_clip。
-func buildReferenceMedia(graph workflow.Graph) []map[string]any {
+// All URLs are validated/uploaded via EnsureRemoteURL to guarantee HTTP(S) accessibility.
+func buildReferenceMedia(ctx context.Context, rt *runtime.RT, apiKey string, graph workflow.Graph) ([]map[string]any, error) {
 	media := make([]map[string]any, 0)
 	images := graphx.ImageURLs(graph)
 	videos := graphx.VideoURLs(graph)
 
-	for i, url := range images {
+	for i, rawURL := range images {
+		url, err := EnsureRemoteURL(ctx, rt, apiKey, rawURL)
+		if err != nil {
+			return nil, err
+		}
 		mediaType := "first_frame"
 		if i == 1 {
 			mediaType = "last_frame"
 		}
 		media = append(media, map[string]any{"type": mediaType, "url": url})
 	}
-	for _, url := range videos {
+	for _, rawURL := range videos {
+		url, err := EnsureRemoteURL(ctx, rt, apiKey, rawURL)
+		if err != nil {
+			return nil, err
+		}
 		media = append(media, map[string]any{"type": "first_clip", "url": url})
 	}
 
-	return media
+	return media, nil
 }
