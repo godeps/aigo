@@ -173,12 +173,16 @@ func TestValidateParams_InvalidEnum(t *testing.T) {
 func TestValidateParams_EnumCaseInsensitive(t *testing.T) {
 	t.Parallel()
 	tool := GenerateVideo()
-	err := ValidateParams(tool, map[string]interface{}{
+	params := map[string]interface{}{
 		"prompt":     "a sunset",
 		"resolution": "1080p",
-	})
+	}
+	err := ValidateParams(tool, params)
 	if err != nil {
 		t.Fatalf("expected case-insensitive enum match, got: %v", err)
+	}
+	if params["resolution"] != "1080P" {
+		t.Fatalf("expected canonicalized value 1080P, got: %v", params["resolution"])
 	}
 }
 
