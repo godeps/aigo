@@ -102,8 +102,12 @@ var EngineMetadataMap = map[string]EngineMetadata{
 	// Audio / Music
 	"elevenlabs": {
 		DisplayName: DisplayName{"en": "ElevenLabs", "zh": "ElevenLabs"},
-		Intro:       DisplayName{"en": "ElevenLabs provides industry-leading text-to-speech with natural-sounding voices, voice cloning, and multilingual support.", "zh": "ElevenLabs 提供业界领先的语音合成，具备自然音色、声音克隆和多语言支持。"},
+		Intro:       DisplayName{"en": "ElevenLabs provides industry-leading text-to-speech with natural-sounding voices, voice cloning, multilingual support, and AI sound effects generation.", "zh": "ElevenLabs 提供业界领先的语音合成，具备自然音色、声音克隆、多语言支持和 AI 音效生成。"},
 		DocURL:      "https://elevenlabs.io/docs/api-reference",
+	},
+	"ffmpeg": {
+		DisplayName: DisplayName{"en": "FFmpeg", "zh": "FFmpeg"},
+		Intro:       DisplayName{"en": "Local audio processing engine using FFmpeg for sound effects generation and multi-track audio mixing.", "zh": "基于 FFmpeg 的本地音频处理引擎，支持音效生成和多轨音频混合。"},
 	},
 	"minimax": {
 		DisplayName: DisplayName{"en": "MiniMax", "zh": "MiniMax"},

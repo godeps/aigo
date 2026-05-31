@@ -176,6 +176,69 @@ func MergeJSONOption(g workflow.Graph, dst map[string]any, keys ...string) {
 	}
 }
 
+// StringSliceOption extracts a string slice from the graph under the given keys.
+// It handles both []string and []any (JSON-decoded arrays).
+func StringSliceOption(g workflow.Graph, keys ...string) ([]string, bool) {
+	for _, id := range g.SortedNodeIDs() {
+		node := g[id]
+		for _, key := range keys {
+			raw, ok := node.Input(key)
+			if !ok || raw == nil {
+				continue
+			}
+			switch v := raw.(type) {
+			case []string:
+				if len(v) > 0 {
+					return v, true
+				}
+			case []any:
+				result := make([]string, 0, len(v))
+				for _, item := range v {
+					if s, ok := item.(string); ok && s != "" {
+						result = append(result, s)
+					}
+				}
+				if len(result) > 0 {
+					return result, true
+				}
+			}
+		}
+	}
+	return nil, false
+}
+
+// Float64SliceOption extracts a float64 slice from the graph under the given keys.
+func Float64SliceOption(g workflow.Graph, keys ...string) ([]float64, bool) {
+	for _, id := range g.SortedNodeIDs() {
+		node := g[id]
+		for _, key := range keys {
+			raw, ok := node.Input(key)
+			if !ok || raw == nil {
+				continue
+			}
+			if arr, ok := raw.([]any); ok && len(arr) > 0 {
+				result := make([]float64, 0, len(arr))
+				for _, item := range arr {
+					switch n := item.(type) {
+					case float64:
+						result = append(result, n)
+					case int:
+						result = append(result, float64(n))
+					case json.Number:
+						if f, err := n.Float64(); err == nil {
+							result = append(result, f)
+						}
+					}
+				}
+				if len(result) > 0 {
+					return result, true
+				}
+			}
+		}
+	}
+	return nil, false
+}
+
 func NormalizeOpenAIImageSize(width, height int) string {
 	return NormalizeImageSize([]string{"1024x1024", "1024x1536", "1536x1024"}, width, height)
 }

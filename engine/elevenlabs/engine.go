@@ -33,6 +33,7 @@ const (
 	ModelTurboV25        = "eleven_turbo_v2_5"
 	ModelFlashV25        = "eleven_flash_v2_5"
 	ModelMultilingualSTS = "eleven_multilingual_sts_v2"
+	ModelSoundGeneration = "eleven_sound_generation"
 )
 
 var (
@@ -84,12 +85,55 @@ func New(cfg Config) *Engine {
 	}
 }
 
-// Execute performs TTS via the ElevenLabs API.
+func isSFXModel(model string) bool {
+	return model == ModelSoundGeneration
+}
+
+// Execute dispatches to TTS or SFX based on the configured model.
 func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, error) {
 	if err := g.Validate(); err != nil {
 		return engine.Result{}, fmt.Errorf("elevenlabs: validate graph: %w", err)
 	}
+	if isSFXModel(e.model) {
+		return e.executeSFX(ctx, g)
+	}
+	return e.executeTTS(ctx, g)
+}
 
+func (e *Engine) executeSFX(ctx context.Context, g workflow.Graph) (engine.Result, error) {
+	apiKey, err := engine.ResolveKey(e.apiKey, "ELEVENLABS_API_KEY")
+	if err != nil {
+		return engine.Result{}, err
+	}
+
+	text, err := resolve.ExtractPrompt(g)
+	if err != nil || strings.TrimSpace(text) == "" {
+		return engine.Result{}, ErrMissingText
+	}
+
+	payload := map[string]any{"text": text}
+	if d, ok := resolve.Float64Option(g, "duration"); ok && d > 0 {
+		payload["duration_seconds"] = d
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return engine.Result{}, fmt.Errorf("elevenlabs: marshal sfx request: %w", err)
+	}
+
+	endpoint := fmt.Sprintf("%s/v1/sound-generation", e.baseURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return engine.Result{}, fmt.Errorf("elevenlabs: build sfx request: %w", err)
+	}
+	req.Header.Set("xi-api-key", apiKey)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "audio/mpeg")
+
+	return e.doAudioRequest(req)
+}
+
+func (e *Engine) executeTTS(ctx context.Context, g workflow.Graph) (engine.Result, error) {
 	apiKey, err := engine.ResolveKey(e.apiKey, "ELEVENLABS_API_KEY")
 	if err != nil {
 		return engine.Result{}, err
@@ -97,7 +141,6 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 
 	text, err := resolve.ExtractPrompt(g)
 	if err != nil {
-		// Fallback to text-specific key.
 		if t, ok := resolve.StringOption(g, "text"); ok && strings.TrimSpace(t) != "" {
 			text = strings.TrimSpace(t)
 		}
@@ -136,8 +179,8 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 		return engine.Result{}, fmt.Errorf("elevenlabs: marshal request: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/v1/text-to-speech/%s", e.baseURL, url.PathEscape(voiceID))
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	endpoint := fmt.Sprintf("%s/v1/text-to-speech/%s", e.baseURL, url.PathEscape(voiceID))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
 		return engine.Result{}, fmt.Errorf("elevenlabs: build request: %w", err)
 	}
@@ -145,6 +188,10 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "audio/mpeg")
 
+	return e.doAudioRequest(req)
+}
+
+func (e *Engine) doAudioRequest(req *http.Request) (engine.Result, error) {
 	resp, err := e.httpClient.Do(req)
 	if err != nil {
 		return engine.Result{}, fmt.Errorf("elevenlabs: http post: %w", err)
@@ -171,8 +218,12 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 
 // Capabilities implements engine.Describer.
 func (e *Engine) Capabilities() engine.Capability {
+	mt := []string{"audio"}
+	if isSFXModel(e.model) {
+		mt = []string{"audio", "sfx"}
+	}
 	return engine.Capability{
-		MediaTypes:   []string{"audio"},
+		MediaTypes:   mt,
 		Models:       []string{e.model},
 		SupportsSync: true,
 	}
@@ -195,6 +246,9 @@ func ModelsByCapability() map[string][]string {
 			ModelTurboV25,
 			ModelFlashV25,
 			ModelMultilingualSTS,
+		},
+		"sfx": {
+			ModelSoundGeneration,
 		},
 	}
 }

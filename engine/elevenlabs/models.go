@@ -41,5 +41,14 @@ func ModelInfos() []engine.ModelInfo {
 			DocURL:      "https://elevenlabs.io/docs/api-reference/text-to-speech",
 			Capability:  "tts",
 		},
+		{
+			Name:        ModelSoundGeneration,
+			Provider:    "elevenlabs",
+			DisplayName: engine.DisplayName{"en": "Sound Generation", "zh": "音效生成"},
+			Description: engine.DisplayName{"en": "AI sound effects generation from text", "zh": "文本生成音效"},
+			Intro:       engine.DisplayName{"en": "Generate realistic sound effects from text descriptions. Supports a wide range of sounds including nature, mechanical, ambient, and impact effects.", "zh": "通过文本描述生成逼真的音效。支持自然、机械、环境和撞击等多种音效类型。"},
+			DocURL:      "https://elevenlabs.io/docs/api-reference/sound-generation",
+			Capability:  "sfx",
+		},
 	}
 }

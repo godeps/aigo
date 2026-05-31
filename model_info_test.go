@@ -159,7 +159,7 @@ func TestModelInfoCapabilities(t *testing.T) {
 		"image": true, "image_edit": true, "video": true, "video_edit": true,
 		"tts": true, "asr": true, "music": true, "3d": true,
 		"text": true, "voice_design": true, "embedding": true,
-		"video_understanding": true,
+		"video_understanding": true, "sfx": true, "audio_mix": true,
 	}
 
 	client := NewClient()

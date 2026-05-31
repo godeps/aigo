@@ -56,6 +56,21 @@ type MusicOptions struct {
 	Format         string // "mp3", "wav", "flac"
 }
 
+// SFXOptions groups sound effects generation parameters.
+type SFXOptions struct {
+	Duration int
+	Format   string // "mp3", "wav", "flac"
+}
+
+// AudioMixOptions groups audio mixing parameters.
+type AudioMixOptions struct {
+	AudioURLs []string
+	Volumes   []float64
+	Delays    []int
+	Duration  int
+	Format    string // "mp3", "wav", "flac"
+}
+
 // VoiceDesignOptions groups voice design parameters.
 type VoiceDesignOptions struct {
 	VoicePrompt    string
@@ -96,6 +111,8 @@ type AgentTask struct {
 	TTS         *TTSOptions
 	VoiceDesign *VoiceDesignOptions
 	Music       *MusicOptions
+	SFX         *SFXOptions
+	AudioMix    *AudioMixOptions
 
 	// Structured groups image/video options separately for finer control.
 	Structured *AgentTaskStructured
@@ -834,6 +851,46 @@ func BuildGraph(task AgentTask) workflow.Graph {
 			}
 			nextID++
 		}
+	}
+
+	if task.SFX != nil {
+		sfxOpts := map[string]any{}
+		if task.SFX.Duration > 0 {
+			sfxOpts["duration"] = task.SFX.Duration
+		}
+		if task.SFX.Format != "" {
+			sfxOpts["format"] = task.SFX.Format
+		}
+		if len(sfxOpts) > 0 {
+			graph[nodeID(nextID)] = workflow.Node{
+				ClassType: "SFXOptions",
+				Inputs:    sfxOpts,
+			}
+			nextID++
+		}
+	}
+
+	if task.AudioMix != nil && len(task.AudioMix.AudioURLs) >= 2 {
+		mixOpts := map[string]any{
+			"audio_urls": task.AudioMix.AudioURLs,
+		}
+		if len(task.AudioMix.Volumes) > 0 {
+			mixOpts["volumes"] = task.AudioMix.Volumes
+		}
+		if len(task.AudioMix.Delays) > 0 {
+			mixOpts["delays"] = task.AudioMix.Delays
+		}
+		if task.AudioMix.Duration > 0 {
+			mixOpts["duration"] = task.AudioMix.Duration
+		}
+		if task.AudioMix.Format != "" {
+			mixOpts["format"] = task.AudioMix.Format
+		}
+		graph[nodeID(nextID)] = workflow.Node{
+			ClassType: "AudioMixOptions",
+			Inputs:    mixOpts,
+		}
+		nextID++
 	}
 
 	if task.VoiceDesign != nil &&

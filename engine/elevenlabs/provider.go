@@ -25,6 +25,12 @@ func DefaultProvider() engine.Provider {
 				EnvVars:     []string{"ELEVENLABS_API_KEY"},
 				DisplayName: engine.LookupDisplayName("elevenlabs"),
 			},
+			{
+				Name:        "elevenlabs-sfx",
+				Engine:      New(Config{Model: ModelSoundGeneration}),
+				EnvVars:     []string{"ELEVENLABS_API_KEY"},
+				DisplayName: engine.LookupDisplayName("elevenlabs"),
+			},
 		},
 	}
 }

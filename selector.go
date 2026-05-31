@@ -13,6 +13,12 @@ func InferMediaType(task AgentTask) string {
 	if task.VoiceDesign != nil {
 		return "voice_design"
 	}
+	if task.AudioMix != nil {
+		return "audio_mix"
+	}
+	if task.SFX != nil {
+		return "sfx"
+	}
 	if task.Music != nil {
 		return "music"
 	}

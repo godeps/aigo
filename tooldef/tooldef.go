@@ -20,7 +20,7 @@ type ToolDef struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Parameters  Schema `json:"parameters"`
-	Category    string `json:"category,omitempty"` // media type category: "image", "video", "audio", "3d", "music", "voice"
+	Category    string `json:"category,omitempty"` // media type category: "image", "video", "audio", "3d", "music", "voice", "sfx"
 }
 
 // Schema is a minimal JSON Schema representation.
@@ -133,6 +133,8 @@ func AllTools() []ToolDef {
 		EditVideo(),
 		TranscribeAudio(),
 		GenerateMusic(),
+		GenerateSfx(),
+		MixAudio(),
 		UnderstandImage(),
 	}
 }
@@ -513,6 +515,81 @@ func GenerateMusic() ToolDef {
 				},
 			},
 			Required: []string{"prompt"},
+		},
+	}
+}
+
+// GenerateSfx returns the tool definition for sound effects generation.
+func GenerateSfx() ToolDef {
+	return ToolDef{
+		Name:        "generate_sfx",
+		Description: "Generate a sound effect from a text description. Returns a URL or data URI of the generated audio. Describe the sound precisely: 'heavy rain on a tin roof with distant thunder' is better than 'rain sound'.",
+		Category:    "sfx",
+		Parameters: Schema{
+			Type: "object",
+			Properties: map[string]Schema{
+				"prompt": {
+					Type:        "string",
+					Description: "Describe the sound effect: source, texture, intensity, and environment. Be specific: 'metallic clang of a sword hitting a shield in a stone hall' is better than 'sword sound'.",
+				},
+				"duration": {
+					Type:        "integer",
+					Description: "Duration of the sound effect in seconds",
+				},
+				"format": {
+					Type:        "string",
+					Description: "Output audio format",
+					Enum:        []string{"mp3", "wav", "flac"},
+					Default:     "mp3",
+				},
+			},
+			Required: []string{"prompt"},
+		},
+	}
+}
+
+// MixAudio returns the tool definition for mixing multiple audio tracks.
+func MixAudio() ToolDef {
+	return ToolDef{
+		Name:        "mix_audio",
+		Description: "Mix multiple audio tracks into a single output. Accepts 2 or more audio URLs with optional per-track volume and delay controls. Use this to combine background music, sound effects, and voice narration into a final mix.",
+		Category:    "audio",
+		Parameters: Schema{
+			Type: "object",
+			Properties: map[string]Schema{
+				"audio_urls": {
+					Type:        "array",
+					Description: "URLs of audio files to mix (minimum 2). The first track is the primary/base track",
+					Items: &Schema{
+						Type: "string",
+					},
+				},
+				"volumes": {
+					Type:        "array",
+					Description: "Per-track volume levels (0.0 to 1.0). Index matches audio_urls. Defaults to 1.0 for all tracks",
+					Items: &Schema{
+						Type: "number",
+					},
+				},
+				"delays": {
+					Type:        "array",
+					Description: "Per-track delay in milliseconds before playback starts. Index matches audio_urls. Defaults to 0 for all tracks",
+					Items: &Schema{
+						Type: "integer",
+					},
+				},
+				"duration": {
+					Type:        "integer",
+					Description: "Maximum output duration in seconds. If omitted, uses the longest track's duration",
+				},
+				"format": {
+					Type:        "string",
+					Description: "Output audio format",
+					Enum:        []string{"mp3", "wav", "flac"},
+					Default:     "mp3",
+				},
+			},
+			Required: []string{"audio_urls"},
 		},
 	}
 }
