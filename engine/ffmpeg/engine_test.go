@@ -2,7 +2,6 @@ package ffmpeg
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os/exec"
@@ -230,7 +229,6 @@ func putLE16(b []byte, v uint16) {
 }
 
 func putLE32(b []byte, v uint32) {
-	_ = fmt.Sprintf("") // suppress unused import
 	b[0] = byte(v)
 	b[1] = byte(v >> 8)
 	b[2] = byte(v >> 16)

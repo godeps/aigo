@@ -14,8 +14,9 @@ import (
 	"net/http"
 	"os"
 	"net/url"
-	"os/exec"
 	"strings"
+
+	ffmpeggo "github.com/u2takey/ffmpeg-go"
 
 	"github.com/godeps/aigo/engine"
 	"github.com/godeps/aigo/workflow"
@@ -109,12 +110,13 @@ func (e *Engine) executeSFX(ctx context.Context, g workflow.Graph, format string
 	outFile.Close()
 	defer os.Remove(outPath)
 
-	err = exec.CommandContext(ctx, "ffmpeg",
-		"-f", "lavfi", "-i", filter,
-		"-t", fmt.Sprintf("%.1f", duration),
-		"-y", outPath,
-	).Run()
-	if err != nil {
+	stream := ffmpeggo.Input(filter, ffmpeggo.KwArgs{"f": "lavfi"}).
+		Output(outPath, ffmpeggo.KwArgs{"t": fmt.Sprintf("%.1f", duration)}).
+		OverWriteOutput().
+		Silent(true)
+	stream.Context = ctx
+
+	if err := stream.Run(); err != nil {
 		return engine.Result{}, fmt.Errorf("ffmpeg: generate sfx: %w", err)
 	}
 
@@ -158,48 +160,38 @@ func (e *Engine) executeMix(ctx context.Context, g workflow.Graph, format string
 	outFile.Close()
 	defer os.Remove(outPath)
 
-	filterParts := make([]string, 0, len(tmpFiles))
-	for i := range tmpFiles {
-		label := fmt.Sprintf("[%d:a]", i)
-		var filters []string
+	// Build per-track streams with volume/delay filters via ffmpeg-go API.
+	tracks := make([]*ffmpeggo.Stream, len(tmpFiles))
+	for i, f := range tmpFiles {
+		s := ffmpeggo.Input(f)
 
 		if i < len(delays) && delays[i] > 0 {
 			ms := int(delays[i])
-			filters = append(filters, fmt.Sprintf("adelay=%d|%d", ms, ms))
+			s = s.Filter("adelay", ffmpeggo.Args{fmt.Sprintf("%d|%d", ms, ms)})
 		}
 		if i < len(volumes) && volumes[i] >= 0 && volumes[i] != 1.0 {
-			filters = append(filters, fmt.Sprintf("volume=%.2f", volumes[i]))
+			s = s.Filter("volume", ffmpeggo.Args{fmt.Sprintf("%.2f", volumes[i])})
 		}
 
-		outLabel := fmt.Sprintf("[a%d]", i)
-		if len(filters) > 0 {
-			filterParts = append(filterParts, fmt.Sprintf("%s%s%s", label, strings.Join(filters, ","), outLabel))
-		} else {
-			filterParts = append(filterParts, fmt.Sprintf("%sanull%s", label, outLabel))
-		}
+		tracks[i] = s
 	}
 
-	mixLabels := make([]string, len(tmpFiles))
-	for i := range tmpFiles {
-		mixLabels[i] = fmt.Sprintf("[a%d]", i)
-	}
-	filterParts = append(filterParts, fmt.Sprintf("%samix=inputs=%d:duration=longest[out]",
-		strings.Join(mixLabels, ""), len(tmpFiles)))
+	// Combine all tracks with amix filter.
+	mixed := ffmpeggo.Filter(tracks, "amix", nil, ffmpeggo.KwArgs{
+		"inputs":   len(tracks),
+		"duration": "longest",
+	})
 
-	filterComplex := strings.Join(filterParts, ";")
-
-	args := []string{"-y"}
-	for _, f := range tmpFiles {
-		args = append(args, "-i", f)
-	}
-	args = append(args, "-filter_complex", filterComplex, "-map", "[out]")
+	outKwargs := ffmpeggo.KwArgs{}
 	if maxDuration > 0 {
-		args = append(args, "-t", fmt.Sprintf("%.1f", maxDuration))
+		outKwargs["t"] = fmt.Sprintf("%.1f", maxDuration)
 	}
-	args = append(args, outPath)
 
-	err = exec.CommandContext(ctx, "ffmpeg", args...).Run()
-	if err != nil {
+	stream := ffmpeggo.OutputContext(ctx, []*ffmpeggo.Stream{mixed}, outPath, outKwargs).
+		OverWriteOutput().
+		Silent(true)
+
+	if err := stream.Run(); err != nil {
 		return engine.Result{}, fmt.Errorf("ffmpeg: mix audio: %w", err)
 	}
 
