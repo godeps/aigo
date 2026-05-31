@@ -233,7 +233,7 @@ func ExtractImageSizeSpec(g workflow.Graph) SizeSpec {
 					spec.AspectRatio = ar
 				}
 				if res, ok := ref.Node.StringInput("resolution"); ok && res != "" {
-					spec.Resolution = res
+					spec.Resolution = normalizeResolution(res)
 				}
 				return spec
 			}
@@ -242,7 +242,7 @@ func ExtractImageSizeSpec(g workflow.Graph) SizeSpec {
 		if ar, ok := ref.Node.StringInput("aspect_ratio"); ok && ar != "" {
 			spec := SizeSpec{AspectRatio: ar}
 			if res, ok := ref.Node.StringInput("resolution"); ok && res != "" {
-				spec.Resolution = res
+				spec.Resolution = normalizeResolution(res)
 			}
 			return spec
 		}
@@ -317,7 +317,7 @@ func ExtractVideoSizeSpec(g workflow.Graph) SizeSpec {
 
 		// Overlay resolution
 		if res, ok := ref.Node.StringInput("resolution"); ok && res != "" {
-			spec.Resolution = res
+			spec.Resolution = normalizeResolution(res)
 		}
 
 		if !spec.IsZero() {
@@ -332,7 +332,7 @@ func ExtractVideoSizeSpec(g workflow.Graph) SizeSpec {
 			spec.AspectRatio = ar
 		}
 		if res, ok := StringOption(g, "resolution"); ok && res != "" {
-			spec.Resolution = res
+			spec.Resolution = normalizeResolution(res)
 		}
 		if !spec.IsZero() {
 			return spec
@@ -347,7 +347,7 @@ func ExtractVideoSizeSpec(g workflow.Graph) SizeSpec {
 				spec.AspectRatio = ar
 			}
 			if res, ok := StringOption(g, "resolution"); ok && res != "" {
-				spec.Resolution = res
+				spec.Resolution = normalizeResolution(res)
 			}
 			return spec
 		}
@@ -356,13 +356,13 @@ func ExtractVideoSizeSpec(g workflow.Graph) SizeSpec {
 	if ar, ok := StringOption(g, "aspect_ratio"); ok && ar != "" {
 		spec := SizeSpec{AspectRatio: ar}
 		if res, ok := StringOption(g, "resolution"); ok && res != "" {
-			spec.Resolution = res
+			spec.Resolution = normalizeResolution(res)
 		}
 		return spec
 	}
 
 	if res, ok := StringOption(g, "resolution"); ok && res != "" {
-		return SizeSpec{Resolution: res}
+		return SizeSpec{Resolution: normalizeResolution(res)}
 	}
 
 	// 3. EmptyLatentImage
@@ -375,6 +375,10 @@ func ExtractVideoSizeSpec(g workflow.Graph) SizeSpec {
 	}
 
 	return SizeSpec{}
+}
+
+func normalizeResolution(s string) string {
+	return strings.ToUpper(strings.TrimSpace(s))
 }
 
 // --- internal helpers ---

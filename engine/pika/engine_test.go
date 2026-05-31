@@ -270,7 +270,7 @@ func TestExecuteWithOptions(t *testing.T) {
 	if gotPayload["aspectRatio"] != "16:9" {
 		t.Fatalf("aspectRatio = %v", gotPayload["aspectRatio"])
 	}
-	if gotPayload["resolution"] != "1080p" {
+	if gotPayload["resolution"] != "1080P" {
 		t.Fatalf("resolution = %v", gotPayload["resolution"])
 	}
 }

@@ -139,7 +139,7 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 		}
 	}
 	if res, ok := resolve.StringOption(g, "resolution"); ok && res != "" {
-		payload["resolution"] = res
+		payload["resolution"] = strings.ToUpper(res)
 	}
 
 	body, err := json.Marshal(payload)

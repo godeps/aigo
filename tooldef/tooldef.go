@@ -70,7 +70,7 @@ func ValidateParams(def ToolDef, params map[string]interface{}) error {
 		}
 		valid := false
 		for _, e := range prop.Enum {
-			if s == e {
+			if strings.EqualFold(s, e) {
 				valid = true
 				break
 			}
