@@ -166,6 +166,12 @@ func TestPromptToFilter(t *testing.T) {
 		{"beep sound", "sine=frequency=880"},
 		{"explosion boom", "sine=frequency=60"},
 		{"white noise static", "white"},
+		{"bell chime", "sine=frequency=1046"},
+		{"bird chirp", "sine=frequency=3200"},
+		{"laser zap", "sine=frequency=1500"},
+		{"fire crackle", "brown"},
+		{"glitch error", "violet"},
+		{"filter:sine=frequency=999", "sine=frequency=999"},
 		{"unknown thing", "pink"},
 	}
 	for _, c := range cases {
@@ -175,6 +181,23 @@ func TestPromptToFilter(t *testing.T) {
 				t.Errorf("promptToFilter(%q) = %q, want contains %q", c.prompt, f, c.contains)
 			}
 		})
+	}
+}
+
+func TestDownloadToTemp_UnsafeURL(t *testing.T) {
+	t.Parallel()
+	e := New(Config{Mode: ModeMix})
+	graph := workflow.Graph{
+		"1": {ClassType: "AudioMixOptions", Inputs: map[string]any{
+			"audio_urls": []any{"file:///etc/passwd", "file:///etc/shadow"},
+		}},
+	}
+	_, err := e.Execute(context.Background(), graph)
+	if err == nil {
+		t.Fatal("expected error for file:// URL")
+	}
+	if !strings.Contains(err.Error(), "only http/https") {
+		t.Fatalf("expected URL scheme error, got: %v", err)
 	}
 }
 

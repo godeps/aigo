@@ -13,6 +13,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"net/url"
 	"os/exec"
 	"strings"
 
@@ -26,9 +27,13 @@ const (
 	ModeMix = "mix"
 )
 
+const maxOutputSize = 100 * 1024 * 1024 // 100 MB
+
 var (
 	ErrMissingPrompt    = errors.New("ffmpeg: missing prompt for SFX generation")
 	ErrMissingAudioURLs = errors.New("ffmpeg: audio_urls is required (minimum 2)")
+	ErrUnsafeURL        = errors.New("ffmpeg: only http/https URLs are allowed")
+	ErrOutputTooLarge   = errors.New("ffmpeg: output exceeds 100 MB size limit")
 )
 
 // Config configures the FFmpeg engine.
@@ -203,23 +208,57 @@ func (e *Engine) executeMix(ctx context.Context, g workflow.Graph, format string
 
 func promptToFilter(prompt string) string {
 	p := strings.ToLower(prompt)
+
+	// Allow direct ffmpeg filter expressions via "filter:" prefix.
+	if strings.HasPrefix(p, "filter:") {
+		return strings.TrimSpace(strings.TrimPrefix(p, "filter:"))
+	}
+
 	switch {
-	case containsAny(p, "rain", "water", "ocean", "wave", "stream"):
+	// Nature / ambient
+	case containsAny(p, "rain", "water", "ocean", "wave", "stream", "river"):
 		return "anoisesrc=color=brown:amplitude=0.3"
-	case containsAny(p, "wind", "breeze", "air"):
+	case containsAny(p, "wind", "breeze", "air", "gust"):
 		return "anoisesrc=color=pink:amplitude=0.2"
-	case containsAny(p, "static", "noise", "hiss", "tv"):
-		return "anoisesrc=color=white:amplitude=0.15"
+	case containsAny(p, "fire", "crackle", "flame", "campfire"):
+		return "anoisesrc=color=brown:amplitude=0.25"
+	case containsAny(p, "bird", "chirp", "tweet", "cricket", "insect"):
+		return "sine=frequency=3200:sample_rate=44100"
+
+	// Mechanical / impact
+	case containsAny(p, "bass", "boom", "rumble", "thunder", "explosion", "cannon"):
+		return "sine=frequency=60:sample_rate=44100"
+	case containsAny(p, "click", "tap", "knock", "tick"):
+		return "sine=frequency=1200:sample_rate=44100"
+	case containsAny(p, "metal", "clang", "anvil", "hammer"):
+		return "sine=frequency=2400:sample_rate=44100"
+	case containsAny(p, "engine", "motor", "machine", "vibrat"):
+		return "sine=frequency=120:sample_rate=44100"
+
+	// Tonal / musical
+	case containsAny(p, "bell", "chime", "ring", "ding"):
+		return "sine=frequency=1046:sample_rate=44100"
 	case containsAny(p, "beep", "alert", "notification", "ping"):
 		return "sine=frequency=880:sample_rate=44100"
-	case containsAny(p, "bass", "boom", "rumble", "thunder", "explosion"):
-		return "sine=frequency=60:sample_rate=44100"
-	case containsAny(p, "tone", "hum", "drone"):
-		return "sine=frequency=440:sample_rate=44100"
-	case containsAny(p, "click", "tap", "knock"):
-		return "sine=frequency=1200:sample_rate=44100"
-	case containsAny(p, "siren", "alarm"):
+	case containsAny(p, "siren", "alarm", "emergency"):
 		return "sine=frequency=660:sample_rate=44100"
+	case containsAny(p, "whistle", "flute", "pipe"):
+		return "sine=frequency=1568:sample_rate=44100"
+	case containsAny(p, "tone", "hum", "drone", "buzz"):
+		return "sine=frequency=440:sample_rate=44100"
+
+	// Electronic / noise
+	case containsAny(p, "static", "noise", "hiss", "tv", "radio"):
+		return "anoisesrc=color=white:amplitude=0.15"
+	case containsAny(p, "glitch", "digital", "error", "corrupt"):
+		return "anoisesrc=color=violet:amplitude=0.2"
+	case containsAny(p, "sweep", "whoosh", "swish", "swing"):
+		return "sine=frequency=200:sample_rate=44100"
+	case containsAny(p, "laser", "zap", "beam", "phaser"):
+		return "sine=frequency=1500:sample_rate=44100"
+	case containsAny(p, "bubble", "pop", "drip", "drop"):
+		return "sine=frequency=600:sample_rate=44100"
+
 	default:
 		return "anoisesrc=color=pink:amplitude=0.2"
 	}
@@ -234,8 +273,16 @@ func containsAny(s string, keywords ...string) bool {
 	return false
 }
 
-func downloadToTemp(ctx context.Context, client *http.Client, url string) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+func downloadToTemp(ctx context.Context, client *http.Client, rawURL string) (string, error) {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return "", fmt.Errorf("ffmpeg: invalid URL: %w", err)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return "", ErrUnsafeURL
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return "", err
 	}
@@ -262,6 +309,13 @@ func downloadToTemp(ctx context.Context, client *http.Client, url string) (strin
 }
 
 func fileToDataURI(path, format string) (engine.Result, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return engine.Result{}, fmt.Errorf("ffmpeg: stat output: %w", err)
+	}
+	if info.Size() > maxOutputSize {
+		return engine.Result{}, ErrOutputTooLarge
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return engine.Result{}, fmt.Errorf("ffmpeg: read output: %w", err)

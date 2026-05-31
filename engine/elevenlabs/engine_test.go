@@ -336,3 +336,80 @@ func TestNewDefaults(t *testing.T) {
 		t.Fatalf("model = %q, want %q", e.model, ModelMultilingualV2)
 	}
 }
+
+func TestExecuteSFX(t *testing.T) {
+	t.Parallel()
+
+	var gotPayload map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/sound-generation" {
+			t.Errorf("path = %q, want /v1/sound-generation", r.URL.Path)
+			http.Error(w, "wrong path", http.StatusNotFound)
+			return
+		}
+		if got := r.Header.Get("xi-api-key"); got != "test-key" {
+			t.Errorf("xi-api-key = %q", got)
+			http.Error(w, "bad auth", http.StatusUnauthorized)
+			return
+		}
+		json.NewDecoder(r.Body).Decode(&gotPayload)
+		w.Header().Set("Content-Type", "audio/mpeg")
+		w.Write([]byte("fake-sfx-audio"))
+	}))
+	defer server.Close()
+
+	e := New(Config{
+		APIKey:  "test-key",
+		BaseURL: server.URL,
+		Model:   ModelSoundGeneration,
+	})
+
+	graph := workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "thunder rolling in the distance"}},
+		"2": {ClassType: "SFXOptions", Inputs: map[string]any{"duration": 5}},
+	}
+
+	result, err := e.Execute(context.Background(), graph)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if result.Kind != engine.OutputDataURI {
+		t.Fatalf("Kind = %v, want OutputDataURI", result.Kind)
+	}
+	if !strings.HasPrefix(result.Value, "data:audio/mpeg;base64,") {
+		t.Fatalf("Value prefix = %q", result.Value[:30])
+	}
+	if gotPayload["text"] != "thunder rolling in the distance" {
+		t.Fatalf("text = %v", gotPayload["text"])
+	}
+	if gotPayload["duration_seconds"] == nil {
+		t.Fatal("expected duration_seconds in payload")
+	}
+}
+
+func TestExecuteSFX_MissingText(t *testing.T) {
+	t.Parallel()
+	e := New(Config{Model: ModelSoundGeneration, APIKey: "k"})
+	graph := workflow.Graph{
+		"1": {ClassType: "Options", Inputs: map[string]any{"duration": 3}},
+	}
+	_, err := e.Execute(context.Background(), graph)
+	if err == nil {
+		t.Fatal("expected error for missing text")
+	}
+}
+
+func TestCapabilities_SFX(t *testing.T) {
+	t.Parallel()
+	e := New(Config{Model: ModelSoundGeneration})
+	cap := e.Capabilities()
+	found := false
+	for _, mt := range cap.MediaTypes {
+		if mt == "sfx" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected sfx in MediaTypes, got %v", cap.MediaTypes)
+	}
+}
