@@ -140,8 +140,8 @@ var EngineMetadataMap = map[string]EngineMetadata{
 		DocURL:      "https://platform.openai.com/docs/guides/vision",
 	},
 	"qwenvl": {
-		DisplayName: DisplayName{"en": "Qwen-VL", "zh": "通义千问视觉"},
-		Intro:       DisplayName{"en": "Qwen-VL provides multimodal understanding with text, image, and video analysis capabilities via DashScope.", "zh": "通义千问视觉通过百炼平台提供多模态理解能力，支持文本、图片和视频分析。"},
+		DisplayName: DisplayName{"en": "Qwen Multimodal", "zh": "通义千问多模态"},
+		Intro:       DisplayName{"en": "Qwen multimodal understanding with text, image, video, and audio analysis capabilities via DashScope.", "zh": "通义千问多模态通过百炼平台提供全模态理解能力，支持文本、图片、视频和音频分析。"},
 		DocURL:      "https://help.aliyun.com/zh/model-studio/qwen-vl-api-reference",
 	},
 

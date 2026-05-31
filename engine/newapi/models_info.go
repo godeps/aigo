@@ -37,10 +37,8 @@ func ModelInfos() []engine.ModelInfo {
 
 		// ── Vision Understanding ──
 		{Name: "newapi/qwen3.6-plus", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Qwen 3.6 Plus", "zh": "通义千问 3.6 Plus"}, Capability: "video_understanding"},
-		{Name: "newapi/qwen-vl-max", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Qwen-VL Max", "zh": "通义千问 VL Max"}, Capability: "video_understanding"},
-		{Name: "newapi/qwen-vl-plus", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Qwen-VL Plus", "zh": "通义千问 VL Plus"}, Capability: "video_understanding"},
-		{Name: "newapi/qwen-vl-max-latest", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Qwen-VL Max Latest", "zh": "通义千问 VL Max 最新版"}, Capability: "video_understanding"},
-		{Name: "newapi/qwen-vl-plus-latest", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Qwen-VL Plus Latest", "zh": "通义千问 VL Plus 最新版"}, Capability: "video_understanding"},
+		{Name: "newapi/qwen3.6-flash", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Qwen 3.6 Flash", "zh": "通义千问 3.6 Flash"}, Capability: "video_understanding"},
+		{Name: "newapi/qwen3.5-omni-plus", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Qwen 3.5 Omni Plus", "zh": "通义千问 3.5 Omni Plus"}, Capability: "video_understanding"},
 		{Name: "newapi/glm-4v", Provider: "newapi", DisplayName: engine.DisplayName{"en": "GLM-4V", "zh": "智谱 GLM-4V"}, Capability: "video_understanding"},
 		{Name: "newapi/glm-4v-plus", Provider: "newapi", DisplayName: engine.DisplayName{"en": "GLM-4V Plus", "zh": "智谱 GLM-4V Plus"}, Capability: "video_understanding"},
 		{Name: "newapi/glm-4.6v", Provider: "newapi", DisplayName: engine.DisplayName{"en": "GLM-4.6V", "zh": "智谱 GLM-4.6V"}, Capability: "video_understanding"},

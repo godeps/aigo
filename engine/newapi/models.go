@@ -136,12 +136,10 @@ var knownModels = map[string]knownModel{
 
 	// ═══ Vision Understanding (/v1/chat/completions) ════════
 
-	// Qwen-VL (DashScope OpenAI-compatible)
+	// Qwen vision & omni (DashScope OpenAI-compatible)
 	"qwen3.6-plus":        {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
-	"qwen-vl-max":         {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
-	"qwen-vl-plus":        {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
-	"qwen-vl-max-latest":  {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
-	"qwen-vl-plus-latest": {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+	"qwen3.6-flash":       {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+	"qwen3.5-omni-plus":   {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
 
 	// GLM-4V (ZhiPu)
 	"glm-4v":      {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
@@ -256,6 +254,10 @@ var inferRules = []inferRule{
 	// Vision understanding patterns — before video to avoid false positives on "vl"
 	{match: func(s string) bool {
 		return strings.Contains(s, "-vl-") || strings.Contains(s, "-vl") || strings.HasSuffix(s, "-vl")
+	}, route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+	// Omni models (e.g. qwen3.5-omni-plus) — multimodal understanding via chat completions
+	{match: func(s string) bool {
+		return strings.Contains(s, "-omni") && !strings.Contains(s, "video-generation")
 	}, route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
 	{match: func(s string) bool {
 		if strings.Contains(s, "-vision") {

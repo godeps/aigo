@@ -1,10 +1,10 @@
-// Package qwenvl implements engine.Engine for Qwen-VL multimodal understanding.
+// Package qwenvl implements engine.Engine for Qwen multimodal understanding.
 //
-// Qwen-VL accepts text, image, and video inputs via the DashScope OpenAI-compatible
+// Qwen accepts text, image, video, and audio inputs via the DashScope OpenAI-compatible
 // Chat Completions API and returns text responses. Auth: Authorization: Bearer {api_key},
 // env DASHSCOPE_API_KEY.
 //
-// Supported models: qwen3.6-plus, qwen-vl-max, qwen-vl-plus.
+// Supported models: qwen3.6-plus, qwen3.6-flash, qwen3.5-omni-plus.
 package qwenvl
 
 import (
@@ -36,10 +36,27 @@ const (
 
 // Model constants.
 const (
-	ModelQwen36Plus = "qwen3.6-plus"
-	ModelQwenVLMax  = "qwen-vl-max"
-	ModelQwenVLPlus = "qwen-vl-plus"
+	ModelQwen36Plus     = "qwen3.6-plus"
+	ModelQwen36Flash    = "qwen3.6-flash"
+	ModelQwen35OmniPlus = "qwen3.5-omni-plus"
 )
+
+// modelAliases maps deprecated model names to their current equivalents.
+var modelAliases = map[string]string{
+	"qwen-vl-max":         ModelQwen36Plus,
+	"qwen-vl-max-latest":  ModelQwen36Plus,
+	"qwen-vl-plus":        ModelQwen36Flash,
+	"qwen-vl-plus-latest": ModelQwen36Flash,
+}
+
+// ResolveModel maps a deprecated model name to the current canonical name.
+// Returns the input unchanged if not an alias.
+func ResolveModel(model string) string {
+	if canonical, ok := modelAliases[model]; ok {
+		return canonical
+	}
+	return model
+}
 
 var (
 	ErrMissingAPIKey = errors.New("qwenvl: missing API key (set Config.APIKey or DASHSCOPE_API_KEY)")
@@ -76,7 +93,7 @@ func New(cfg Config) *Engine {
 		base = defaultBaseURL
 	}
 
-	model := strings.TrimSpace(cfg.Model)
+	model := ResolveModel(strings.TrimSpace(cfg.Model))
 	if model == "" {
 		model = defaultModel
 	}
@@ -115,17 +132,13 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 	}
 
 	content := e.buildContent(g, prompt)
+	messages := e.buildMessages(g, content)
 
 	payload := map[string]any{
 		"model":      e.model,
 		"max_tokens": e.maxTokens,
 		"stream":     true,
-		"messages": []map[string]any{
-			{
-				"role":    "user",
-				"content": content,
-			},
-		},
+		"messages":   messages,
 	}
 	mergeExtraBody(g, payload)
 
@@ -237,14 +250,16 @@ func parseSSE(r io.Reader) (string, error) {
 	return text, nil
 }
 
-// buildContent constructs the message content field. If LoadImage or LoadVideo
-// nodes are present in the graph, it returns a multi-part array with text,
-// image_url, and video_url entries. Otherwise it returns the prompt string directly.
+// buildContent constructs the message content field. If LoadImage, LoadVideo,
+// or LoadAudio nodes are present in the graph, it returns a multi-part array
+// with text, image_url, video_url, and input_audio entries. Otherwise it
+// returns the prompt string directly.
 func (e *Engine) buildContent(g workflow.Graph, prompt string) any {
 	imageRefs := g.FindByClassType("LoadImage")
 	videoRefs := g.FindByClassType("LoadVideo")
+	audioRefs := g.FindByClassType("LoadAudio")
 
-	if len(imageRefs) == 0 && len(videoRefs) == 0 {
+	if len(imageRefs) == 0 && len(videoRefs) == 0 && len(audioRefs) == 0 {
 		return prompt
 	}
 
@@ -272,6 +287,17 @@ func (e *Engine) buildContent(g workflow.Graph, prompt string) any {
 		})
 	}
 
+	for _, ref := range audioRefs {
+		u, ok := ref.Node.Inputs["url"].(string)
+		if !ok || u == "" {
+			continue
+		}
+		parts = append(parts, map[string]any{
+			"type":        "input_audio",
+			"input_audio": map[string]any{"url": u},
+		})
+	}
+
 	parts = append(parts, map[string]any{
 		"type": "text",
 		"text": prompt,
@@ -287,8 +313,12 @@ func (e *Engine) buildContent(g workflow.Graph, prompt string) any {
 
 // Capabilities implements engine.Describer.
 func (e *Engine) Capabilities() engine.Capability {
+	media := []string{"text", "image", "video"}
+	if e.model == ModelQwen35OmniPlus {
+		media = append(media, "audio")
+	}
 	return engine.Capability{
-		MediaTypes:   []string{"text", "image", "video"},
+		MediaTypes:   media,
 		Models:       []string{e.model},
 		SupportsSync: true,
 	}
@@ -299,19 +329,46 @@ func ConfigSchema() []engine.ConfigField {
 	return []engine.ConfigField{
 		{Key: "apiKey", Label: "API Key", Type: "secret", Required: true, EnvVar: "DASHSCOPE_API_KEY", Description: "DashScope API key"},
 		{Key: "baseUrl", Label: "Base URL", Type: "url", EnvVar: "DASHSCOPE_BASE_URL", Description: "Custom API base URL (optional)", Default: defaultBaseURL},
-		{Key: "model", Label: "Model", Type: "string", Description: "Qwen-VL model (qwen3.6-plus, qwen-vl-max, qwen-vl-plus)", Default: defaultModel},
+		{Key: "model", Label: "Model", Type: "string", Description: "Qwen-VL model (qwen3.6-plus, qwen3.6-flash, qwen3.5-omni-plus)", Default: defaultModel},
 		{Key: "maxTokens", Label: "Max Tokens", Type: "number", Description: "Maximum tokens in response", Default: "4096"},
 	}
 }
 
-// ModelsByCapability returns known Qwen-VL models grouped by capability.
+// ModelsByCapability returns known Qwen multimodal models grouped by capability.
 func ModelsByCapability() map[string][]string {
 	return map[string][]string{
-		"text":   {ModelQwen36Plus, ModelQwenVLMax, ModelQwenVLPlus},
-		"image":  {ModelQwen36Plus, ModelQwenVLMax, ModelQwenVLPlus},
-		"video":  {ModelQwen36Plus, ModelQwenVLMax, ModelQwenVLPlus},
-		"vision": {ModelQwen36Plus, ModelQwenVLMax, ModelQwenVLPlus},
+		"text":   {ModelQwen36Plus, ModelQwen36Flash, ModelQwen35OmniPlus},
+		"image":  {ModelQwen36Plus, ModelQwen36Flash, ModelQwen35OmniPlus},
+		"video":  {ModelQwen36Plus, ModelQwen36Flash, ModelQwen35OmniPlus},
+		"vision": {ModelQwen36Plus, ModelQwen36Flash, ModelQwen35OmniPlus},
+		"audio":  {ModelQwen35OmniPlus},
 	}
+}
+
+// buildMessages assembles the full messages array. It prepends a system message
+// (from "system_prompt" or "system" option) and inserts chat history (from a
+// ChatHistory node) before the final user message.
+func (e *Engine) buildMessages(g workflow.Graph, content any) []map[string]any {
+	messages := []map[string]any{}
+
+	if sys, ok := resolve.StringOption(g, "system_prompt", "system"); ok && strings.TrimSpace(sys) != "" {
+		messages = append(messages, map[string]any{"role": "system", "content": sys})
+	}
+
+	for _, ref := range g.FindByClassType("ChatHistory") {
+		raw, ok := ref.Node.Inputs["messages"].(string)
+		if !ok || strings.TrimSpace(raw) == "" {
+			continue
+		}
+		var history []map[string]any
+		if err := json.Unmarshal([]byte(raw), &history); err != nil {
+			continue
+		}
+		messages = append(messages, history...)
+	}
+
+	messages = append(messages, map[string]any{"role": "user", "content": content})
+	return messages
 }
 
 // mergeExtraBody looks for "extra_body" or "chat_extra" in Options/Settings nodes

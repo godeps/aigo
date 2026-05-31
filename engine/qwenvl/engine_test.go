@@ -233,6 +233,63 @@ func TestExecute_WithImageAndVideo(t *testing.T) {
 	}
 }
 
+func TestExecute_WithAudio(t *testing.T) {
+	t.Parallel()
+
+	var gotPayload map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&gotPayload); err != nil {
+			t.Errorf("decode body: %v", err)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"The audio contains speech."}}]}`))
+	}))
+	defer srv.Close()
+
+	eng := New(Config{
+		APIKey:  "test-key",
+		BaseURL: srv.URL,
+		Model:   ModelQwen35OmniPlus,
+	})
+
+	g := workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "transcribe this audio"}},
+		"2": {ClassType: "LoadAudio", Inputs: map[string]any{"url": "https://example.com/speech.wav"}},
+	}
+
+	result, err := eng.Execute(context.Background(), g)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if result.Value != "The audio contains speech." {
+		t.Fatalf("Value = %q", result.Value)
+	}
+
+	msgs := gotPayload["messages"].([]any)
+	msg := msgs[0].(map[string]any)
+	parts, ok := msg["content"].([]any)
+	if !ok {
+		t.Fatalf("expected array content for audio request, got %T", msg["content"])
+	}
+	if len(parts) != 2 {
+		t.Fatalf("expected 2 content parts, got %d", len(parts))
+	}
+	audioPart := parts[0].(map[string]any)
+	if audioPart["type"] != "input_audio" {
+		t.Fatalf("first part type = %v, want input_audio", audioPart["type"])
+	}
+	audioData := audioPart["input_audio"].(map[string]any)
+	if audioData["url"] != "https://example.com/speech.wav" {
+		t.Fatalf("input_audio.url = %v", audioData["url"])
+	}
+	textPart := parts[1].(map[string]any)
+	if textPart["type"] != "text" {
+		t.Fatalf("second part type = %v, want text", textPart["type"])
+	}
+}
+
 func TestExecute_MissingKey(t *testing.T) {
 	t.Setenv("DASHSCOPE_API_KEY", "")
 
@@ -280,6 +337,22 @@ func TestCapabilities(t *testing.T) {
 	}
 }
 
+func TestCapabilities_OmniModel(t *testing.T) {
+	t.Parallel()
+
+	eng := New(Config{Model: ModelQwen35OmniPlus})
+	cap := eng.Capabilities()
+	if len(cap.MediaTypes) != 4 {
+		t.Fatalf("expected 4 media types for omni model, got %v", cap.MediaTypes)
+	}
+	want := map[string]bool{"text": true, "image": true, "video": true, "audio": true}
+	for _, mt := range cap.MediaTypes {
+		if !want[mt] {
+			t.Errorf("unexpected media type %q", mt)
+		}
+	}
+}
+
 func TestModelsByCapability(t *testing.T) {
 	t.Parallel()
 
@@ -292,6 +365,12 @@ func TestModelsByCapability(t *testing.T) {
 	}
 	if len(m["video"]) != 3 {
 		t.Errorf("expected 3 video models, got %d", len(m["video"]))
+	}
+	if len(m["audio"]) != 1 {
+		t.Errorf("expected 1 audio model, got %d", len(m["audio"]))
+	}
+	if m["audio"][0] != ModelQwen35OmniPlus {
+		t.Errorf("audio model = %q, want %q", m["audio"][0], ModelQwen35OmniPlus)
 	}
 }
 
@@ -322,6 +401,39 @@ func TestDefaultProvider(t *testing.T) {
 	}
 	if p.Configs[0].EnvVars[0] != "DASHSCOPE_API_KEY" {
 		t.Errorf("envVar = %q, want DASHSCOPE_API_KEY", p.Configs[0].EnvVars[0])
+	}
+}
+
+func TestResolveModel(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"qwen-vl-max", ModelQwen36Plus},
+		{"qwen-vl-max-latest", ModelQwen36Plus},
+		{"qwen-vl-plus", ModelQwen36Flash},
+		{"qwen-vl-plus-latest", ModelQwen36Flash},
+		{"qwen3.6-plus", "qwen3.6-plus"},
+		{"qwen3.6-flash", "qwen3.6-flash"},
+		{"qwen3.5-omni-plus", "qwen3.5-omni-plus"},
+		{"unknown-model", "unknown-model"},
+	}
+	for _, tt := range tests {
+		if got := ResolveModel(tt.input); got != tt.want {
+			t.Errorf("ResolveModel(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestNew_LegacyModelAlias(t *testing.T) {
+	t.Parallel()
+
+	eng := New(Config{Model: "qwen-vl-max"})
+	cap := eng.Capabilities()
+	if cap.Models[0] != ModelQwen36Plus {
+		t.Errorf("model = %q, want %q", cap.Models[0], ModelQwen36Plus)
 	}
 }
 
@@ -382,6 +494,135 @@ func TestExecute_JSONEmptyContent(t *testing.T) {
 	_, err := eng.Execute(context.Background(), g)
 	if err == nil {
 		t.Fatal("expected error for empty content")
+	}
+}
+
+func TestExecute_SystemPrompt(t *testing.T) {
+	t.Parallel()
+
+	var gotPayload map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&gotPayload); err != nil {
+			t.Errorf("decode body: %v", err)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"ok"}}]}`))
+	}))
+	defer srv.Close()
+
+	eng := New(Config{APIKey: "test-key", BaseURL: srv.URL})
+
+	g := workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "describe this"}},
+		"2": {ClassType: "Options", Inputs: map[string]any{"system_prompt": "You are a video analyst. Reply in Chinese."}},
+	}
+
+	_, err := eng.Execute(context.Background(), g)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	msgs := gotPayload["messages"].([]any)
+	if len(msgs) != 2 {
+		t.Fatalf("expected 2 messages, got %d", len(msgs))
+	}
+	sysMsg := msgs[0].(map[string]any)
+	if sysMsg["role"] != "system" {
+		t.Fatalf("first message role = %v, want system", sysMsg["role"])
+	}
+	if sysMsg["content"] != "You are a video analyst. Reply in Chinese." {
+		t.Fatalf("system content = %v", sysMsg["content"])
+	}
+	userMsg := msgs[1].(map[string]any)
+	if userMsg["role"] != "user" {
+		t.Fatalf("second message role = %v, want user", userMsg["role"])
+	}
+}
+
+func TestExecute_ChatHistory(t *testing.T) {
+	t.Parallel()
+
+	var gotPayload map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&gotPayload); err != nil {
+			t.Errorf("decode body: %v", err)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"It is a tabby cat."}}]}`))
+	}))
+	defer srv.Close()
+
+	eng := New(Config{APIKey: "test-key", BaseURL: srv.URL})
+
+	history := `[{"role":"user","content":"What is in this image?"},{"role":"assistant","content":"A cat."}]`
+	g := workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "What breed is it?"}},
+		"2": {ClassType: "Options", Inputs: map[string]any{"system_prompt": "You are helpful."}},
+		"3": {ClassType: "ChatHistory", Inputs: map[string]any{"messages": history}},
+	}
+
+	result, err := eng.Execute(context.Background(), g)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if result.Value != "It is a tabby cat." {
+		t.Fatalf("Value = %q", result.Value)
+	}
+
+	msgs := gotPayload["messages"].([]any)
+	if len(msgs) != 4 {
+		t.Fatalf("expected 4 messages (system + 2 history + user), got %d", len(msgs))
+	}
+	if msgs[0].(map[string]any)["role"] != "system" {
+		t.Fatalf("msgs[0] role = %v, want system", msgs[0].(map[string]any)["role"])
+	}
+	if msgs[1].(map[string]any)["role"] != "user" {
+		t.Fatalf("msgs[1] role = %v, want user (history)", msgs[1].(map[string]any)["role"])
+	}
+	if msgs[2].(map[string]any)["role"] != "assistant" {
+		t.Fatalf("msgs[2] role = %v, want assistant (history)", msgs[2].(map[string]any)["role"])
+	}
+	if msgs[3].(map[string]any)["role"] != "user" {
+		t.Fatalf("msgs[3] role = %v, want user (current)", msgs[3].(map[string]any)["role"])
+	}
+}
+
+func TestExecute_NoSystemNoHistory(t *testing.T) {
+	t.Parallel()
+
+	var gotPayload map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&gotPayload); err != nil {
+			t.Errorf("decode body: %v", err)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"ok"}}]}`))
+	}))
+	defer srv.Close()
+
+	eng := New(Config{APIKey: "test-key", BaseURL: srv.URL})
+
+	g := workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "hello"}},
+	}
+
+	_, err := eng.Execute(context.Background(), g)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	msgs := gotPayload["messages"].([]any)
+	if len(msgs) != 1 {
+		t.Fatalf("expected 1 message (user only), got %d", len(msgs))
+	}
+	if msgs[0].(map[string]any)["role"] != "user" {
+		t.Fatalf("role = %v, want user", msgs[0].(map[string]any)["role"])
 	}
 }
 
