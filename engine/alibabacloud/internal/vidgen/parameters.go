@@ -7,7 +7,10 @@ import (
 )
 
 // BuildParameters 为 video-synthesis 构建 parameters。
-// 文生视频 / 参考生视频使用 size；视频编辑使用 resolution（preferResolution=true）。
+//
+// wan2.7 系列 API 统一使用 resolution（"720P"/"1080P"）。当 graph 中设置了
+// resolution 时优先使用；仅在没有 resolution 时才回退到 size（兼容 wan2.6）。
+// preferResolution=true 时（video-edit）只使用 resolution。
 func BuildParameters(graph workflow.Graph, preferResolution bool) map[string]any {
 	parameters := map[string]any{}
 
@@ -15,21 +18,18 @@ func BuildParameters(graph workflow.Graph, preferResolution bool) map[string]any
 		if resolution, ok := graphx.Resolution(graph); ok {
 			parameters["resolution"] = resolution
 		}
-	} else {
-		if size, ok := graphx.StringOption(graph, "size"); ok {
-			parameters["size"] = graphx.NormalizeSize(size)
-		} else if size, ok := graphx.WidthHeightSize(graph); ok {
-			parameters["size"] = size
-		}
-	}
-
-	if preferResolution {
-		if size, exists := parameters["resolution"]; !exists {
+		if _, exists := parameters["resolution"]; !exists {
 			if resolution, ok := graphx.DeriveResolution(graph); ok {
 				parameters["resolution"] = resolution
 			}
-		} else if _, ok := size.(string); !ok {
-			delete(parameters, "resolution")
+		}
+	} else {
+		if resolution, ok := graphx.StringOption(graph, "resolution"); ok {
+			parameters["resolution"] = resolution
+		} else if size, ok := graphx.StringOption(graph, "size"); ok {
+			parameters["size"] = graphx.NormalizeSize(size)
+		} else if size, ok := graphx.WidthHeightSize(graph); ok {
+			parameters["size"] = size
 		}
 	}
 
@@ -47,6 +47,17 @@ func BuildParameters(graph workflow.Graph, preferResolution bool) map[string]any
 	}
 	if promptExtend, ok := graphx.BoolOption(graph, "prompt_extend"); ok {
 		parameters["prompt_extend"] = promptExtend
+	}
+	if seed, ok := graphx.IntOption(graph, "seed"); ok {
+		parameters["seed"] = seed
+	}
+	if ratio, ok := graphx.StringOption(graph, "ratio"); ok {
+		parameters["ratio"] = ratio
+	}
+	if preferResolution {
+		if audioSetting, ok := graphx.StringOption(graph, "audio_setting"); ok {
+			parameters["audio_setting"] = audioSetting
+		}
 	}
 
 	if len(parameters) == 0 {

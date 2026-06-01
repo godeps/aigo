@@ -224,7 +224,7 @@ func TestBuildReferenceMedia(t *testing.T) {
 				"V": {ClassType: "LoadVideo", Inputs: map[string]any{"url": "https://example.com/clip.mp4"}},
 			},
 		)
-		media, err := buildReferenceMedia(context.Background(), &runtime.RT{}, "", g)
+		media, err := buildReferenceMedia(context.Background(), &runtime.RT{}, "", "wan2.7-i2v", g)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -251,7 +251,7 @@ func TestBuildReferenceMedia(t *testing.T) {
 	t.Run("empty_graph", func(t *testing.T) {
 		t.Parallel()
 		g := promptGraph("test")
-		media, err := buildReferenceMedia(context.Background(), &runtime.RT{}, "", g)
+		media, err := buildReferenceMedia(context.Background(), &runtime.RT{}, "", "wan2.7-i2v", g)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}

@@ -149,6 +149,57 @@ func MediaURLs(graph workflow.Graph) []string {
 	return urls
 }
 
+// FirstFrameURL returns the URL from a node with ClassType containing
+// "firstframe" or "first_frame", used by r2v models to specify a first frame
+// alongside reference images.
+func FirstFrameURL(graph workflow.Graph) (string, bool) {
+	for _, id := range graph.SortedNodeIDs() {
+		node := graph[id]
+		url, ok := node.StringInput("url")
+		if !ok || url == "" {
+			continue
+		}
+		ct := strings.ToLower(node.ClassType)
+		if strings.Contains(ct, "firstframe") || strings.Contains(ct, "first_frame") {
+			return url, true
+		}
+	}
+	return "", false
+}
+
+func AudioURLs(graph workflow.Graph) []string {
+	urls := make([]string, 0)
+	seen := make(map[string]struct{})
+	for _, id := range graph.SortedNodeIDs() {
+		node := graph[id]
+		url, ok := node.StringInput("url")
+		if !ok || url == "" {
+			continue
+		}
+		if strings.Contains(strings.ToLower(node.ClassType), "audio") {
+			urls = appendUnique(urls, seen, url)
+		}
+	}
+	return urls
+}
+
+// ReferenceVoiceForURL returns the reference_voice input associated with
+// a media node that has the given URL. Used by r2v to attach voice cloning
+// audio to reference_image / reference_video media objects.
+func ReferenceVoiceForURL(graph workflow.Graph, mediaURL string) (string, bool) {
+	for _, id := range graph.SortedNodeIDs() {
+		node := graph[id]
+		url, ok := node.StringInput("url")
+		if !ok || url != mediaURL {
+			continue
+		}
+		if voice, ok := node.StringInput("reference_voice"); ok && voice != "" {
+			return voice, true
+		}
+	}
+	return "", false
+}
+
 func VideoEditMedia(graph workflow.Graph) []map[string]any {
 	media := make([]map[string]any, 0)
 	for _, id := range graph.SortedNodeIDs() {

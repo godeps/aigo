@@ -482,10 +482,10 @@ func TestExecuteWanReferenceVideoAsync(t *testing.T) {
 	}
 	m0 := media[0].(map[string]any)
 	m1 := media[1].(map[string]any)
-	if m0["type"] != "first_frame" || m0["url"] != "https://assets.example.com/dog.png" {
+	if m0["type"] != "reference_image" || m0["url"] != "https://assets.example.com/dog.png" {
 		t.Fatalf("media[0] = %#v", m0)
 	}
-	if m1["type"] != "first_clip" || m1["url"] != "https://assets.example.com/role1.mp4" {
+	if m1["type"] != "reference_video" || m1["url"] != "https://assets.example.com/role1.mp4" {
 		t.Fatalf("media[1] = %#v", m1)
 	}
 }
