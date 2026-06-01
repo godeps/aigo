@@ -124,6 +124,21 @@ func extractTools(g workflow.Graph) []map[string]any {
 	return nil
 }
 
+// appendDraftTasks adds draft_task content entries from LoadDraftTask nodes.
+func appendDraftTasks(g workflow.Graph, content []map[string]any) []map[string]any {
+	for _, ref := range g.FindByClassType("LoadDraftTask") {
+		id, ok := ref.Node.StringInput("id")
+		if !ok || id == "" {
+			continue
+		}
+		content = append(content, map[string]any{
+			"type":       "draft_task",
+			"draft_task": map[string]any{"id": id},
+		})
+	}
+	return content
+}
+
 // mergeJSONOption delegates to resolve.MergeJSONOption.
 func mergeJSONOption(g workflow.Graph, dst map[string]any, keys ...string) {
 	resolve.MergeJSONOption(g, dst, keys...)

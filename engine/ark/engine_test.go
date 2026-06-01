@@ -579,7 +579,7 @@ func TestModelInfos(t *testing.T) {
 func TestParseTaskResponseCancelled(t *testing.T) {
 	t.Parallel()
 
-	_, _, err := parseTaskResponse([]byte(`{"id":"t","status":"cancelled"}`))
+	_, _, _, err := parseTaskResponse([]byte(`{"id":"t","status":"cancelled"}`))
 	if err == nil {
 		t.Fatal("expected error for cancelled task")
 	}
@@ -591,7 +591,7 @@ func TestParseTaskResponseCancelled(t *testing.T) {
 func TestParseTaskResponseSucceededNoURL(t *testing.T) {
 	t.Parallel()
 
-	_, _, err := parseTaskResponse([]byte(`{"id":"t","status":"succeeded","content":{}}`))
+	_, _, _, err := parseTaskResponse([]byte(`{"id":"t","status":"succeeded","content":{}}`))
 	if err == nil {
 		t.Fatal("expected error for succeeded but no url")
 	}
@@ -603,7 +603,7 @@ func TestParseTaskResponseSucceededNoURL(t *testing.T) {
 func TestParseTaskResponseSucceededNilContent(t *testing.T) {
 	t.Parallel()
 
-	_, _, err := parseTaskResponse([]byte(`{"id":"t","status":"succeeded"}`))
+	_, _, _, err := parseTaskResponse([]byte(`{"id":"t","status":"succeeded"}`))
 	if err == nil {
 		t.Fatal("expected error for succeeded but nil content")
 	}
@@ -615,7 +615,7 @@ func TestParseTaskResponseSucceededNilContent(t *testing.T) {
 func TestParseTaskResponseFailedNoMessage(t *testing.T) {
 	t.Parallel()
 
-	_, _, err := parseTaskResponse([]byte(`{"id":"t","status":"failed"}`))
+	_, _, _, err := parseTaskResponse([]byte(`{"id":"t","status":"failed"}`))
 	if err == nil {
 		t.Fatal("expected error for failed task")
 	}
@@ -627,7 +627,7 @@ func TestParseTaskResponseFailedNoMessage(t *testing.T) {
 func TestParseTaskResponseInvalidJSON(t *testing.T) {
 	t.Parallel()
 
-	_, _, err := parseTaskResponse([]byte(`not json`))
+	_, _, _, err := parseTaskResponse([]byte(`not json`))
 	if err == nil {
 		t.Fatal("expected error for invalid json")
 	}
@@ -639,7 +639,7 @@ func TestParseTaskResponseInvalidJSON(t *testing.T) {
 func TestParseTaskResponseRunning(t *testing.T) {
 	t.Parallel()
 
-	url, done, err := parseTaskResponse([]byte(`{"id":"t","status":"running"}`))
+	url, _, done, err := parseTaskResponse([]byte(`{"id":"t","status":"running"}`))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -654,7 +654,7 @@ func TestParseTaskResponseRunning(t *testing.T) {
 func TestParseTaskResponseQueued(t *testing.T) {
 	t.Parallel()
 
-	_, done, err := parseTaskResponse([]byte(`{"id":"t","status":"queued"}`))
+	_, _, done, err := parseTaskResponse([]byte(`{"id":"t","status":"queued"}`))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -858,6 +858,78 @@ func TestBuildPayloadVideoWithCustomRole(t *testing.T) {
 				t.Fatalf("expected bgm, got %v", item["role"])
 			}
 		}
+	}
+}
+
+func TestBuildPayloadDraftTask(t *testing.T) {
+	t.Parallel()
+
+	eng := New(Config{Model: "doubao-seedance-1-5-pro-251215", APIKey: "sk-test"})
+
+	graph := workflow.Graph{
+		"1": {ClassType: "LoadDraftTask", Inputs: map[string]any{"id": "cgt-2026xxxx-pzjqb"}},
+	}
+
+	payload, err := eng.buildPayload(graph)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	contentArr, ok := payload["content"].([]map[string]any)
+	if !ok {
+		t.Fatalf("expected content array, got %T", payload["content"])
+	}
+	if len(contentArr) != 1 {
+		t.Fatalf("expected 1 content item, got %d", len(contentArr))
+	}
+	item := contentArr[0]
+	if item["type"] != "draft_task" {
+		t.Fatalf("expected type draft_task, got %v", item["type"])
+	}
+	dt, ok := item["draft_task"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected draft_task object, got %T", item["draft_task"])
+	}
+	if dt["id"] != "cgt-2026xxxx-pzjqb" {
+		t.Fatalf("expected draft task id cgt-2026xxxx-pzjqb, got %v", dt["id"])
+	}
+}
+
+func TestParseTaskResponseLastFrameURL(t *testing.T) {
+	t.Parallel()
+
+	body := []byte(`{"id":"t","status":"succeeded","content":{"video_url":"https://example.com/video.mp4","last_frame_url":"https://example.com/last_frame.png"}}`)
+	videoURL, lastFrameURL, done, err := parseTaskResponse(body)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !done {
+		t.Fatal("expected done=true")
+	}
+	if videoURL != "https://example.com/video.mp4" {
+		t.Fatalf("expected video URL, got %q", videoURL)
+	}
+	if lastFrameURL != "https://example.com/last_frame.png" {
+		t.Fatalf("expected last frame URL, got %q", lastFrameURL)
+	}
+}
+
+func TestParseTaskResponseNoLastFrame(t *testing.T) {
+	t.Parallel()
+
+	body := []byte(`{"id":"t","status":"succeeded","content":{"video_url":"https://example.com/video.mp4"}}`)
+	videoURL, lastFrameURL, done, err := parseTaskResponse(body)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !done {
+		t.Fatal("expected done=true")
+	}
+	if videoURL != "https://example.com/video.mp4" {
+		t.Fatalf("expected video URL, got %q", videoURL)
+	}
+	if lastFrameURL != "" {
+		t.Fatalf("expected empty last frame URL, got %q", lastFrameURL)
 	}
 }
 

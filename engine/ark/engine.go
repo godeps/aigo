@@ -139,11 +139,11 @@ func (e *Engine) Execute(ctx context.Context, g workflow.Graph) (engine.Result, 
 		return engine.Result{Value: created.ID, Kind: engine.OutputPlainText}, nil
 	}
 
-	videoURL, err := e.poll(ctx, apiKey, created.ID)
+	videoURL, lastFrameURL, err := e.poll(ctx, apiKey, created.ID)
 	if err != nil {
 		return engine.Result{}, err
 	}
-	return engine.Result{Value: videoURL, Kind: engine.OutputURL}, nil
+	return buildVideoResult(videoURL, lastFrameURL), nil
 }
 
 // Resume implements engine.Resumer — resumes polling a previously submitted task.
@@ -152,11 +152,11 @@ func (e *Engine) Resume(ctx context.Context, remoteID string) (engine.Result, er
 	if err != nil {
 		return engine.Result{}, err
 	}
-	url, err := e.poll(ctx, apiKey, remoteID)
+	videoURL, lastFrameURL, err := e.poll(ctx, apiKey, remoteID)
 	if err != nil {
 		return engine.Result{}, err
 	}
-	return engine.Result{Value: url, Kind: engine.OutputURL}, nil
+	return buildVideoResult(videoURL, lastFrameURL), nil
 }
 
 // Capabilities implements engine.Describer.
@@ -191,6 +191,9 @@ func ModelsByCapability() map[string][]string {
 		"video": {
 			"doubao-seedance-2-0-260128",
 			"doubao-seedance-2-0-fast-260128",
+			"doubao-seedance-1-5-pro-251215",
+			"doubao-seedance-1-0-pro-250528",
+			"doubao-seedance-1-0-pro-fast-251015",
 			"doubao-seedance-1-0-lite-250428",
 		},
 		"image": {
@@ -223,6 +226,9 @@ func (e *Engine) buildPayload(g workflow.Graph) (map[string]any, error) {
 
 	// audios
 	content = appendAudios(g, content)
+
+	// draft tasks
+	content = appendDraftTasks(g, content)
 
 	if len(content) == 0 {
 		return nil, ErrMissingContent
@@ -279,8 +285,9 @@ func (e *Engine) buildPayload(g workflow.Graph) (map[string]any, error) {
 	return payload, nil
 }
 
-func (e *Engine) poll(ctx context.Context, apiKey, taskID string) (string, error) {
-	return epoll.Poll(ctx, epoll.Config{Interval: e.pollInterval}, func(ctx context.Context) (string, bool, error) {
+func (e *Engine) poll(ctx context.Context, apiKey, taskID string) (videoURL, lastFrameURL string, err error) {
+	var lfURL string
+	videoURL, err = epoll.Poll(ctx, epoll.Config{Interval: e.pollInterval}, func(ctx context.Context) (string, bool, error) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, e.baseURL+tasksPath+"/"+taskID, nil)
 		if err != nil {
 			return "", false, fmt.Errorf("ark: build get: %w", err)
@@ -298,8 +305,25 @@ func (e *Engine) poll(ctx context.Context, apiKey, taskID string) (string, error
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			return "", false, aigoerr.FromHTTPResponse(resp, body, "ark")
 		}
-		return parseTaskResponse(body)
+		vURL, lf, done, perr := parseTaskResponse(body)
+		if done && perr == nil {
+			lfURL = lf
+		}
+		return vURL, done, perr
 	})
+	return videoURL, lfURL, err
+}
+
+func buildVideoResult(videoURL, lastFrameURL string) engine.Result {
+	res := engine.Result{Value: videoURL, Kind: engine.OutputURL}
+	if lastFrameURL != "" {
+		res.Results = []engine.ResultItem{{
+			Value:    videoURL,
+			Kind:     engine.OutputURL,
+			Metadata: map[string]string{"last_frame_url": lastFrameURL},
+		}}
+	}
+	return res
 }
 
 func (e *Engine) doRequest(ctx context.Context, method, url, apiKey string, body []byte) ([]byte, error) {
@@ -310,7 +334,8 @@ type taskResponse struct {
 	ID      string `json:"id"`
 	Status  string `json:"status"`
 	Content *struct {
-		VideoURL string `json:"video_url"`
+		VideoURL     string `json:"video_url"`
+		LastFrameURL string `json:"last_frame_url"`
 	} `json:"content"`
 	Error *struct {
 		Code    string `json:"code"`
@@ -318,29 +343,29 @@ type taskResponse struct {
 	} `json:"error"`
 }
 
-func parseTaskResponse(body []byte) (videoURL string, done bool, err error) {
+func parseTaskResponse(body []byte) (videoURL, lastFrameURL string, done bool, err error) {
 	var task taskResponse
 	if err := json.Unmarshal(body, &task); err != nil {
-		return "", false, fmt.Errorf("ark: decode task: %w", err)
+		return "", "", false, fmt.Errorf("ark: decode task: %w", err)
 	}
 	switch strings.ToLower(strings.TrimSpace(task.Status)) {
 	case "succeeded":
 		if task.Content != nil && strings.TrimSpace(task.Content.VideoURL) != "" {
-			return strings.TrimSpace(task.Content.VideoURL), true, nil
+			return strings.TrimSpace(task.Content.VideoURL), strings.TrimSpace(task.Content.LastFrameURL), true, nil
 		}
-		return "", true, fmt.Errorf("ark: task succeeded but no video_url")
+		return "", "", true, fmt.Errorf("ark: task succeeded but no video_url")
 	case "failed":
 		msg := "failed"
 		if task.Error != nil && task.Error.Message != "" {
 			msg = task.Error.Message
 		}
-		return "", true, fmt.Errorf("ark: task failed: %s", msg)
+		return "", "", true, fmt.Errorf("ark: task failed: %s", msg)
 	case "expired":
-		return "", true, fmt.Errorf("ark: task expired")
+		return "", "", true, fmt.Errorf("ark: task expired")
 	case "cancelled":
-		return "", true, fmt.Errorf("ark: task cancelled")
+		return "", "", true, fmt.Errorf("ark: task cancelled")
 	default:
 		// queued, running
-		return "", false, nil
+		return "", "", false, nil
 	}
 }

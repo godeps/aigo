@@ -50,5 +50,32 @@ func ModelInfos() []engine.ModelInfo {
 			DocURL:      "https://www.volcengine.com/docs/6791/overview",
 			Capability:  "video",
 		},
+		{
+			Name:        "doubao-seedance-1-5-pro-251215",
+			Provider:    "ark",
+			DisplayName: engine.DisplayName{"en": "Seedance 1.5 Pro", "zh": "Seedance 1.5 Pro"},
+			Description: engine.DisplayName{"en": "Professional video generation", "zh": "专业视频生成"},
+			Intro:       engine.DisplayName{"en": "Seedance 1.5 Pro delivers professional-grade video generation with draft preview mode, offline inference, and audio generation support.", "zh": "Seedance 1.5 Pro 提供专业级视频生成，支持样片预览模式、离线推理和有声视频生成。"},
+			DocURL:      "https://www.volcengine.com/docs/6791/overview",
+			Capability:  "video",
+		},
+		{
+			Name:        "doubao-seedance-1-0-pro-250528",
+			Provider:    "ark",
+			DisplayName: engine.DisplayName{"en": "Seedance 1.0 Pro", "zh": "Seedance 1.0 Pro"},
+			Description: engine.DisplayName{"en": "Professional video generation", "zh": "专业视频生成"},
+			Intro:       engine.DisplayName{"en": "Seedance 1.0 Pro offers high-quality video generation with rich motion control and flexible duration settings.", "zh": "Seedance 1.0 Pro 提供高质量视频生成，支持丰富的运动控制和灵活的时长设置。"},
+			DocURL:      "https://www.volcengine.com/docs/6791/overview",
+			Capability:  "video",
+		},
+		{
+			Name:        "doubao-seedance-1-0-pro-fast-251015",
+			Provider:    "ark",
+			DisplayName: engine.DisplayName{"en": "Seedance 1.0 Pro Fast", "zh": "Seedance 1.0 Pro 快速版"},
+			Description: engine.DisplayName{"en": "Fast professional video generation", "zh": "快速专业视频生成"},
+			Intro:       engine.DisplayName{"en": "Seedance 1.0 Pro Fast provides accelerated video generation with reduced latency for time-sensitive workflows.", "zh": "Seedance 1.0 Pro 快速版提供加速视频生成，降低延迟，适合时间敏感的工作流。"},
+			DocURL:      "https://www.volcengine.com/docs/6791/overview",
+			Capability:  "video",
+		},
 	}
 }
