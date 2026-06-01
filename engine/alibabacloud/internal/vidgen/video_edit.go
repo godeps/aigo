@@ -46,7 +46,7 @@ func RunVideoEdit(ctx context.Context, rt *runtime.RT, apiKey, model string, gra
 	if err := validateWanVideoEditMedia(media); err != nil {
 		return "", err
 	}
-	if media, err = ensureRemoteMediaURLs(ctx, rt, apiKey, media); err != nil {
+	if media, err = ensureRemoteMediaURLs(ctx, rt, apiKey, model, media); err != nil {
 		return "", err
 	}
 

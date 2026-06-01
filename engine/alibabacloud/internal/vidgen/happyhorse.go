@@ -37,7 +37,7 @@ func RunHappyHorseImageToVideo(ctx context.Context, rt *runtime.RT, apiKey, mode
 		return "", ierr.ErrMissingReference
 	}
 
-	imageURL, err := EnsureRemoteURL(ctx, rt, apiKey, images[0])
+	imageURL, err := EnsureRemoteURL(ctx, rt, apiKey, model, images[0])
 	if err != nil {
 		return "", err
 	}
@@ -75,7 +75,7 @@ func RunHappyHorseReferenceToVideo(ctx context.Context, rt *runtime.RT, apiKey, 
 		return "", ierr.ErrTooManyHappyHorseImages
 	}
 
-	remoteImages, err := EnsureRemoteURLs(ctx, rt, apiKey, images)
+	remoteImages, err := EnsureRemoteURLs(ctx, rt, apiKey, model, images)
 	if err != nil {
 		return "", err
 	}
@@ -112,7 +112,7 @@ func RunHappyHorseVideoEdit(ctx context.Context, rt *runtime.RT, apiKey, model s
 	if err := validateVideoEditMedia(media); err != nil {
 		return "", err
 	}
-	if media, err = ensureRemoteMediaURLs(ctx, rt, apiKey, media); err != nil {
+	if media, err = ensureRemoteMediaURLs(ctx, rt, apiKey, model, media); err != nil {
 		return "", err
 	}
 

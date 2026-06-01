@@ -20,18 +20,22 @@ import (
 // EnsureRemoteURL guarantees that url is usable by DashScope servers.
 //
 // DashScope video APIs accept base64 data URIs for image inputs
-// (first_frame, last_frame, reference_image) but require HTTP(S) URLs
-// for video inputs (video, first_clip, reference_video).
+// (first_frame, last_frame, reference_image) but require HTTP(S) or
+// oss:// URLs for video/audio inputs (video, first_clip, reference_video).
 //
 // Resolution strategy:
-//  1. HTTP(S) URLs are returned as-is.
+//  1. HTTP(S) and oss:// URLs are returned as-is.
 //  2. data: URIs with image MIME types are returned as-is (API accepts them).
-//  3. data: URIs with non-image MIME types are decoded and uploaded.
+//  3. data: URIs with non-image MIME types are decoded and uploaded to OSS.
 //  4. Absolute file paths: images are converted to data URIs; videos use
-//     sidecar .url files or are uploaded.
+//     sidecar .url files or are uploaded to OSS.
 //  5. Anything else returns an error.
-func EnsureRemoteURL(ctx context.Context, rt *runtime.RT, apiKey, rawURL string) (string, error) {
-	if strings.HasPrefix(rawURL, "http://") || strings.HasPrefix(rawURL, "https://") {
+//
+// model is the DashScope model name (e.g. "wan2.7-i2v") required by the
+// upload policy API — uploaded files are bound to the specified model.
+func EnsureRemoteURL(ctx context.Context, rt *runtime.RT, apiKey, model, rawURL string) (string, error) {
+	if strings.HasPrefix(rawURL, "http://") || strings.HasPrefix(rawURL, "https://") ||
+		strings.HasPrefix(rawURL, "oss://") {
 		return rawURL, nil
 	}
 
@@ -43,13 +47,14 @@ func EnsureRemoteURL(ctx context.Context, rt *runtime.RT, apiKey, rawURL string)
 		if err != nil {
 			return "", fmt.Errorf("aliyun: decode data URI for upload: %w", err)
 		}
-		return uploadToDashScope(ctx, rt, apiKey, data, "ref"+ext)
+		return uploadToDashScopeOSS(ctx, rt, apiKey, model, data, "ref"+ext)
 	}
 
 	if filepath.IsAbs(rawURL) {
 		if sidecar, err := os.ReadFile(rawURL + ".url"); err == nil {
 			src := strings.TrimSpace(string(sidecar))
-			if strings.HasPrefix(src, "http://") || strings.HasPrefix(src, "https://") {
+			if strings.HasPrefix(src, "http://") || strings.HasPrefix(src, "https://") ||
+				strings.HasPrefix(src, "oss://") {
 				return src, nil
 			}
 		}
@@ -64,18 +69,17 @@ func EnsureRemoteURL(ctx context.Context, rt *runtime.RT, apiKey, rawURL string)
 		if ext == "" {
 			ext = ".mp4"
 		}
-		return uploadToDashScope(ctx, rt, apiKey, data, "ref"+ext)
+		return uploadToDashScopeOSS(ctx, rt, apiKey, model, data, "ref"+ext)
 	}
 
 	return "", fmt.Errorf("aliyun: unsupported URL scheme for video API (need http/https, got %q)", truncate(rawURL, 80))
 }
 
-// EnsureRemoteURLs applies EnsureRemoteURL to each URL in the slice, returning
-// on the first error.
-func EnsureRemoteURLs(ctx context.Context, rt *runtime.RT, apiKey string, urls []string) ([]string, error) {
+// EnsureRemoteURLs applies EnsureRemoteURL to each URL in the slice.
+func EnsureRemoteURLs(ctx context.Context, rt *runtime.RT, apiKey, model string, urls []string) ([]string, error) {
 	out := make([]string, len(urls))
 	for i, u := range urls {
-		resolved, err := EnsureRemoteURL(ctx, rt, apiKey, u)
+		resolved, err := EnsureRemoteURL(ctx, rt, apiKey, model, u)
 		if err != nil {
 			return nil, err
 		}
@@ -84,63 +88,105 @@ func EnsureRemoteURLs(ctx context.Context, rt *runtime.RT, apiKey string, urls [
 	return out, nil
 }
 
-// uploadToDashScope uploads binary data to DashScope's file storage and returns
-// the accessible HTTP URL. It uses the /compatible-mode/v1/files endpoint.
-func uploadToDashScope(ctx context.Context, rt *runtime.RT, apiKey string, data []byte, filename string) (string, error) {
+// uploadPolicy holds the credentials returned by the DashScope upload policy API.
+type uploadPolicy struct {
+	Policy             string `json:"policy"`
+	Signature          string `json:"signature"`
+	UploadDir          string `json:"upload_dir"`
+	UploadHost         string `json:"upload_host"`
+	OSSAccessKeyID     string `json:"oss_access_key_id"`
+	XOSSObjectACL      string `json:"x_oss_object_acl"`
+	XOSSForbidOverwrite string `json:"x_oss_forbid_overwrite"`
+}
+
+// getUploadPolicy fetches temporary OSS upload credentials from DashScope.
+// The returned policy is valid for ~300 seconds.
+func getUploadPolicy(ctx context.Context, rt *runtime.RT, apiKey, model string) (*uploadPolicy, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		rt.BaseURL+"/uploads?action=getPolicy&model="+model, nil)
+	if err != nil {
+		return nil, fmt.Errorf("aliyun: build upload policy request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := rt.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("aliyun: get upload policy: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("aliyun: read upload policy response: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("aliyun: upload policy failed (HTTP %d): %s", resp.StatusCode, truncate(string(body), 200))
+	}
+
+	var result struct {
+		Data uploadPolicy `json:"data"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("aliyun: decode upload policy: %w", err)
+	}
+	if result.Data.UploadHost == "" || result.Data.UploadDir == "" {
+		return nil, fmt.Errorf("aliyun: upload policy missing upload_host or upload_dir: %s", truncate(string(body), 200))
+	}
+	return &result.Data, nil
+}
+
+// uploadToDashScopeOSS uploads binary data to DashScope's temporary OSS storage
+// and returns an oss:// URL (valid for 48 hours).
+//
+// Flow: GET /uploads?action=getPolicy → POST {upload_host} → oss://{key}
+//
+// When using the returned oss:// URL in API calls, the caller must add
+// the header X-DashScope-OssResourceResolve: enable (handled by async.Submit).
+func uploadToDashScopeOSS(ctx context.Context, rt *runtime.RT, apiKey, model string, data []byte, filename string) (string, error) {
+	policy, err := getUploadPolicy(ctx, rt, apiKey, model)
+	if err != nil {
+		return "", err
+	}
+
+	key := policy.UploadDir + "/" + filename
+
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
-
+	writer.WriteField("OSSAccessKeyId", policy.OSSAccessKeyID)
+	writer.WriteField("Signature", policy.Signature)
+	writer.WriteField("policy", policy.Policy)
+	writer.WriteField("x-oss-object-acl", policy.XOSSObjectACL)
+	writer.WriteField("x-oss-forbid-overwrite", policy.XOSSForbidOverwrite)
+	writer.WriteField("key", key)
+	writer.WriteField("success_action_status", "200")
 	part, err := writer.CreateFormFile("file", filename)
 	if err != nil {
-		return "", fmt.Errorf("aliyun: create upload form: %w", err)
+		return "", fmt.Errorf("aliyun: create OSS upload form: %w", err)
 	}
 	if _, err := part.Write(data); err != nil {
-		return "", fmt.Errorf("aliyun: write upload data: %w", err)
-	}
-	if err := writer.WriteField("purpose", "file-extract"); err != nil {
-		return "", fmt.Errorf("aliyun: write upload purpose: %w", err)
+		return "", fmt.Errorf("aliyun: write OSS upload data: %w", err)
 	}
 	writer.Close()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		rt.BaseURL+"/compatible-mode/v1/files", body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, policy.UploadHost, body)
 	if err != nil {
-		return "", fmt.Errorf("aliyun: build upload request: %w", err)
+		return "", fmt.Errorf("aliyun: build OSS upload request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	resp, err := rt.HTTPClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("aliyun: upload file: %w", err)
+		return "", fmt.Errorf("aliyun: OSS upload: %w", err)
 	}
 	defer resp.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("aliyun: read upload response: %w", err)
-	}
-
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("aliyun: upload failed (HTTP %d): %s", resp.StatusCode, truncate(string(respBody), 200))
+		respBody, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("aliyun: OSS upload failed (HTTP %d): %s", resp.StatusCode, truncate(string(respBody), 200))
 	}
 
-	var result struct {
-		ID       string `json:"id"`
-		URL      string `json:"url"`
-		Filename string `json:"filename"`
-	}
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return "", fmt.Errorf("aliyun: decode upload response: %w", err)
-	}
-
-	if result.URL != "" {
-		return result.URL, nil
-	}
-
-	return "", fmt.Errorf("aliyun: upload response did not contain a downloadable URL (id=%s); "+
-		"video inputs require an HTTP(S) URL — provide a publicly accessible URL instead of a local file: %s",
-		result.ID, truncate(string(respBody), 200))
+	return "oss://" + key, nil
 }
 
 // isVideoMediaType reports whether a media type string refers to a video input
@@ -155,8 +201,8 @@ func isVideoMediaType(mediaType string) bool {
 
 // ensureRemoteMediaURLs resolves "url" fields in a VideoEditMedia slice.
 // EnsureRemoteURL handles the image-vs-video distinction internally: image
-// data URIs pass through, video data URIs and local files get uploaded.
-func ensureRemoteMediaURLs(ctx context.Context, rt *runtime.RT, apiKey string, media []map[string]any) ([]map[string]any, error) {
+// data URIs pass through, video data URIs and local files get uploaded to OSS.
+func ensureRemoteMediaURLs(ctx context.Context, rt *runtime.RT, apiKey, model string, media []map[string]any) ([]map[string]any, error) {
 	out := make([]map[string]any, len(media))
 	for i, m := range media {
 		clone := make(map[string]any, len(m))
@@ -164,7 +210,7 @@ func ensureRemoteMediaURLs(ctx context.Context, rt *runtime.RT, apiKey string, m
 			clone[k] = v
 		}
 		if rawURL, ok := clone["url"].(string); ok && rawURL != "" {
-			resolved, err := EnsureRemoteURL(ctx, rt, apiKey, rawURL)
+			resolved, err := EnsureRemoteURL(ctx, rt, apiKey, model, rawURL)
 			if err != nil {
 				return nil, err
 			}

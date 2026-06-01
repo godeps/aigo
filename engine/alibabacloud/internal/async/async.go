@@ -35,6 +35,7 @@ func Submit(ctx context.Context, rt *runtime.RT, apiKey, path string, payload ma
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-DashScope-Async", "enable")
+	req.Header.Set("X-DashScope-OssResourceResolve", "enable")
 
 	resp, err := rt.HTTPClient.Do(req)
 	if err != nil {

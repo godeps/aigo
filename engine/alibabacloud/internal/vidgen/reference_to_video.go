@@ -65,7 +65,7 @@ func buildReferenceMedia(ctx context.Context, rt *runtime.RT, apiKey, model stri
 
 	if isR2V {
 		if ffURL, ok := graphx.FirstFrameURL(graph); ok {
-			url, err := EnsureRemoteURL(ctx, rt, apiKey, ffURL)
+			url, err := EnsureRemoteURL(ctx, rt, apiKey, model, ffURL)
 			if err != nil {
 				return nil, err
 			}
@@ -74,7 +74,7 @@ func buildReferenceMedia(ctx context.Context, rt *runtime.RT, apiKey, model stri
 	}
 
 	for i, rawURL := range images {
-		url, err := EnsureRemoteURL(ctx, rt, apiKey, rawURL)
+		url, err := EnsureRemoteURL(ctx, rt, apiKey, model, rawURL)
 		if err != nil {
 			return nil, err
 		}
@@ -96,7 +96,7 @@ func buildReferenceMedia(ctx context.Context, rt *runtime.RT, apiKey, model stri
 		media = append(media, entry)
 	}
 	for _, rawURL := range videos {
-		url, err := EnsureRemoteURL(ctx, rt, apiKey, rawURL)
+		url, err := EnsureRemoteURL(ctx, rt, apiKey, model, rawURL)
 		if err != nil {
 			return nil, err
 		}
@@ -115,7 +115,7 @@ func buildReferenceMedia(ctx context.Context, rt *runtime.RT, apiKey, model stri
 
 	if !isR2V {
 		for _, rawURL := range graphx.AudioURLs(graph) {
-			url, err := EnsureRemoteURL(ctx, rt, apiKey, rawURL)
+			url, err := EnsureRemoteURL(ctx, rt, apiKey, model, rawURL)
 			if err != nil {
 				return nil, err
 			}
