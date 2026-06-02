@@ -249,6 +249,10 @@ func AudioInstructions(graph workflow.Graph) (string, bool) {
 	return StringOption(graph, "instructions")
 }
 
+func AudioSpeed(graph workflow.Graph) (float64, bool) {
+	return resolve.Float64Option(graph, "speed")
+}
+
 func AudioOptimizeInstructions(graph workflow.Graph) (bool, bool) {
 	for _, ref := range graph.FindByClassType("AudioOptions") {
 		if v, ok := ref.Node.Input("optimize_instructions"); ok {

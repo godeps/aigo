@@ -36,6 +36,7 @@ func ModelInfos() []engine.ModelInfo {
 		{Name: "newapi/veo-3.0-generate-001", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Veo 3.0", "zh": "Veo 3.0"}, Capability: "video"},
 
 		// ── Vision Understanding ──
+		{Name: "newapi/qwen3.7-plus", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Qwen 3.7 Plus", "zh": "通义千问 3.7 Plus"}, Capability: "video_understanding"},
 		{Name: "newapi/qwen3.6-plus", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Qwen 3.6 Plus", "zh": "通义千问 3.6 Plus"}, Capability: "video_understanding"},
 		{Name: "newapi/qwen3.6-flash", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Qwen 3.6 Flash", "zh": "通义千问 3.6 Flash"}, Capability: "video_understanding"},
 		{Name: "newapi/qwen3.5-omni-plus", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Qwen 3.5 Omni Plus", "zh": "通义千问 3.5 Omni Plus"}, Capability: "video_understanding"},

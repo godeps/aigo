@@ -55,7 +55,7 @@ func main() {
 			baseURL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 		}
 		if os.Getenv("AIGO_ROUTER_MODEL") == "" && defaultModel == "gpt-5-mini" {
-			defaultModel = "qwen3.6-plus"
+			defaultModel = "qwen3.7-plus"
 		}
 	}
 

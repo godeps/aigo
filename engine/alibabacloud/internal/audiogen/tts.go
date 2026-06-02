@@ -101,6 +101,9 @@ func RunTTS(ctx context.Context, rt *runtime.RT, apiKey, model string, graph wor
 	}
 
 	parameters := map[string]any{}
+	if speed, ok := graphx.AudioSpeed(graph); ok && speed > 0 {
+		parameters["speed"] = speed
+	}
 	if instr, ok := graphx.AudioInstructions(graph); ok && strings.TrimSpace(instr) != "" {
 		parameters["instructions"] = strings.TrimSpace(instr)
 	}

@@ -295,7 +295,7 @@ func GenerateVideo() ToolDef {
 				},
 				"duration": {
 					Type:        "integer",
-					Description: "Video duration in seconds (shorter durations produce higher quality)",
+					Description: "Video duration in seconds. Must be between 3 and 15 (inclusive). Shorter durations produce higher quality. Default: 5",
 				},
 				"size": {
 					Type:        "string",
@@ -310,7 +310,7 @@ func GenerateVideo() ToolDef {
 				},
 				"resolution": {
 					Type:        "string",
-					Description: "Video resolution. Use 720P for drafts, 1080P for final output",
+					Description: "Output resolution tier. '720P' produces ~720p equivalent (draft quality), '1080P' produces ~1080p equivalent (final quality). For 9:16 vertical video at full HD, use '1080P'. Actual pixel dimensions depend on the engine.",
 					Enum:        []string{"480P", "720P", "1080P"},
 					Default:     "720P",
 				},
@@ -358,11 +358,16 @@ func TextToSpeech() ToolDef {
 				},
 				"voice": {
 					Type:        "string",
-					Description: "Voice identifier. Common voices: Cherry (female Chinese), Serena (female Chinese/English), Ethan (male English), Chelsie (female English). Other providers may support different voices.",
+					Description: "Voice identifier. Chinese female: Cherry (warm), Serena (bilingual zh/en), Bella (gentle), Momo (cute). Chinese male: Li (mature), Marcus (deep), Peter (standard). English female: Chelsie, Jennifer, Maia. English male: Ethan, Ryan, Aiden. IMPORTANT: Use Chinese voices for Chinese text.",
+					Enum:        []string{"Cherry", "Serena", "Ethan", "Chelsie", "Momo", "Vivian", "Maia", "Bella", "Jennifer", "Katerina", "Mia", "Bellona", "Bunny", "Elias", "Nini", "Seren", "Stella", "Sonrisa", "Sohee", "Jada", "Sunny", "Kiki", "Moon", "Kai", "Nofish", "Ryan", "Aiden", "Mochi", "Vincent", "Neil", "Arthur", "Pip", "Bodega", "Alek", "Dolce", "Lenn", "Emilien", "Andre", "Dylan", "Li", "Marcus", "Roy", "Peter", "Eric", "Rocky"},
 				},
 				"language": {
 					Type:        "string",
 					Description: "Language code (e.g., zh, en)",
+				},
+				"speed": {
+					Type:        "number",
+					Description: "Speech rate multiplier. 0.5 = half speed (slow, dramatic), 1.0 = normal, 1.5 = fast. For narration/advertising voiceover use 0.7-0.8. Default: 1.0",
 				},
 				"instructions": {
 					Type:        "string",

@@ -137,6 +137,7 @@ var knownModels = map[string]knownModel{
 	// ═══ Vision Understanding (/v1/chat/completions) ════════
 
 	// Qwen vision & omni (DashScope OpenAI-compatible)
+	"qwen3.7-plus":        {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
 	"qwen3.6-plus":        {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
 	"qwen3.6-flash":       {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
 	"qwen3.5-omni-plus":   {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},

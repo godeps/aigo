@@ -4,7 +4,7 @@
 // Chat Completions API and returns text responses. Auth: Authorization: Bearer {api_key},
 // env DASHSCOPE_API_KEY.
 //
-// Supported models: qwen3.6-plus, qwen3.6-flash, qwen3.5-omni-plus.
+// Supported models: qwen3.7-plus, qwen3.6-plus, qwen3.6-flash, qwen3.5-omni-plus.
 package qwenvl
 
 import (
@@ -29,13 +29,14 @@ import (
 
 const (
 	defaultBaseURL   = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-	defaultModel     = "qwen3.6-plus"
+	defaultModel     = "qwen3.7-plus"
 	defaultMaxTokens = 4096
 	visionTimeout    = 5 * time.Minute
 )
 
 // Model constants.
 const (
+	ModelQwen37Plus     = "qwen3.7-plus"
 	ModelQwen36Plus     = "qwen3.6-plus"
 	ModelQwen36Flash    = "qwen3.6-flash"
 	ModelQwen35OmniPlus = "qwen3.5-omni-plus"
@@ -43,8 +44,8 @@ const (
 
 // modelAliases maps deprecated model names to their current equivalents.
 var modelAliases = map[string]string{
-	"qwen-vl-max":         ModelQwen36Plus,
-	"qwen-vl-max-latest":  ModelQwen36Plus,
+	"qwen-vl-max":         ModelQwen37Plus,
+	"qwen-vl-max-latest":  ModelQwen37Plus,
 	"qwen-vl-plus":        ModelQwen36Flash,
 	"qwen-vl-plus-latest": ModelQwen36Flash,
 }
@@ -67,7 +68,7 @@ var (
 type Config struct {
 	APIKey     string
 	BaseURL    string // default: https://dashscope.aliyuncs.com/compatible-mode/v1
-	Model      string // default: qwen3.6-plus
+	Model      string // default: qwen3.7-plus
 	HTTPClient *http.Client
 	MaxTokens  int // default: 4096
 }
@@ -329,7 +330,7 @@ func ConfigSchema() []engine.ConfigField {
 	return []engine.ConfigField{
 		{Key: "apiKey", Label: "API Key", Type: "secret", Required: true, EnvVar: "DASHSCOPE_API_KEY", Description: "DashScope API key"},
 		{Key: "baseUrl", Label: "Base URL", Type: "url", EnvVar: "DASHSCOPE_BASE_URL", Description: "Custom API base URL (optional)", Default: defaultBaseURL},
-		{Key: "model", Label: "Model", Type: "string", Description: "Qwen-VL model (qwen3.6-plus, qwen3.6-flash, qwen3.5-omni-plus)", Default: defaultModel},
+		{Key: "model", Label: "Model", Type: "string", Description: "Qwen-VL model (qwen3.7-plus, qwen3.6-plus, qwen3.6-flash, qwen3.5-omni-plus)", Default: defaultModel},
 		{Key: "maxTokens", Label: "Max Tokens", Type: "number", Description: "Maximum tokens in response", Default: "4096"},
 	}
 }
@@ -337,10 +338,10 @@ func ConfigSchema() []engine.ConfigField {
 // ModelsByCapability returns known Qwen multimodal models grouped by capability.
 func ModelsByCapability() map[string][]string {
 	return map[string][]string{
-		"text":   {ModelQwen36Plus, ModelQwen36Flash, ModelQwen35OmniPlus},
-		"image":  {ModelQwen36Plus, ModelQwen36Flash, ModelQwen35OmniPlus},
-		"video":  {ModelQwen36Plus, ModelQwen36Flash, ModelQwen35OmniPlus},
-		"vision": {ModelQwen36Plus, ModelQwen36Flash, ModelQwen35OmniPlus},
+		"text":   {ModelQwen37Plus, ModelQwen36Plus, ModelQwen36Flash, ModelQwen35OmniPlus},
+		"image":  {ModelQwen37Plus, ModelQwen36Plus, ModelQwen36Flash, ModelQwen35OmniPlus},
+		"video":  {ModelQwen37Plus, ModelQwen36Plus, ModelQwen36Flash, ModelQwen35OmniPlus},
+		"vision": {ModelQwen37Plus, ModelQwen36Plus, ModelQwen36Flash, ModelQwen35OmniPlus},
 		"audio":  {ModelQwen35OmniPlus},
 	}
 }
