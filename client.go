@@ -12,6 +12,7 @@ import (
 
 	"github.com/godeps/aigo/engine"
 	"github.com/godeps/aigo/engine/poll"
+	"github.com/godeps/aigo/material"
 	"github.com/godeps/aigo/workflow"
 )
 
@@ -197,10 +198,16 @@ type Client struct {
 	disabled   map[string]bool // engines that are registered but temporarily disabled
 	middleware []Middleware
 	store      TaskStore
+	searcher   material.Searcher
 }
 
 // ClientOption configures the Client at construction time.
 type ClientOption func(*Client)
+
+// WithSearcher attaches a material searcher for asset retrieval.
+func WithSearcher(s material.Searcher) ClientOption {
+	return func(c *Client) { c.searcher = s }
+}
 
 // WithStore attaches a TaskStore for async task persistence and crash recovery.
 func WithStore(s TaskStore) ClientOption {
@@ -1245,4 +1252,51 @@ func (c *Client) RecoverPending() ([]TaskRecord, error) {
 		}
 	}
 	return pending, nil
+}
+
+// --- Material Search ---
+
+// ErrSearcherNotConfigured is returned when SearchMaterial is called without a searcher.
+var ErrSearcherNotConfigured = errors.New("aigo: material searcher not configured")
+
+// SetSearcher replaces the material searcher at runtime.
+func (c *Client) SetSearcher(s material.Searcher) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.searcher = s
+}
+
+// SearchMaterial executes a material search using the configured searcher.
+func (c *Client) SearchMaterial(ctx context.Context, req material.Request) (material.Result, error) {
+	c.mu.RLock()
+	s := c.searcher
+	c.mu.RUnlock()
+
+	if s == nil {
+		return material.Result{}, ErrSearcherNotConfigured
+	}
+	return s.Search(ctx, req)
+}
+
+// SearchMaterialFromTask converts an AgentTask (with Search options) into a
+// material.Request and executes the search.
+func (c *Client) SearchMaterialFromTask(ctx context.Context, task AgentTask) (material.Result, error) {
+	if task.Search == nil {
+		return material.Result{}, errors.New("aigo: AgentTask.Search is nil")
+	}
+
+	req := material.Request{
+		Query:       task.Prompt,
+		MediaTypes:  task.Search.MediaTypes,
+		Tags:        task.Search.Tags,
+		MaxResults:  task.Search.MaxResults,
+		Page:        task.Search.Page,
+		Sort:        task.Search.Sort,
+		Order:       task.Search.Order,
+		NextToken:   task.Search.NextToken,
+		FieldQuery:  task.Search.FieldQuery,
+		SimpleQuery: task.Search.SimpleQuery,
+	}
+
+	return c.SearchMaterial(ctx, req)
 }

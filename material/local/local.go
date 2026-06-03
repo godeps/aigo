@@ -4,12 +4,12 @@ package local
 
 import (
 	"context"
+	"container/heap"
 	"encoding/json"
 	"fmt"
 	"math"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 
@@ -284,29 +284,45 @@ type scored struct {
 	score float64
 }
 
-// topK returns the top-K entries by cosine similarity, pre-filtered by media types.
+// minHeap implements heap.Interface for scored items (min by score).
+type minHeap []scored
+
+func (h minHeap) Len() int            { return len(h) }
+func (h minHeap) Less(i, j int) bool   { return h[i].score < h[j].score }
+func (h minHeap) Swap(i, j int)        { h[i], h[j] = h[j], h[i] }
+func (h *minHeap) Push(x any)          { *h = append(*h, x.(scored)) }
+func (h *minHeap) Pop() any {
+	old := *h
+	n := len(old)
+	item := old[n-1]
+	*h = old[:n-1]
+	return item
+}
+
+// topK returns the top-K entries by cosine similarity in O(n log k) time.
 func topK(entries []IndexEntry, queryVec []float32, mediaTypes []string, k int) []scored {
-	var candidates []scored
+	h := &minHeap{}
+	heap.Init(h)
+
 	for _, e := range entries {
 		if len(mediaTypes) > 0 && !containsMediaType(mediaTypes, e.MediaType) {
 			continue
 		}
 		score := cosineSimilarity(queryVec, e.Vector)
-		candidates = append(candidates, scored{entry: e, score: score})
+		if h.Len() < k {
+			heap.Push(h, scored{entry: e, score: score})
+		} else if score > (*h)[0].score {
+			(*h)[0] = scored{entry: e, score: score}
+			heap.Fix(h, 0)
+		}
 	}
 
-	if len(candidates) <= k {
-		sort.Slice(candidates, func(i, j int) bool {
-			return candidates[i].score > candidates[j].score
-		})
-		return candidates
+	// Extract in descending score order.
+	result := make([]scored, h.Len())
+	for i := len(result) - 1; i >= 0; i-- {
+		result[i] = heap.Pop(h).(scored)
 	}
-
-	// Partial sort: only need top-K, use selection for better perf on large sets.
-	sort.Slice(candidates, func(i, j int) bool {
-		return candidates[i].score > candidates[j].score
-	})
-	return candidates[:k]
+	return result
 }
 
 func cosineSimilarity(a, b []float32) float64 {

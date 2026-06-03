@@ -26,6 +26,7 @@ const baseURL = "https://api.unsplash.com/search/photos"
 // Config configures the Unsplash searcher.
 type Config struct {
 	AccessKey  string
+	RPM        int // requests per minute; default 50
 	HTTPClient *http.Client
 }
 
@@ -33,6 +34,7 @@ type Config struct {
 type Searcher struct {
 	accessKey string
 	client    *http.Client
+	limiter   *material.RateLimiter
 }
 
 // New creates an Unsplash searcher.
@@ -46,7 +48,11 @@ func New(cfg Config) *Searcher {
 	if client == nil {
 		client = &http.Client{Timeout: 30 * time.Second}
 	}
-	return &Searcher{accessKey: accessKey, client: client}
+	rpm := cfg.RPM
+	if rpm <= 0 {
+		rpm = 50
+	}
+	return &Searcher{accessKey: accessKey, client: client, limiter: material.NewRateLimiter(rpm)}
 }
 
 func (s *Searcher) Source() string                { return "unsplash" }
@@ -94,25 +100,42 @@ func (s *Searcher) Search(ctx context.Context, req material.Request) (material.R
 		params.Set("order_by", orderBy)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"?"+params.Encode(), nil)
-	if err != nil {
+	if err := s.limiter.Wait(ctx); err != nil {
 		return material.Result{}, err
 	}
-	httpReq.Header.Set("Authorization", "Client-ID "+s.accessKey)
-	httpReq.Header.Set("Accept-Version", "v1")
 
-	resp, err := s.client.Do(httpReq)
-	if err != nil {
-		return material.Result{}, fmt.Errorf("unsplash: request failed: %w", err)
-	}
-	defer resp.Body.Close()
+	var body []byte
+	err := material.RetryWithContext(ctx, func() error {
+		httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"?"+params.Encode(), nil)
+		if err != nil {
+			return err
+		}
+		httpReq.Header.Set("Authorization", "Client-ID "+s.accessKey)
+		httpReq.Header.Set("Accept-Version", "v1")
 
-	body, err := io.ReadAll(resp.Body)
+		resp, err := s.client.Do(httpReq)
+		if err != nil {
+			return fmt.Errorf("unsplash: request failed: %w", err)
+		}
+		defer resp.Body.Close()
+
+		body, err = io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("unsplash: read response: %w", err)
+		}
+		if resp.StatusCode == 429 {
+			return fmt.Errorf("unsplash: rate limited (HTTP 429)")
+		}
+		if resp.StatusCode >= 500 {
+			return fmt.Errorf("unsplash: server error (HTTP %d)", resp.StatusCode)
+		}
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("unsplash: API error (HTTP %d): %s", resp.StatusCode, truncate(string(body), 200))
+		}
+		return nil
+	}, 3, 500*time.Millisecond)
 	if err != nil {
-		return material.Result{}, fmt.Errorf("unsplash: read response: %w", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return material.Result{}, fmt.Errorf("unsplash: API error (HTTP %d): %s", resp.StatusCode, truncate(string(body), 200))
+		return material.Result{}, err
 	}
 
 	var apiResp apiResponse

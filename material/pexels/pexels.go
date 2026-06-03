@@ -29,13 +29,15 @@ const (
 // Config configures the Pexels searcher.
 type Config struct {
 	APIKey     string
+	RPM        int // requests per minute; default 30
 	HTTPClient *http.Client
 }
 
 // Searcher queries the Pexels API for photos and videos.
 type Searcher struct {
-	apiKey string
-	client *http.Client
+	apiKey  string
+	client  *http.Client
+	limiter *material.RateLimiter
 }
 
 // New creates a Pexels searcher.
@@ -49,7 +51,11 @@ func New(cfg Config) *Searcher {
 	if client == nil {
 		client = &http.Client{Timeout: 30 * time.Second}
 	}
-	return &Searcher{apiKey: apiKey, client: client}
+	rpm := cfg.RPM
+	if rpm <= 0 {
+		rpm = 30
+	}
+	return &Searcher{apiKey: apiKey, client: client, limiter: material.NewRateLimiter(rpm)}
 }
 
 func (s *Searcher) Source() string                { return "pexels" }
@@ -199,26 +205,41 @@ func (s *Searcher) searchVideos(ctx context.Context, query string, perPage, page
 }
 
 func (s *Searcher) doRequest(ctx context.Context, reqURL string) ([]byte, error) {
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
-	if err != nil {
+	if err := s.limiter.Wait(ctx); err != nil {
 		return nil, err
 	}
-	httpReq.Header.Set("Authorization", s.apiKey)
 
-	resp, err := s.client.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("pexels: request failed: %w", err)
-	}
-	defer resp.Body.Close()
+	var body []byte
+	err := material.RetryWithContext(ctx, func() error {
+		httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+		if err != nil {
+			return err
+		}
+		httpReq.Header.Set("Authorization", s.apiKey)
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("pexels: read response: %w", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("pexels: API error (HTTP %d): %s", resp.StatusCode, truncate(string(body), 200))
-	}
-	return body, nil
+		resp, err := s.client.Do(httpReq)
+		if err != nil {
+			return fmt.Errorf("pexels: request failed: %w", err)
+		}
+		defer resp.Body.Close()
+
+		body, err = io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("pexels: read response: %w", err)
+		}
+		if resp.StatusCode == 429 {
+			return fmt.Errorf("pexels: rate limited (HTTP 429)")
+		}
+		if resp.StatusCode >= 500 {
+			return fmt.Errorf("pexels: server error (HTTP %d)", resp.StatusCode)
+		}
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("pexels: API error (HTTP %d): %s", resp.StatusCode, truncate(string(body), 200))
+		}
+		return nil
+	}, 3, 500*time.Millisecond)
+
+	return body, err
 }
 
 func extractVideoTags(v video) []string {
