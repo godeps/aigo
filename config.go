@@ -26,6 +26,63 @@ func LoadConfig(path string) (FileConfig, error) {
 	return cfg, nil
 }
 
+// ApplyURI parses a URI (or comma-separated URIs) and registers engines
+// using the factory system. Returns the names of successfully registered engines.
+//
+// Example:
+//
+//	client.ApplyURI("dashscope://sk-xxx@proxy.com/api/v1?model=qwen-image,openai://sk-abc?model=dall-e-3")
+func (c *Client) ApplyURI(uris string) ([]string, error) {
+	configs, err := engine.ParseURIs(uris)
+	if err != nil {
+		return nil, err
+	}
+	var registered []string
+	for _, ec := range configs {
+		factory, ok := engine.GetFactory(ec.Provider)
+		if !ok {
+			return registered, fmt.Errorf("aigo: no factory registered for provider %q (from URI)", ec.Provider)
+		}
+		eng, err := factory(ec)
+		if err != nil {
+			return registered, fmt.Errorf("aigo: create engine %s (provider=%s): %w", ec.Name, ec.Provider, err)
+		}
+		if err := c.RegisterEngine(ec.Name, eng); err != nil {
+			return registered, err
+		}
+		registered = append(registered, ec.Name)
+	}
+	return registered, nil
+}
+
+// ApplyEnvURI reads ENGINE_URIS from the environment and registers engines.
+// Returns nil if the env var is not set. This is a convenience wrapper around ApplyURI.
+func (c *Client) ApplyEnvURI() ([]string, error) {
+	configs, err := engine.NewFromEnv()
+	if err != nil {
+		return nil, err
+	}
+	if configs == nil {
+		return nil, nil
+	}
+	var registered []string
+	for _, ec := range configs {
+		factory, ok := engine.GetFactory(ec.Provider)
+		if !ok {
+			return registered, fmt.Errorf("aigo: no factory registered for provider %q (from URI)", ec.Provider)
+		}
+		eng, err := factory(ec)
+		if err != nil {
+			return registered, fmt.Errorf("aigo: create engine %s (provider=%s): %w", ec.Name, ec.Provider, err)
+		}
+		if err := c.RegisterEngine(ec.Name, eng); err != nil {
+			return registered, err
+		}
+		registered = append(registered, ec.Name)
+	}
+	return registered, nil
+}
+
 // ApplyConfig registers engines from a FileConfig using registered factories.
 // Disabled entries are silently skipped. Returns the names of successfully registered engines.
 func (c *Client) ApplyConfig(cfg FileConfig) ([]string, error) {
