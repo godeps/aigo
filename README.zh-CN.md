@@ -102,6 +102,20 @@ AgentTask ──► BuildGraph() ──► workflow.Graph (DAG)
 | `embed/jina` | Jina Embeddings | `JINA_API_KEY` |
 | `embed/voyage` | Voyage AI Embeddings | `VOYAGE_API_KEY` |
 
+### 素材检索
+
+| 后端 | 能力 | 环境变量（传统） | URI 环境变量 |
+|------|------|---------|---------|
+| `material/pexels` | Pexels 图片+视频检索 | `PEXELS_API_KEY` | `PEXELS_URI` |
+| `material/unsplash` | Unsplash 图片检索 | `UNSPLASH_ACCESS_KEY` | `UNSPLASH_URI` |
+| `material/pixabay` | Pixabay 图片+视频检索 | `PIXABAY_API_KEY` | `PIXABAY_URI` |
+| `material/ossmeta` | 阿里云 OSS DoMetaQuery（标量+语义检索） | `OSS_ACCESS_KEY_ID` / `OSS_ACCESS_KEY_SECRET` | `OSS_META_URI` |
+| `material/local` | 本地向量相似度搜索（基于 embed 引擎） | 依赖所选嵌入引擎 | `LOCAL_MATERIAL_URI` |
+
+也支持聚合 URI 一行配置所有后端：`MATERIAL_URIS="pexels://KEY,unsplash://KEY,oss://AK:SK@bucket.region"`
+
+详见 [docs/material_search.md](./docs/material_search.md)。
+
 ## 安装
 
 ```bash

@@ -102,6 +102,20 @@ AgentTask ──► BuildGraph() ──► workflow.Graph (DAG)
 | `embed/jina` | Jina Embeddings | `JINA_API_KEY` |
 | `embed/voyage` | Voyage AI Embeddings | `VOYAGE_API_KEY` |
 
+### Material Search
+
+| Backend | Capability | Env Var (legacy) | URI Env Var |
+|---------|-----------|---------|---------|
+| `material/pexels` | Pexels photo + video search | `PEXELS_API_KEY` | `PEXELS_URI` |
+| `material/unsplash` | Unsplash photo search | `UNSPLASH_ACCESS_KEY` | `UNSPLASH_URI` |
+| `material/pixabay` | Pixabay image + video search | `PIXABAY_API_KEY` | `PIXABAY_URI` |
+| `material/ossmeta` | Alibaba Cloud OSS DoMetaQuery (scalar + semantic) | `OSS_ACCESS_KEY_ID` / `OSS_ACCESS_KEY_SECRET` | `OSS_META_URI` |
+| `material/local` | Local vector similarity search (via embed engines) | Depends on embed backend | `LOCAL_MATERIAL_URI` |
+
+Combined URI env var for all backends: `MATERIAL_URIS="pexels://KEY,unsplash://KEY,oss://AK:SK@bucket.region"`
+
+See [docs/material_search.md](./docs/material_search.md) for details.
+
 ## Install
 
 ```bash

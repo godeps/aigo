@@ -136,6 +136,7 @@ func AllTools() []ToolDef {
 		GenerateSfx(),
 		MixAudio(),
 		UnderstandImage(),
+		SearchMaterial(),
 	}
 }
 
@@ -619,6 +620,50 @@ func UnderstandImage() ToolDef {
 				},
 			},
 			Required: []string{"image_url"},
+		},
+	}
+}
+
+// SearchMaterial returns the tool definition for material/asset search.
+func SearchMaterial() ToolDef {
+	return ToolDef{
+		Name:        "search_material",
+		Description: "Search for stock photos, videos, audio, and other creative assets from multiple platforms (Pexels, Unsplash, Pixabay) or your own asset library. Returns a list of matching items with preview URLs and metadata. Use specific keywords and media_type to narrow results.",
+		Category:    "search",
+		Parameters: Schema{
+			Type: "object",
+			Properties: map[string]Schema{
+				"query": {
+					Type:        "string",
+					Description: "Search keywords or natural language description of the desired material. Be specific: 'aerial view of snow-covered forest at sunset' is better than 'forest'.",
+				},
+				"media_type": {
+					Type:        "string",
+					Description: "Type of material to search for",
+					Enum:        []string{"image", "video", "audio", "document"},
+				},
+				"source": {
+					Type:        "string",
+					Description: "Which platform to search. Use 'all' to search everywhere, or pick a specific source for faster results",
+					Enum:        []string{"all", "pexels", "unsplash", "pixabay", "oss", "local"},
+					Default:     "all",
+				},
+				"max_results": {
+					Type:        "integer",
+					Description: "Maximum number of results to return (1-100). Default: 20",
+				},
+				"tags": {
+					Type:        "string",
+					Description: "Comma-separated tags to filter by (e.g. 'nature,landscape,sunset')",
+				},
+				"sort": {
+					Type:        "string",
+					Description: "How to sort results",
+					Enum:        []string{"relevance", "newest", "popular"},
+					Default:     "relevance",
+				},
+			},
+			Required: []string{"query"},
 		},
 	}
 }

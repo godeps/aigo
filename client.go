@@ -71,6 +71,21 @@ type AudioMixOptions struct {
 	Format    string // "mp3", "wav", "flac"
 }
 
+// SearchOptions groups material search parameters.
+type SearchOptions struct {
+	Mode        string   // "basic" or "semantic" (for OSS MetaQuery)
+	MediaTypes  []string // ["image", "video", "audio", "document"]
+	Source      string   // "all", "pexels", "unsplash", "pixabay", "oss", "local"
+	MaxResults  int
+	Tags        []string
+	Sort        string // "relevance", "newest", "popular"
+	Order       string // "asc", "desc"
+	Page        int
+	NextToken   string
+	FieldQuery  string // structured JSON query for OSS basic mode
+	SimpleQuery string // additional filter for OSS semantic mode
+}
+
 // VoiceDesignOptions groups voice design parameters.
 type VoiceDesignOptions struct {
 	VoicePrompt    string
@@ -113,6 +128,9 @@ type AgentTask struct {
 	Music       *MusicOptions
 	SFX         *SFXOptions
 	AudioMix    *AudioMixOptions
+
+	// Search groups material search parameters.
+	Search *SearchOptions
 
 	// Structured groups image/video options separately for finer control.
 	Structured *AgentTaskStructured
@@ -891,6 +909,50 @@ func BuildGraph(task AgentTask) workflow.Graph {
 			Inputs:    mixOpts,
 		}
 		nextID++
+	}
+
+	if task.Search != nil {
+		searchOpts := map[string]any{}
+		if task.Search.Mode != "" {
+			searchOpts["mode"] = task.Search.Mode
+		}
+		if len(task.Search.MediaTypes) > 0 {
+			searchOpts["media_types"] = task.Search.MediaTypes
+		}
+		if task.Search.Source != "" {
+			searchOpts["source"] = task.Search.Source
+		}
+		if task.Search.MaxResults > 0 {
+			searchOpts["max_results"] = task.Search.MaxResults
+		}
+		if len(task.Search.Tags) > 0 {
+			searchOpts["tags"] = task.Search.Tags
+		}
+		if task.Search.Sort != "" {
+			searchOpts["sort"] = task.Search.Sort
+		}
+		if task.Search.Order != "" {
+			searchOpts["order"] = task.Search.Order
+		}
+		if task.Search.Page > 0 {
+			searchOpts["page"] = task.Search.Page
+		}
+		if task.Search.NextToken != "" {
+			searchOpts["next_token"] = task.Search.NextToken
+		}
+		if task.Search.FieldQuery != "" {
+			searchOpts["field_query"] = task.Search.FieldQuery
+		}
+		if task.Search.SimpleQuery != "" {
+			searchOpts["simple_query"] = task.Search.SimpleQuery
+		}
+		if len(searchOpts) > 0 {
+			graph[nodeID(nextID)] = workflow.Node{
+				ClassType: "SearchOptions",
+				Inputs:    searchOpts,
+			}
+			nextID++
+		}
 	}
 
 	if task.VoiceDesign != nil &&
