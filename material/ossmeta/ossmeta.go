@@ -168,17 +168,6 @@ func (s *Searcher) Search(ctx context.Context, req material.Request) (material.R
 }
 
 func (s *Searcher) doMetaQuery(ctx context.Context, mode, xmlBody string) ([]byte, error) {
-	endpoint := fmt.Sprintf("https://%s.oss-%s.aliyuncs.com", s.bucket, s.region)
-
-	reqURL := endpoint + "/?metaQuery&comp=query&mode=" + mode
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, strings.NewReader(xmlBody))
-	if err != nil {
-		return nil, fmt.Errorf("ossmeta: build request: %w", err)
-	}
-	httpReq.Header.Set("Content-Type", "application/xml")
-
-	// Use the SDK's internal signer via InvokeOperation for proper V4 signing.
 	result, err := s.client.InvokeOperation(ctx, &oss.OperationInput{
 		OpName: "DoMetaQuery",
 		Method: "POST",

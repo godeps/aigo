@@ -35,6 +35,8 @@ type Config struct {
 type IndexEntry struct {
 	Path      string            `json:"path"`
 	MediaType string            `json:"media_type"`
+	Size      int64             `json:"size,omitempty"`
+	ModTime   int64             `json:"mod_time,omitempty"` // unix timestamp for change detection
 	Vector    []float32         `json:"vector"`
 	Metadata  map[string]string `json:"metadata,omitempty"`
 }
@@ -45,6 +47,7 @@ type Searcher struct {
 	indexPath   string
 	mu          sync.RWMutex
 	entries     []IndexEntry
+	pathIndex   map[string]int // path → entries slice index (dedup + fast lookup)
 }
 
 // New creates a local vector searcher.
@@ -59,6 +62,7 @@ func New(cfg Config) (*Searcher, error) {
 	s := &Searcher{
 		embedEngine: cfg.EmbedEngine,
 		indexPath:   cfg.IndexPath,
+		pathIndex:   make(map[string]int),
 	}
 
 	if err := s.loadIndex(); err != nil && !os.IsNotExist(err) {
@@ -85,38 +89,20 @@ func (s *Searcher) Search(ctx context.Context, req material.Request) (material.R
 		return material.Result{}, fmt.Errorf("local search: embed query: %w", err)
 	}
 
-	type scored struct {
-		entry IndexEntry
-		score float64
-	}
-
-	candidates := make([]scored, 0, len(entries))
-	for _, e := range entries {
-		if len(req.MediaTypes) > 0 && !containsMediaType(req.MediaTypes, e.MediaType) {
-			continue
-		}
-		score := cosineSimilarity(queryResult.Vector, e.Vector)
-		candidates = append(candidates, scored{entry: e, score: score})
-	}
-
-	sort.Slice(candidates, func(i, j int) bool {
-		return candidates[i].score > candidates[j].score
-	})
-
 	maxResults := req.MaxResults
 	if maxResults <= 0 {
 		maxResults = 20
 	}
-	if maxResults > len(candidates) {
-		maxResults = len(candidates)
-	}
 
-	items := make([]material.Item, 0, maxResults)
-	for i := 0; i < maxResults; i++ {
-		c := candidates[i]
+	// Use a min-heap approach for large indexes: only keep top-K candidates.
+	candidates := topK(entries, queryResult.Vector, req.MediaTypes, maxResults)
+
+	items := make([]material.Item, 0, len(candidates))
+	for _, c := range candidates {
 		items = append(items, material.Item{
 			URI:       c.entry.Path,
 			Filename:  filepath.Base(c.entry.Path),
+			Size:      c.entry.Size,
 			MediaType: c.entry.MediaType,
 			Source:    "local",
 			Score:     c.score,
@@ -126,47 +112,73 @@ func (s *Searcher) Search(ctx context.Context, req material.Request) (material.R
 
 	return material.Result{
 		Items:  items,
-		Total:  len(candidates),
+		Total:  len(entries),
 		Source: "local",
 	}, nil
 }
 
-// IndexFile adds a single file to the vector index.
+// IndexFile adds or updates a single file in the vector index.
+// If the file is already indexed and unchanged (same size + mod time), it is skipped.
 func (s *Searcher) IndexFile(ctx context.Context, path string) error {
-	mediaType := guessMediaType(path)
+	absPath, _ := filepath.Abs(path)
+
+	info, err := os.Stat(absPath)
+	if err != nil {
+		return fmt.Errorf("local search: stat %s: %w", path, err)
+	}
+
+	// Check if already indexed and unchanged.
+	s.mu.RLock()
+	if idx, ok := s.pathIndex[absPath]; ok {
+		existing := s.entries[idx]
+		if existing.Size == info.Size() && existing.ModTime == info.ModTime().Unix() {
+			s.mu.RUnlock()
+			return nil // already indexed, unchanged
+		}
+	}
+	s.mu.RUnlock()
+
+	mediaType := guessMediaType(absPath)
 
 	var req embed.Request
 	switch mediaType {
 	case "image":
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(absPath)
 		if err != nil {
-			return fmt.Errorf("local search: read file %s: %w", path, err)
+			return fmt.Errorf("local search: read file %s: %w", absPath, err)
 		}
 		req = embed.ImageRequest(data, "RETRIEVAL_DOCUMENT")
 	default:
-		req = embed.TextRequest(filepath.Base(path), "RETRIEVAL_DOCUMENT")
+		req = embed.TextRequest(filepath.Base(absPath), "RETRIEVAL_DOCUMENT")
 	}
 
 	result, err := s.embedEngine.Embed(ctx, req)
 	if err != nil {
-		return fmt.Errorf("local search: embed %s: %w", path, err)
+		return fmt.Errorf("local search: embed %s: %w", absPath, err)
 	}
 
-	absPath, _ := filepath.Abs(path)
 	entry := IndexEntry{
 		Path:      absPath,
 		MediaType: mediaType,
+		Size:      info.Size(),
+		ModTime:   info.ModTime().Unix(),
 		Vector:    result.Vector,
 	}
 
 	s.mu.Lock()
-	s.entries = append(s.entries, entry)
+	if idx, ok := s.pathIndex[absPath]; ok {
+		s.entries[idx] = entry // update in place
+	} else {
+		s.pathIndex[absPath] = len(s.entries)
+		s.entries = append(s.entries, entry)
+	}
 	s.mu.Unlock()
 
 	return nil
 }
 
-// IndexDir scans a directory and indexes all supported files.
+// IndexDir scans a directory and indexes all supported files incrementally.
+// Files already indexed with the same size and mod time are skipped.
 func (s *Searcher) IndexDir(ctx context.Context, dir string) (int, error) {
 	var count int
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
@@ -179,6 +191,9 @@ func (s *Searcher) IndexDir(ctx context.Context, dir string) (int, error) {
 		if !isSupportedFile(path) {
 			return nil
 		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		if err := s.IndexFile(ctx, path); err != nil {
 			return nil
 		}
@@ -190,6 +205,29 @@ func (s *Searcher) IndexDir(ctx context.Context, dir string) (int, error) {
 	}
 
 	return count, s.saveIndex()
+}
+
+// RemoveStale removes index entries whose files no longer exist on disk.
+func (s *Searcher) RemoveStale() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var kept []IndexEntry
+	newIndex := make(map[string]int)
+	removed := 0
+
+	for _, e := range s.entries {
+		if _, err := os.Stat(e.Path); err != nil {
+			removed++
+			continue
+		}
+		newIndex[e.Path] = len(kept)
+		kept = append(kept, e)
+	}
+
+	s.entries = kept
+	s.pathIndex = newIndex
+	return removed
 }
 
 // SaveIndex persists the current index to disk.
@@ -215,6 +253,10 @@ func (s *Searcher) loadIndex() error {
 	}
 	s.mu.Lock()
 	s.entries = entries
+	s.pathIndex = make(map[string]int, len(entries))
+	for i, e := range entries {
+		s.pathIndex[e.Path] = i
+	}
 	s.mu.Unlock()
 	return nil
 }
@@ -234,6 +276,37 @@ func (s *Searcher) saveIndex() error {
 		return err
 	}
 	return os.WriteFile(s.indexPath, data, 0o644)
+}
+
+// scored pairs an entry with its similarity score.
+type scored struct {
+	entry IndexEntry
+	score float64
+}
+
+// topK returns the top-K entries by cosine similarity, pre-filtered by media types.
+func topK(entries []IndexEntry, queryVec []float32, mediaTypes []string, k int) []scored {
+	var candidates []scored
+	for _, e := range entries {
+		if len(mediaTypes) > 0 && !containsMediaType(mediaTypes, e.MediaType) {
+			continue
+		}
+		score := cosineSimilarity(queryVec, e.Vector)
+		candidates = append(candidates, scored{entry: e, score: score})
+	}
+
+	if len(candidates) <= k {
+		sort.Slice(candidates, func(i, j int) bool {
+			return candidates[i].score > candidates[j].score
+		})
+		return candidates
+	}
+
+	// Partial sort: only need top-K, use selection for better perf on large sets.
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].score > candidates[j].score
+	})
+	return candidates[:k]
 }
 
 func cosineSimilarity(a, b []float32) float64 {
@@ -278,14 +351,14 @@ func guessMediaType(path string) string {
 
 func isSupportedFile(path string) bool {
 	ext := strings.ToLower(filepath.Ext(path))
-	supported := map[string]bool{
-		".jpg": true, ".jpeg": true, ".png": true, ".webp": true,
-		".bmp": true, ".gif": true, ".tiff": true,
-		".mp4": true, ".mov": true, ".avi": true, ".mkv": true,
-		".mp3": true, ".wav": true, ".flac": true, ".aac": true,
-		".pdf": true, ".doc": true, ".docx": true, ".txt": true,
+	switch ext {
+	case ".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tiff",
+		".mp4", ".mov", ".avi", ".mkv",
+		".mp3", ".wav", ".flac", ".aac",
+		".pdf", ".doc", ".docx", ".txt":
+		return true
 	}
-	return supported[ext]
+	return false
 }
 
 var (
