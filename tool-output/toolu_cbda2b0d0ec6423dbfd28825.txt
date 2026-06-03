@@ -1,0 +1,215 @@
+[cwd: /home/vipas/workspace/saker-ai/mysaker/godeps/aigo]
+diff --git a/engine/alibabacloud/internal/audiogen/tts.go b/engine/alibabacloud/internal/audiogen/tts.go
+index e328e8d..debb0a3 100644
+--- a/engine/alibabacloud/internal/audiogen/tts.go
++++ b/engine/alibabacloud/internal/audiogen/tts.go
+@@ -101,6 +101,9 @@ func RunTTS(ctx context.Context, rt *runtime.RT, apiKey, model string, graph wor
+ 	}
+ 
+ 	parameters := map[string]any{}
++	if speed, ok := graphx.AudioSpeed(graph); ok && speed > 0 {
++		parameters["speed"] = speed
++	}
+ 	if instr, ok := graphx.AudioInstructions(graph); ok && strings.TrimSpace(instr) != "" {
+ 		parameters["instructions"] = strings.TrimSpace(instr)
+ 	}
+diff --git a/engine/alibabacloud/internal/graphx/extract.go b/engine/alibabacloud/internal/graphx/extract.go
+index a9ab6d5..c3b796a 100644
+--- a/engine/alibabacloud/internal/graphx/extract.go
++++ b/engine/alibabacloud/internal/graphx/extract.go
+@@ -249,6 +249,10 @@ func AudioInstructions(graph workflow.Graph) (string, bool) {
+ 	return StringOption(graph, "instructions")
+ }
+ 
++func AudioSpeed(graph workflow.Graph) (float64, bool) {
++	return resolve.Float64Option(graph, "speed")
++}
++
+ func AudioOptimizeInstructions(graph workflow.Graph) (bool, bool) {
+ 	for _, ref := range graph.FindByClassType("AudioOptions") {
+ 		if v, ok := ref.Node.Input("optimize_instructions"); ok {
+diff --git a/engine/newapi/models.go b/engine/newapi/models.go
+index 67766a6..4712407 100644
+--- a/engine/newapi/models.go
++++ b/engine/newapi/models.go
+@@ -137,6 +137,7 @@ var knownModels = map[string]knownModel{
+ 	// ═══ Vision Understanding (/v1/chat/completions) ════════
+ 
+ 	// Qwen vision & omni (DashScope OpenAI-compatible)
++	"qwen3.7-plus":        {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+ 	"qwen3.6-plus":        {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+ 	"qwen3.6-flash":       {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+ 	"qwen3.5-omni-plus":   {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+diff --git a/engine/newapi/models_info.go b/engine/newapi/models_info.go
+index d130e25..58fb96a 100644
+--- a/engine/newapi/models_info.go
++++ b/engine/newapi/models_info.go
+@@ -36,6 +36,7 @@ func ModelInfos() []engine.ModelInfo {
+ 		{Name: "newapi/veo-3.0-generate-001", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Veo 3.0", "zh": "Veo 3.0"}, Capability: "video"},
+ 
+ 		// ── Vision Understanding ──
++		{Name: "newapi/qwen3.7-plus", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Qwen 3.7 Plus", "zh": "通义千问 3.7 Plus"}, Capability: "video_understanding"},
+ 		{Name: "newapi/qwen3.6-plus", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Qwen 3.6 Plus", "zh": "通义千问 3.6 Plus"}, Capability: "video_understanding"},
+ 		{Name: "newapi/qwen3.6-flash", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Qwen 3.6 Flash", "zh": "通义千问 3.6 Flash"}, Capability: "video_understanding"},
+ 		{Name: "newapi/qwen3.5-omni-plus", Provider: "newapi", DisplayName: engine.DisplayName{"en": "Qwen 3.5 Omni Plus", "zh": "通义千问 3.5 Omni Plus"}, Capability: "video_understanding"},
+diff --git a/engine/qwenvl/engine.go b/engine/qwenvl/engine.go
+index 13db9e7..9580e48 100644
+--- a/engine/qwenvl/engine.go
++++ b/engine/qwenvl/engine.go
+@@ -4,7 +4,7 @@
+ // Chat Completions API and returns text responses. Auth: Authorization: Bearer {api_key},
+ // env DASHSCOPE_API_KEY.
+ //
+-// Supported models: qwen3.6-plus, qwen3.6-flash, qwen3.5-omni-plus.
++// Supported models: qwen3.7-plus, qwen3.6-plus, qwen3.6-flash, qwen3.5-omni-plus.
+ package qwenvl
+ 
+ import (
+@@ -29,13 +29,14 @@ import (
+ 
+ const (
+ 	defaultBaseURL   = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+-	defaultModel     = "qwen3.6-plus"
++	defaultModel     = "qwen3.7-plus"
+ 	defaultMaxTokens = 4096
+ 	visionTimeout    = 5 * time.Minute
+ )
+ 
+ // Model constants.
+ const (
++	ModelQwen37Plus     = "qwen3.7-plus"
+ 	ModelQwen36Plus     = "qwen3.6-plus"
+ 	ModelQwen36Flash    = "qwen3.6-flash"
+ 	ModelQwen35OmniPlus = "qwen3.5-omni-plus"
+@@ -43,8 +44,8 @@ const (
+ 
+ // modelAliases maps deprecated model names to their current equivalents.
+ var modelAliases = map[string]string{
+-	"qwen-vl-max":         ModelQwen36Plus,
+-	"qwen-vl-max-latest":  ModelQwen36Plus,
++	"qwen-vl-max":         ModelQwen37Plus,
++	"qwen-vl-max-latest":  ModelQwen37Plus,
+ 	"qwen-vl-plus":        ModelQwen36Flash,
+ 	"qwen-vl-plus-latest": ModelQwen36Flash,
+ }
+@@ -67,7 +68,7 @@ var (
+ type Config struct {
+ 	APIKey     string
+ 	BaseURL    string // default: https://dashscope.aliyuncs.com/compatible-mode/v1
+-	Model      string // default: qwen3.6-plus
++	Model      string // default: qwen3.7-plus
+ 	HTTPClient *http.Client
+ 	MaxTokens  int // default: 4096
+ }
+@@ -329,7 +330,7 @@ func ConfigSchema() []engine.ConfigField {
+ 	return []engine.ConfigField{
+ 		{Key: "apiKey", Label: "API Key", Type: "secret", Required: true, EnvVar: "DASHSCOPE_API_KEY", Description: "DashScope API key"},
+ 		{Key: "baseUrl", Label: "Base URL", Type: "url", EnvVar: "DASHSCOPE_BASE_URL", Description: "Custom API base URL (optional)", Default: defaultBaseURL},
+-		{Key: "model", Label: "Model", Type: "string", Description: "Qwen-VL model (qwen3.6-plus, qwen3.6-flash, qwen3.5-omni-plus)", Default: defaultModel},
++		{Key: "model", Label: "Model", Type: "string", Description: "Qwen-VL model (qwen3.7-plus, qwen3.6-plus, qwen3.6-flash, qwen3.5-omni-plus)", Default: defaultModel},
+ 		{Key: "maxTokens", Label: "Max Tokens", Type: "number", Description: "Maximum tokens in response", Default: "4096"},
+ 	}
+ }
+@@ -337,10 +338,10 @@ func ConfigSchema() []engine.ConfigField {
+ // ModelsByCapability returns known Qwen multimodal models grouped by capability.
+ func ModelsByCapability() map[string][]string {
+ 	return map[string][]string{
+-		"text":   {ModelQwen36Plus, ModelQwen36Flash, ModelQwen35OmniPlus},
+-		"image":  {ModelQwen36Plus, ModelQwen36Flash, ModelQwen35OmniPlus},
+-		"video":  {ModelQwen36Plus, ModelQwen36Flash, ModelQwen35OmniPlus},
+-		"vision": {ModelQwen36Plus, ModelQwen36Flash, ModelQwen35OmniPlus},
++		"text":   {ModelQwen37Plus, ModelQwen36Plus, ModelQwen36Flash, ModelQwen35OmniPlus},
++		"image":  {ModelQwen37Plus, ModelQwen36Plus, ModelQwen36Flash, ModelQwen35OmniPlus},
++		"video":  {ModelQwen37Plus, ModelQwen36Plus, ModelQwen36Flash, ModelQwen35OmniPlus},
++		"vision": {ModelQwen37Plus, ModelQwen36Plus, ModelQwen36Flash, ModelQwen35OmniPlus},
+ 		"audio":  {ModelQwen35OmniPlus},
+ 	}
+ }
+diff --git a/engine/qwenvl/models.go b/engine/qwenvl/models.go
+index d0aef39..1647bfa 100644
+--- a/engine/qwenvl/models.go
++++ b/engine/qwenvl/models.go
+@@ -5,12 +5,21 @@ import "github.com/godeps/aigo/engine"
+ // ModelInfos returns i18n metadata for all Qwen-VL models.
+ func ModelInfos() []engine.ModelInfo {
+ 	return []engine.ModelInfo{
++		{
++			Name:        ModelQwen37Plus,
++			Provider:    "qwenvl",
++			DisplayName: engine.DisplayName{"en": "Qwen 3.7 Plus", "zh": "通义千问 3.7 Plus"},
++			Description: engine.DisplayName{"en": "Multimodal understanding with text, image, and video", "zh": "多模态理解，支持文本、图片和视频"},
++			Intro:       engine.DisplayName{"en": "Qwen 3.7 Plus is Alibaba's latest multimodal model, a full upgrade from Qwen 3.6 Plus, delivering strong vision-language understanding across text, image, and video inputs with balanced speed and accuracy.", "zh": "通义千问 3.7 Plus 是阿里巴巴最新多模态模型，是通义千问 3.6 Plus 的完整升级版本，在文本、图片和视频输入上提供强大的视觉语言理解，兼顾速度与准确度。"},
++			DocURL:      "https://help.aliyun.com/zh/model-studio/qwen-vl-api-reference",
++			Capability:  "video_understanding",
++		},
+ 		{
+ 			Name:        ModelQwen36Plus,
+ 			Provider:    "qwenvl",
+ 			DisplayName: engine.DisplayName{"en": "Qwen 3.6 Plus", "zh": "通义千问 3.6 Plus"},
+ 			Description: engine.DisplayName{"en": "Multimodal understanding with text, image, and video", "zh": "多模态理解，支持文本、图片和视频"},
+-			Intro:       engine.DisplayName{"en": "Qwen 3.6 Plus is Alibaba's latest multimodal model delivering strong vision-language understanding across text, image, and video inputs with balanced speed and accuracy.", "zh": "通义千问 3.6 Plus 是阿里巴巴最新多模态模型，在文本、图片和视频输入上提供强大的视觉语言理解，兼顾速度与准确度。"},
++			Intro:       engine.DisplayName{"en": "Qwen 3.6 Plus is Alibaba's multimodal model delivering strong vision-language understanding across text, image, and video inputs with balanced speed and accuracy.", "zh": "通义千问 3.6 Plus 是阿里巴巴多模态模型，在文本、图片和视频输入上提供强大的视觉语言理解，兼顾速度与准确度。"},
+ 			DocURL:      "https://help.aliyun.com/zh/model-studio/qwen-vl-api-reference",
+ 			Capability:  "video_understanding",
+ 		},
+diff --git a/examples/agent_auto_router/main.go b/examples/agent_auto_router/main.go
+index ab42d3a..dfd11a2 100644
+--- a/examples/agent_auto_router/main.go
++++ b/examples/agent_auto_router/main.go
+@@ -55,7 +55,7 @@ func main() {
+ 			baseURL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+ 		}
+ 		if os.Getenv("AIGO_ROUTER_MODEL") == "" && defaultModel == "gpt-5-mini" {
+-			defaultModel = "qwen3.6-plus"
++			defaultModel = "qwen3.7-plus"
+ 		}
+ 	}
+ 
+diff --git a/tooldef/tooldef.go b/tooldef/tooldef.go
+index 98ea768..c30552d 100644
+--- a/tooldef/tooldef.go
++++ b/tooldef/tooldef.go
+@@ -295,7 +295,7 @@ func GenerateVideo() ToolDef {
+ 				},
+ 				"duration": {
+ 					Type:        "integer",
+-					Description: "Video duration in seconds (shorter durations produce higher quality)",
++					Description: "Video duration in seconds. Must be between 3 and 15 (inclusive). Shorter durations produce higher quality. Default: 5",
+ 				},
+ 				"size": {
+ 					Type:        "string",
+@@ -310,7 +310,7 @@ func GenerateVideo() ToolDef {
+ 				},
+ 				"resolution": {
+ 					Type:        "string",
+-					Description: "Video resolution. Use 720P for drafts, 1080P for final output",
++					Description: "Output resolution tier. '720P' produces ~720p equivalent (draft quality), '1080P' produces ~1080p equivalent (final quality). For 9:16 vertical video at full HD, use '1080P'. Actual pixel dimensions depend on the engine.",
+ 					Enum:        []string{"480P", "720P", "1080P"},
+ 					Default:     "720P",
+ 				},
+@@ -358,12 +358,17 @@ func TextToSpeech() ToolDef {
+ 				},
+ 				"voice": {
+ 					Type:        "string",
+-					Description: "Voice identifier. Common voices: Cherry (female Chinese), Serena (female Chinese/English), Ethan (male English), Chelsie (female English). Other providers may support different voices.",
++					Description: "Voice identifier. Chinese female: Cherry (warm), Serena (bilingual zh/en), Bella (gentle), Momo (cute). Chinese male: Li (mature), Marcus (deep), Peter (standard). English female: Chelsie, Jennifer, Maia. English male: Ethan, Ryan, Aiden. IMPORTANT: Use Chinese voices for Chinese text.",
++					Enum:        []string{"Cherry", "Serena", "Ethan", "Chelsie", "Momo", "Vivian", "Maia", "Bella", "Jennifer", "Katerina", "Mia", "Bellona", "Bunny", "Elias", "Nini", "Seren", "Stella", "Sonrisa", "Sohee", "Jada", "Sunny", "Kiki", "Moon", "Kai", "Nofish", "Ryan", "Aiden", "Mochi", "Vincent", "Neil", "Arthur", "Pip", "Bodega", "Alek", "Dolce", "Lenn", "Emilien", "Andre", "Dylan", "Li", "Marcus", "Roy", "Peter", "Eric", "Rocky"},
+ 				},
+ 				"language": {
+ 					Type:        "string",
+ 					Description: "Language code (e.g., zh, en)",
+ 				},
++				"speed": {
++					Type:        "number",
++					Description: "Speech rate multiplier. 0.5 = half speed (slow, dramatic), 1.0 = normal, 1.5 = fast. For narration/advertising voiceover use 0.7-0.8. Default: 1.0",
++				},
+ 				"instructions": {
+ 					Type:        "string",
+ 					Description: "Style instructions for the speech, e.g. 'speak slowly and clearly', 'with warm emotion', 'fast pace'. Controls speed, emotion, and delivery style",
+=== UNTRACKED ===
+total 204
+drwxr-xr-x+  2 vipas vipas   4096 Jun  2 12:44 .
+drwxrwxr-x+ 13 vipas vipas   4096 Jun  2 12:44 ..
+-rw-r--r--+  1 vipas vipas   4096 Jun  2 12:44 c4510504-af86-4c08-8873-8fa1c00bfb8d.db
+-rw-r--r--+  1 vipas vipas  32768 Jun  2 12:44 c4510504-af86-4c08-8873-8fa1c00bfb8d.db-shm
+-rw-r--r--+  1 vipas vipas 152472 Jun  2 12:44 c4510504-af86-4c08-8873-8fa1c00bfb8d.db-wal

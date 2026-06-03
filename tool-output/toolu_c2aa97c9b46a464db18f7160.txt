@@ -1,0 +1,644 @@
+     1	调用DoMetaQuery接口查询满足指定条件的文件（Object），并按照指定字段和排序方式列出文件信息。您也可以通过Query的嵌套使用实现复杂查询，以及通过聚合操作实现对不同字段的值进行统计和分析。
+     2	
+     3	## 注意事项
+     4	
+     5	要查询满足指定条件的文件，您必须有`oss:DoMetaQuery`权限。具体操作，请参见[为RAM用户授予自定义的权限策略](https://help.aliyun.com/zh/oss/common-examples-of-ram-policies#section-ucu-jv0-zip)。
+     6	
+     7	## 请求语法
+     8	
+     9	### **标量检索**
+    10	
+    11	```
+    12	POST /?metaQuery&comp=query&mode=basic HTTP/1.1
+    13	Host: BucketName.oss-cn-hangzhou.aliyuncs.com
+    14	Date: GMT Date
+    15	Authorization: SignatureValue 
+    16	<?xml version="1.0" encoding="UTF-8"?>
+    17	<MetaQuery>
+    18	  <NextToken></NextToken>
+    19	  <MaxResults>5</MaxResults>
+    20	  <Query>{"Field": "Size","Value": "1048576","Operation": "gt"}</Query>
+    21	  <Sort>Size</Sort>
+    22	  <Order>asc</Order>
+    23	  <Aggregations>
+    24	    <Aggregation>
+    25	      <Field>Size</Field>
+    26	      <Operation>sum</Operation>
+    27	    </Aggregation>
+    28	    <Aggregation>
+    29	      <Field>Size</Field>
+    30	      <Operation>max</Operation>
+    31	    </Aggregation>
+    32	  </Aggregations>
+    33	</MetaQuery>
+    34	```
+    35	
+    36	### **向量检索**
+    37	
+    38	```
+    39	POST /?metaQuery&comp=query&mode=semantic HTTP/1.1
+    40	Host: BucketName.oss-cn-hangzhou.aliyuncs.com
+    41	Date: GMT Date
+    42	Authorization: SignatureValue 
+    43	<?xml version="1.0" encoding="UTF-8"?>
+    44	<MetaQuery>
+    45	  <MaxResults>99</MaxResults>
+    46	  <Query>俯瞰白雪覆盖的森林</Query>
+    47	  <MediaTypes>
+    48	    <MediaType>image</MediaType>
+    49	  </MediaTypes>  
+    50	  <SimpleQuery>{"Operation":"gt", "Field": "Size", "Value": "30"}</SimpleQuery>
+    51	</MetaQuery>
+    52	```
+    53	
+    54	## 请求头
+    55	
+    56	此接口仅涉及公共请求头。更多信息，请参见[公共请求头（Common Request Headers）](https://help.aliyun.com/zh/oss/developer-reference/common-http-headers#section-eq1-b2y-wdb)。
+    57	
+    58	## 请求元素
+    59	
+    60	### **标量检索**
+    61	
+    62	| **名称** | **类型** | **是否必选** | **示例值** | **描述** |
+    63	| --- | --- | --- | --- | --- |
+    64	| mode | 字符串 | 是   | basic | 指定检索模式为标量检索。 |
+    65	| MetaQuery | 容器  | 是   | 不涉及 | 查询条件的容器。 子节点：NextToken、MaxResults、Query、Sort、Order、Aggregations |
+    66	| NextToken | 字符串 | 否   | MTIzNDU2Nzg6aW1tdGVzdDpleGFtcGxlYnVja2V0OmRhdGFzZXQwMDE6b3NzOi8vZXhhbXBsZWJ1Y2tldC9zYW1wbGVvYmplY3QxLmpw\\*\\*\\*\\* | 当Object总数大于设置的MaxResults时，用于翻页的token。 从NextToken开始按字典序返回Object信息列表。 第一次调用此接口时，设置此字段为空。 父节点：MetaQuery |
+    67	| MaxResults | 整型  | 否   | 5   | 返回Object的最大个数，取值范围为0~100。 不设置此参数或者设置为0时，则默认值为100。 父节点：MetaQuery |
+    68	| Query | 字符串 | 是   | {"Field": "Size","Value": "1048576","Operation": "gt"} | 查询条件。包括如下选项： - Operation：操作符。取值范围为eq（等于）、gt（大于）、gte（大于等于）、lt（小于）、 lte（小于等于）、match（模糊查询）、prefix（前缀查询）、and（逻辑与）、or（逻辑或）和not（逻辑非）。 - Field：字段名称。支持的字段以及字段对操作符的支持情况请参见[附录：标量检索的字段和操作符列表](https://help.aliyun.com/zh/oss/developer-reference/appendix-supported-fields-and-operators#concept-2084036)。 - Value：字段值。 - SubQueries：子查询条件，包括的选项与简单查询条件相同。只有当Operations为逻辑运算符（and、or和not）时，才需要设置子查询条件。 关于Query示例的更多信息，请参见[DoMetaQuery](#)。 父节点：MetaQuery |
+    69	| Sort | 字符串 | 否   | Size | 对指定字段排序。关于支持排序的字段列表，请参见[附录：标量检索的字段和操作符列表](https://help.aliyun.com/zh/oss/developer-reference/appendix-supported-fields-and-operators#concept-2084036)。 父节点：MetaQuery |
+    70	| Order | 字符串 | 否   | asc | 排序方式。取值范围如下： - asc：升序 - desc（默认值）：降序 父节点：MetaQuery |
+    71	| Aggregations | 容器  | 否   | 不涉及 | 聚合操作信息的容器。 子节点：Aggregation 父节点：MetaQuery |
+    72	| Aggregation | 容器  | 否   | 不涉及 | 单个聚合操作信息的容器。 子节点：Field、Operation 父节点：Aggregations |
+    73	| Field | 字符串 | 否   | Size | 字段名称。关于支持的字段以及字段对操作符的支持情况，请参见[附录：标量检索的字段和操作符列表](https://help.aliyun.com/zh/oss/developer-reference/appendix-supported-fields-and-operators#concept-2084036)。 父节点：Aggregation |
+    74	| Operation | 字符串 | 否   | sum | 聚合操作中的操作符。取值范围如下： - min：最小值 - max：最大值 - average：平均数 - sum：求和 - count：计数 - distinct：去重统计 - group：分组计数 父节点：Aggregation |
+    75	
+    76	### **向量检索**
+    77	
+    78	| **名称** | **类型** | **是否必选** | **示例值** | **描述** |
+    79	| --- | --- | --- | --- | --- |
+    80	| mode | 字符串 | 是   | semantic | 指定检索模式为向量检索。 |
+    81	| MetaQuery | 容器  | 是   | 不涉及 | 查询条件的容器。 子节点：MaxResults、Query、MediaTypes、SimpleQuery |
+    82	| MaxResults | 整型  | 否   | 5   | 返回Object的最大个数，取值范围为0~100。 不设置此参数或者设置为0时，则默认值为100。 父节点：MetaQuery |
+    83	| Query | 字符串 | 是   | 俯瞰白雪覆盖的森林 | 输入检索内容。 父节点：MetaQuery |
+    84	| MediaTypes | 容器  | 是   | 不涉及 | 多媒体元数据检索条件。 父节点：MetaQuery |
+    85	| MediaType | 字符串 | 是   | image | 选择检索的多媒体类型。取值如下： - image：图片 - video：视频 - audio：音频 - document：文档 父节点：MediaTypes |
+    86	| SimpleQuery | 字符串 | 否   | {"Operation":"gt", "Field": "Size", "Value": "30"} | 查询条件。包括如下选项： - Operation：操作符。取值范围为eq（等于）、gt（大于）、gte（大于等于）、lt（小于）、 lte（小于等于）、match（模糊查询）、prefix（前缀查询）、and（逻辑与）、or（逻辑或）和not（逻辑非）。 - Field：字段名称。支持的字段以及字段对操作符的支持情况请参见[附录：向量检索的字段和操作符列表](https://help.aliyun.com/zh/oss/developer-reference/appendix-list-of-fields-and-operators-for-vector-retrieval)。 - Value：字段值。 - SubQueries：子查询条件，包括的选项与简单查询条件相同。只有当Operations为逻辑运算符（and、or和not）时，才需要设置子查询条件。 父节点：MetaQuery |
+    87	
+    88	## 响应头
+    89	
+    90	此接口仅涉及公共响应头。更多信息，请参见[公共响应头（Common Response Headers）](https://help.aliyun.com/zh/oss/developer-reference/common-http-headers#section-hcd-m2y-wdb)。
+    91	
+    92	## 响应元素
+    93	
+    94	### **标量检索**
+    95	
+    96	| **名称** | **类型** | **示例值** | **描述** |
+    97	| --- | --- | --- | --- |
+    98	| MetaQuery | 容器  | 不涉及 | 查询结果的容器。 子节点：NextToken、Files、Aggregations |
+    99	| NextToken | 字符串 | MTIzNDU2Nzg6aW1tdGVzdDpleGFtcGxlYnVja2V0OmRhdGFzZXQwMDE6b3NzOi8vZXhhbXBsZWJ1Y2tldC9zYW1wbGVvYmplY3QxLmpw\\*\\*\\*\\* | 当Object总数大于设置的MaxResults时，用于翻页的token。 下一次列出Object信息时以此值为NextToken，将未返回的结果返回。 当Object未全部返回时，此参数才有值。 父节点：MetaQuery |
+   100	| Files | 容器  | 不涉及 | Object信息的容器。 子节点：File 父节点：MetaQuery |
+   101	| File | 容器  | 不涉及 | 单个Object信息的容器。 子节点：Filename、Size、FileModifiedTime、OSSObjectType、OSSStorageClass、ObjectACL、ETag、OSSTaggingCount、OSSTagging、OSSUserMeta、OSSCRC64、ServerSideEncryption 父节点：Files |
+   102	| Filename | 字符串 | exampleobject.txt | Object完整路径。 父节点：File |
+   103	| Size | 整型  | 120 | Object大小。单位为字节。 父节点：File |
+   104	| FileModifiedTime | 字符串 | 2025-05-19T16:14:38+08:00 | Object的最近一次修改时间，遵循RFC3339Nano标准格式。 父节点：File |
+   105	| OSSObjectType | 字符串 | Normal | Object的类型。取值范围如下： - Normal：通过PutObject接口上传的Object类型。 - Appendable：通过AppendObject接口上传的Object类型。 - Multipart：通过MultipartUpload接口上传的Object类型。 - Symlink：通过PutSymlink接口创建的软链接。 父节点：File |
+   106	| OSSStorageClass | 字符串 | Standard | Object的存储类型。取值范围如下： - Standard：标准存储类型提供高可靠、高可用、高性能的对象存储服务，能够支持频繁的数据访问。 - IA：低频访问存储类型适合需要长期存储但不经常被访问的数据（平均每月访问频率1到2次）。 - Archive：归档存储类型适合需要长期存储（建议半年以上）的归档数据，在存储周期内极少被访问，数据进入到可读取状态需要1分钟的解冻时间。 - ColdArchive：冷归档存储类型适用于需要长期保存且几乎不访问的数据。 父节点：File |
+   107	| ObjectACL | 字符串 | default | Object的访问权限。取值范围如下： - default：Object遵循所在存储空间的访问权限。 - private：Object是私有资源。只有Object的拥有者和授权用户有该Object的读写权限，其他用户没有权限操作该Object。 - public-read：Object是公共读资源。只有Object的拥有者和授权用户有该Object的读写权限，其他用户只有该Object的读权限。请谨慎使用该权限。 - public-read-write：Object是公共读写资源。所有用户都有该Object的读写权限。请谨慎使用该权限。 父节点：File |
+   108	| ETag | 字符串 | "fba9dede5f27731c9771645a3986\\*\\*\\*\\*" | Object生成时会创建相应的ETag ，ETag用于标识一个Object的内容。 - 对于PutObject请求创建的Object，ETag值是其内容的MD5值。 - 对于其他方式创建的Object，ETag值是基于一定计算规则生成的唯一值，但不是其内容的MD5值。 **说明** ETag值可以用于检查Object内容是否发生变化。不建议使用ETag作为Object内容的MD5来校验数据完整性。 父节点：File |
+   109	| OSSTaggingCount | 整型  | 2   | Object的标签个数。 父节点：File |
+   110	| OSSTagging | 容器  | 不涉及 | 标签信息的容器。 子节点：Tagging 父节点：File |
+   111	| Tagging | 容器  | 不涉及 | 单个标签信息的容器。 子节点：Key、Value 父节点：OSSTagging |
+   112	| Key | 字符串 | owner | 标签或者用户自定义元数据的Key。 用户自定义元数据必须以`x-oss-meta-`为前缀。 父节点：Tagging、UserMeta |
+   113	| Value | 字符串 | John | 标签或者用户自定义元数据的Value。 父节点：Tagging、UserMeta |
+   114	| OSSUserMeta | 容器  | 不涉及 | 用户自定义元数据的容器。 子节点：UserMeta 父节点：File |
+   115	| UserMeta | 容器  | 不涉及 | 单个用户自定义元数据的容器。 子节点：Key、Value 父节点：OSSUserMeta |
+   116	| OSSCRC64 | 字符串 | 4858A48BD1466884 | Object的64位CRC值。该64位CRC根据CRC-64/XZ标准计算得出。 父节点：File |
+   117	| ServerSideEncryption | 字符串 | AES256 | OSS创建文件时的服务器端加密编码算法。取值范围为AES256。 父节点：File |
+   118	| ServerSideEncryptionCustomerAlgorithm | 字符串 | SM4 | 用户在本地客户端加密文件时使用的加密编码算法。 父节点：File |
+   119	| Aggregations | 容器  | 不涉及 | 聚合操作信息的容器。 子节点：Field、Operation、Operation、Value、Groups 父节点：MetaQuery |
+   120	| Field | 字符串 | Size | 字段名称。 父节点：Aggregations |
+   121	| Operation | 字符串 | sum | 聚合操作符。 父节点：Aggregations |
+   122	| Value | 浮点数 | 200 | 聚合操作的结果值。 父节点：Aggregations |
+   123	| Groups | 容器  | 不涉及 | 分组聚合的结果列表。 子节点：Value、Count 父节点：Aggregations |
+   124	| Value | 字符串 | 100 | 分组聚合的值。 父节点：Groups |
+   125	| Count | 整型  | 5   | 分组聚合的总个数。 父节点：Groups |
+   126	
+   127	### **向量检索**
+   128	
+   129	| **名称** | **类型** | **示例值** | **描述** |
+   130	| --- | --- | --- | --- |
+   131	| MetaQuery | 容器  | 不涉及 | 查询结果的容器。 子节点：Files |
+   132	| Files | 容器  | 不涉及 | Object信息列表。 子节点：File 父节点：MetaQuery |
+   133	| File | 容器  | 不涉及 | 单个Object信息。 父节点：Files |
+   134	| URI | 字符串 | oss://examplebucket/test-object.jpg | Object完整路径。 父节点：File |
+   135	| Filename | 字符串 | exampleobject.txt | Object名称。 父节点：File |
+   136	| Size | 整型  | 120 | Object大小。单位为字节。 父节点：File |
+   137	| ObjectACL | 字符串 | default | Object的访问权限。取值范围如下： - default：Object遵循所在存储空间的访问权限。 - private：Object是私有资源。只有Object的拥有者和授权用户有该Object的读写权限，其他用户没有权限操作该Object。 - public-read：Object是公共读资源。只有Object的拥有者和授权用户有该Object的读写权限，其他用户只有该Object的读权限。请谨慎使用该权限。 - public-read-write：Object是公共读写资源。所有用户都有该Object的读写权限。请谨慎使用该权限。 父节点：File |
+   138	| FileModifiedTime | 字符串 | 2025-05-19T16:15:33+08:00 | Object的最近一次修改时间，遵循RFC3339Nano标准格式。 父节点：File |
+   139	| ServerSideEncryption | 字符串 | AES256 | OSS创建文件时的服务器端加密编码算法。取值范围为AES256。 父节点：File |
+   140	| ServerSideEncryptionCustomerAlgorithm | 字符串 | SM4 | 用户在本地客户端加密文件时使用的加密编码算法。 父节点：File |
+   141	| ETag | 字符串 | "fba9dede5f27731c9771645a3986\\*\\*\\*\\*" | Object生成时会创建相应的ETag ，ETag用于标识一个Object的内容。 - 对于PutObject请求创建的Object，ETag值是其内容的MD5值。 - 对于其他方式创建的Object，ETag值是基于一定计算规则生成的唯一值，但不是其内容的MD5值。 **说明** ETag值可以用于检查Object内容是否发生变化。不建议使用ETag作为Object内容的MD5来校验数据完整性。 父节点：File |
+   142	| OSSCRC64 | 字符串 | 4858A48BD1466884 | Object的64位CRC值。该64位CRC根据CRC64/XZ标准计算得出。 父节点：File |
+   143	| ProduceTime | 字符串 | 2021-06-29T14:50:13.011643661+08:00 | 设备记录的照片或视频的拍摄时间。 父节点：File |
+   144	| ContentType | 字符串 | image/jpeg | MIME类型。 父节点：File |
+   145	| MediaType | 字符串 | image | 多媒体类型。 父节点：File |
+   146	| LatLong | 字符串 | 30.134390,120.074997 | 经纬度信息。 父节点：File |
+   147	| Title | 字符串 | test | 文件标题。 父节点：File |
+   148	| OSSExpiration | 字符串 | 2124-12-01T12:00:00.000Z | 文件过期时间。 父节点：File |
+   149	| AccessControlAllowOrigin | 字符串 | [https://aliyundoc.com](https://aliyundoc.com) | 允许的跨域请求的来源。 父节点：File |
+   150	| AccessControlRequestMethod | 字符串 | PUT | 跨域请求中用到的方法。 父节点：File |
+   151	| ServerSideDataEncryption | 字符串 | SM4 | Object的加密算法。 父节点：File |
+   152	| ServerSideEncryptionKeyId | 字符串 | 9468da86-3509-4f8d-a61e-6eab1eac\\*\\*\\*\\* | KMS托管的用户主密钥。 父节点：File |
+   153	| CacheControl | 字符串 | no-cache | Object被下载时网页的缓存行为。 父节点：File |
+   154	| ContentDisposition | 字符串 | attachment; filename =test.jpg | Object被下载时的名称。 父节点：File |
+   155	| ContentEncoding | 字符串 | UTF-8 | Object被下载时的内容编码格式。 父节点：File |
+   156	| ContentLanguage | 字符串 | zh-CN | Object内容使用的语言。 父节点：File |
+   157	| ImageHeight | 整型  | 500 | 图片高度，单位为像素（px）。 父节点：File |
+   158	| ImageWidth | 整型  | 270 | 图片宽度，单位为像素（px）。 父节点：File |
+   159	| VideoWidth | 整型  | 1080 | 视频画面宽度，单位为像素（px）。 父节点：File |
+   160	| VideoHeight | 整型  | 1920 | 视频画面高度，单位为像素（px）。 父节点：File |
+   161	| VideoStreams | 容器  | 不涉及 | 视频流列表。 父节点：File |
+   162	| VideoStream | 容器  | 不涉及 | 视频流。 父节点：VideoStreams |
+   163	| CodecName | 字符串 | h264 | 编码器名称。 父节点：VideoStream |
+   164	| Language | 字符串 | en  | 视频流中使用的语言，格式为BCP 47。 父节点：VideoStream |
+   165	| Bitrate | 整型  | 5407765 | 码率，单位为比特每秒（bit/s）。 父节点：VideoStream |
+   166	| FrameRate | 字符串 | 25/1 | 视频流帧率。 父节点：VideoStream |
+   167	| StartTime | 双精度浮点数 | 0.000000 | 视频流起始时间，单位为秒（s）。 父节点：VideoStream |
+   168	| Duration | 双精度浮点数 | 22.88 | 视频流持续时长，单位为秒（s）。 父节点：VideoStream |
+   169	| FrameCount | 整型  | 572 | 视频帧数。 父节点：VideoStream |
+   170	| BitDepth | 整型  | 8   | 像素位宽。 父节点：VideoStream |
+   171	| PixelFormat | 字符串 | yuv420p | 视频流像素格式。 父节点：VideoStream |
+   172	| ColorSpace | 字符串 | bt709 | 色彩空间。 父节点：VideoStream |
+   173	| Height | 整型  | 720 | 视频流画面高度，单位为像素（px）。 父节点：VideoStream |
+   174	| Width | 整型  | 1280 | 视频流画面宽度，单位为像素（px）。 父节点：VideoStream |
+   175	| AudioStreams | 容器  | 不涉及 | 音频流列表。 父节点：File |
+   176	| AudioStream | 容器  | 不涉及 | 音频流。 父节点：AudioStreams |
+   177	| CodecName | 字符串 | aac | 编码器名称。 父节点：AudioStream |
+   178	| Bitrate | 整型  | 320087 | 码率，单位为比特每秒（bit/s）。 父节点：AudioStream |
+   179	| SampleRate | 整型  | 48000 | 采样率，单位为赫兹（Hz）。 父节点：AudioStream |
+   180	| StartTime | 双精度浮点数 | 0.0235 | 音频流起始时间，单位为秒（s）。 父节点：AudioStream |
+   181	| Duration | 双精度浮点数 | 3.690667 | 音频流持续时长，单位为秒（s）。 父节点：AudioStream |
+   182	| Channels | 整型  | 2   | 声道数量。 父节点：AudioStream |
+   183	| Language | 字符串 | en  | 音频流中使用的语言，格式为BCP 47。 父节点：AudioStream |
+   184	| Subtitles | 容器  | 不涉及 | 字幕流列表。 父节点：File |
+   185	| Subtitle | 容器  | 不涉及 | 字幕流。 父节点：Subtitles |
+   186	| CodecName | 字符串 | mov\\_text | 编码器名称。 父节点：Subtitle |
+   187	| Language | 字符串 | en  | 字幕语言，格式为BCP 47。 父节点：Subtitle |
+   188	| StartTime | 双精度浮点数 | 0.000000 | 字幕流起始时间，单位为秒（s）。 父节点：Subtitle |
+   189	| Duration | 双精度浮点数 | 71.378 | 字幕流持续时长，单位为秒（s）。 父节点：Subtitle |
+   190	| Bitrate | 整型  | 13091201 | 码率，单位为比特每秒（bit/s）。 父节点：File |
+   191	| Artist | 字符串 | Jane | 艺术家。 父节点：File |
+   192	| AlbumArtist | 字符串 | Jenny | 演唱者。 父节点：File |
+   193	| Composer | 字符串 | Jane | 作曲家。 父节点：File |
+   194	| Performer | 字符串 | Jane | 演奏者。 父节点：File |
+   195	| Album | 字符串 | FirstAlbum | 专辑。 父节点：File |
+   196	| Duration | 双精度浮点数 | 15.263000 | 视频的总时长。单位秒。 父节点：File |
+   197	| Addresses | 容器  | 不涉及 | 地址信息。 父节点：File |
+   198	| Address | 容器  | 不涉及 | 地址信息。 父节点：Addresses |
+   199	| AddressLine | 字符串 | 中国浙江省杭州市余杭区文一西路969号 | 完整地址。 父节点：Address |
+   200	| City | 字符串 | 杭州市 | 城市 父节点：Address |
+   201	| District | 字符串 | 余杭区 | 区 父节点：Address |
+   202	| Language | 字符串 | zh-Hans | 语言，格式为BCP 47。 父节点：Address |
+   203	| Province | 字符串 | 浙江省 | 省份 父节点：Address |
+   204	| Township | 字符串 | 文一西路 | 街道 父节点：Address |
+   205	| OSSObjectType | 字符串 | Normal | Object的类型。 父节点：File |
+   206	| OSSStorageClass | 字符串 | Standard | Object的存储类型。 父节点：File |
+   207	| OSSTaggingCount | 整型  | 2   | Object的标签个数。 父节点：File |
+   208	| OSSTagging | 容器  | 不涉及 | 标签信息列表。 子节点：Tagging 父节点：File |
+   209	| Tagging | 容器  | 不涉及 | 单个标签信息的容器。 子节点：Key、Value 父节点：OSSTagging |
+   210	| Key | 字符串 | owner | 标签的Key。 父节点：Tagging |
+   211	| Value | 字符串 | John | 标签的Value。 父节点：Tagging |
+   212	| OSSUserMeta | 容器  | 不涉及 | 用户自定义元数据的信息列表。 子节点：UserMeta 父节点：File |
+   213	| UserMeta | 容器  | 不涉及 | 单个用户自定义元数据的容器。 子节点：Key、Value 父节点：OSSUserMeta |
+   214	| Key | 字符串 | owner | 用户自定义元数据的Key。 父节点：Tagging |
+   215	| Value | 字符串 | John | 用户自定义元数据的Value。 父节点：Tagging |
+   216	| Insights | 容器  | 不涉及 | 文件的描述信息。 子节点：Video、Image |
+   217	| Video | 容器  | 不涉及 | 视频文件的描述信息。 父节点：Insights 子节点：Caption、Description |
+   218	| Caption | 字符串 | 不涉及 | 简短描述信息。 父节点：Video |
+   219	| Image | 容器  | 不涉及 | 图片文件的描述信息 父节点：Insights 子节点：Caption、Description |
+   220	| Caption | 字符串 | 不涉及 | 简短描述信息。 父节点：Image |
+   221	| Description | 字符串 | 不涉及 | 详细描述信息。 父节点：Image |
+   222	
+   223	## 示例
+   224	
+   225	### **请求示例**
+   226	
+   227	#### **标量检索**
+   228	
+   229	```
+   230	POST /?metaQuery&comp=query&mode=basic HTTP/1.1
+   231	Host: BucketName.oss-cn-hangzhou.aliyuncs.com
+   232	Date: GMT Date
+   233	Authorization: SignatureValue 
+   234	<?xml version="1.0" encoding="UTF-8"?>
+   235	<MetaQuery>
+   236	  <NextToken></NextToken>
+   237	  <MaxResults>5</MaxResults>
+   238	  <Query>{"Field": "Size","Value": "1048576","Operation": "gt"}</Query>
+   239	  <Sort>Size</Sort>
+   240	  <Order>asc</Order>
+   241	  <Aggregations>
+   242	    <Aggregation>
+   243	      <Field>Size</Field>
+   244	      <Operation>sum</Operation>
+   245	    </Aggregation>
+   246	    <Aggregation>
+   247	      <Field>Size</Field>
+   248	      <Operation>max</Operation>
+   249	    </Aggregation>
+   250	  </Aggregations>
+   251	</MetaQuery>
+   252	```
+   253	
+   254	#### **向量检索**
+   255	
+   256	```
+   257	POST /?metaQuery&comp=query&mode=semantic HTTP/1.1
+   258	Host: BucketName.oss-cn-hangzhou.aliyuncs.com
+   259	Date: Thu, 12 Sep 2024 13:08:38 GMT
+   260	Authorization: SignatureValue 
+   261	<?xml version="1.0" encoding="UTF-8"?>
+   262	<MetaQuery>
+   263	  <MaxResults>99</MaxResults>
+   264	  <Query>俯瞰白雪覆盖的森林</Query> // 必选
+   265	  <MediaTypes>
+   266	    <MediaType>image</MediaType>
+   267	  </MediaTypes>
+   268	  // SimpleQuery等同于Simple模式下的Query字段。
+   269	  <SimpleQuery>{"Operation":"gt", "Field": "Size", "Value": "30"}</SimpleQuery>
+   270	</MetaQuery>
+   271	```
+   272	
+   273	### **返回示例**
+   274	
+   275	#### **标量检索**
+   276	
+   277	```
+   278	HTTP/1.1 200 OK
+   279	x-oss-request-id: 5C1B138A109F4E405B2D****
+   280	Date: Mon, 26 Jul 2021 13:08:38 GMT
+   281	Content-Length: 118
+   282	Content-Type: application/xml
+   283	Connection: keep-alive
+   284	Server: AliyunOSS
+   285	<?xml version="1.0" encoding="UTF-8"?>
+   286	<MetaQuery>
+   287	  <NextToken>MTIzNDU2Nzg6aW1tdGVzdDpleGFtcGxlYnVja2V0OmRhdGFzZXQwMDE6b3NzOi8vZXhhbXBsZWJ1Y2tldC9zYW1wbGVvYmplY3QxLmpw****</NextToken>
+   288	  <Files>
+   289	    <File>
+   290	      <Filename>exampleobject.txt</Filename>
+   291	      <Size>120</Size>
+   292	      <FileModifiedTime>2025-05-19T16:14:38+08:00</FileModifiedTime>
+   293	      <OSSObjectType>Normal</OSSObjectType>
+   294	      <OSSStorageClass>Standard</OSSStorageClass>
+   295	      <ObjectACL>default</ObjectACL>
+   296	      <ETag>"fba9dede5f27731c9771645a3986****"</ETag>
+   297	      <OSSCRC64>4858A48BD1466884</OSSCRC64>
+   298	      <OSSTaggingCount>2</OSSTaggingCount>
+   299	      <OSSTagging>
+   300	        <Tagging>
+   301	          <Key>owner</Key>
+   302	          <Value>John</Value>
+   303	        </Tagging>
+   304	        <Tagging>
+   305	          <Key>type</Key>
+   306	          <Value>document</Value>
+   307	        </Tagging>
+   308	      </OSSTagging>
+   309	      <OSSUserMeta>
+   310	        <UserMeta>
+   311	          <Key>x-oss-meta-location</Key>
+   312	          <Value>hangzhou</Value>
+   313	        </UserMeta>
+   314	      </OSSUserMeta>
+   315	    </File>
+   316	  </Files>
+   317	</MetaQuery>
+   318	```
+   319	
+   320	#### **向量检索**
+   321	
+   322	##### **检索图片返回示例**
+   323	
+   324	```
+   325	HTTP/1.1 200 OK
+   326	x-oss-request-id: 5C1B138A109F4E405B2D****
+   327	Date: Thu, 12 Sep 2024 13:08:38 GMT
+   328	Content-Length: 118
+   329	Content-Type: application/xml
+   330	Connection: keep-alive
+   331	Server: AliyunOSS
+   332	<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+   333	<MetaQuery>
+   334	  <Files>
+   335	    <File>
+   336	      <URI>oss://examplebucket/test-object.jpg</URI>
+   337	      <Filename>sampleobject.jpg</Filename>
+   338	      <Size>1000</Size>
+   339	      <ObjectACL>default</ObjectACL>
+   340	      <FileModifiedTime>2025-05-19T16:14:38+08:00</FileModifiedTime>
+   341	      <ServerSideEncryption>AES256</ServerSideEncryption>
+   342	      <ServerSideEncryptionCustomerAlgorithm>SM4</ServerSideEncryptionCustomerAlgorithm>
+   343	      <ETag>\"1D9C280A7C4F67F7EF873E28449****\"</ETag>
+   344	      <OSSCRC64>559890638950338001</OSSCRC64>
+   345	      <ProduceTime>2021-06-29T14:50:15.011643661+08:00</ProduceTime>
+   346	      <ContentType>image/jpeg</ContentType>
+   347	      <MediaType>image</MediaType>
+   348	      <LatLong>30.134390,120.074997</LatLong>
+   349	      <Title>test</Title>
+   350	      <OSSExpiration>2024-12-01T12:00:00.000Z</OSSExpiration>
+   351	      <AccessControlAllowOrigin>https://aliyundoc.com</AccessControlAllowOrigin>
+   352	      <AccessControlRequestMethod>PUT</AccessControlRequestMethod>
+   353	      <ServerSideDataEncryption>SM4</ServerSideDataEncryption>
+   354	      <ServerSideEncryptionKeyId>9468da86-3509-4f8d-a61e-6eab1eac****</ServerSideEncryptionKeyId>
+   355	      <CacheControl>no-cache</CacheControl>
+   356	      <ContentDisposition>attachment; filename =test.jpg</ContentDisposition>
+   357	      <ContentEncoding>UTF-8</ContentEncoding>
+   358	      <ContentLanguage>zh-CN</ContentLanguage>
+   359	      <ImageHeight>500</ImageHeight>
+   360	      <ImageWidth>270</ImageWidth>
+   361	      <Addresses>
+   362	        <Address>
+   363	          <AddressLine>中国浙江省杭州市余杭区文一西路969号</AddressLine>
+   364	          <City>杭州市</City>
+   365	          <Country>中国</Country>
+   366	          <District>余杭区</District>
+   367	          <Language>zh-Hans</Language>
+   368	          <Province>浙江省</Province>
+   369	          <Township>文一西路</Township>
+   370	        </Address>
+   371	        <Address>
+   372	          <AddressLine>中国浙江省杭州市余杭区文一西路970号</AddressLine>
+   373	          <City>杭州市</City>
+   374	          <Country>中国</Country>
+   375	          <District>余杭区</District>
+   376	          <Language>zh-Hans</Language>
+   377	          <Province>浙江省</Province>
+   378	          <Township>文一西路</Township>
+   379	        </Address>
+   380	      </Addresses>
+   381	      <OSSObjectType>Normal</OSSObjectType>
+   382	      <OSSStorageClass>Standard</OSSStorageClass>
+   383	      <OSSTaggingCount>2</OSSTaggingCount>
+   384	      <OSSTagging>
+   385	        <Tagging>
+   386	          <Key>key</Key>
+   387	          <Value>val</Value>
+   388	        </Tagging>
+   389	        <Tagging>
+   390	          <Key>key</Key>
+   391	          <Value>val</Value>
+   392	        </Tagging>
+   393	      </OSSTagging>
+   394	      <OSSUserMeta>
+   395	        <UserMeta>
+   396	          <Key>key</Key>
+   397	          <Value>val</Value>
+   398	        </UserMeta>
+   399	      </OSSUserMeta>
+   400	      <Insights>
+   401	        <Image>
+   402	          <Caption>站着一个人</Caption>
+   403	          <Description>图片中有一人，穿着深色西装外套，内搭白色衬衫。背景为渐变的浅蓝色至灰色</Description>
+   404	        </Image>
+   405	      </Insights>
+   406	    </File>
+   407	  </Files>
+   408	</MetaQuery>
+   409	```
+   410	
+   411	##### **检索音视频返回示例**
+   412	
+   413	```
+   414	HTTP/1.1 200 OK
+   415	x-oss-request-id: 5C1B138A109F4E405B2D****
+   416	Date: Thu, 12 Sep 2024 13:08:38 GMT
+   417	Content-Length: 118
+   418	Content-Type: application/xml
+   419	Connection: keep-alive
+   420	Server: AliyunOSS
+   421	<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+   422	<MetaQuery>
+   423	  <Files>
+   424	    <File>
+   425	      <URI>oss://examplebucket/test-object.jpg</URI>
+   426	      <Filename>sampleobject.jpg</Filename>
+   427	      <Size>1000</Size>
+   428	      <ObjectACL>default</ObjectACL>
+   429	      <FileModifiedTime>2021-06-29T14:50:14.011643661+08:00</FileModifiedTime>
+   430	      <ServerSideEncryption>AES256</ServerSideEncryption>
+   431	      <ServerSideEncryptionCustomerAlgorithm>SM4</ServerSideEncryptionCustomerAlgorithm>
+   432	      <ETag>\"1D9C280A7C4F67F7EF873E28449****\"</ETag>
+   433	      <OSSCRC64>559890638950338001</OSSCRC64>
+   434	      <ProduceTime>2021-06-29T14:50:15.011643661+08:00</ProduceTime>
+   435	      <ContentType>image/jpeg</ContentType>
+   436	      <MediaType>image</MediaType>
+   437	      <LatLong>30.134390,120.074997</LatLong>
+   438	      <Title>test</Title>
+   439	      <OSSExpiration>2024-12-01T12:00:00.000Z</OSSExpiration>
+   440	      <AccessControlAllowOrigin>https://aliyundoc.com</AccessControlAllowOrigin>
+   441	      <AccessControlRequestMethod>PUT</AccessControlRequestMethod>
+   442	      <ServerSideDataEncryption>SM4</ServerSideDataEncryption>
+   443	      <ServerSideEncryptionKeyId>9468da86-3509-4f8d-a61e-6eab1eac****</ServerSideEncryptionKeyId>
+   444	      <CacheControl>no-cache</CacheControl>
+   445	      <ContentDisposition>attachment; filename =test.jpg</ContentDisposition>
+   446	      <ContentEncoding>UTF-8</ContentEncoding>
+   447	      <ContentLanguage>zh-CN</ContentLanguage>
+   448	      <VideoWidth>1080</VideoWidth>
+   449	      <VideoHeight>1920</VideoHeight>
+   450	      <VideoStreams>
+   451	        <VideoStream>
+   452	          <CodecName>h264</CodecName>
+   453	          <Language>en</Language>
+   454	          <Bitrate>5407765</Bitrate>
+   455	          <FrameRate>25/1</FrameRate>
+   456	          <StartTime>0</StartTime>
+   457	          <Duration>22.88</Duration>
+   458	          <FrameCount>572</FrameCount>
+   459	          <BitDepth>8</BitDepth>
+   460	          <PixelFormat>yuv420p</PixelFormat>
+   461	          <ColorSpace>bt709</ColorSpace>
+   462	          <Height>720</Height>
+   463	          <Width>1280</Width>
+   464	        </VideoStream>
+   465	        <VideoStream>
+   466	          <CodecName>h264</CodecName>
+   467	          <Language>en</Language>
+   468	          <Bitrate>5407765</Bitrate>
+   469	          <FrameRate>25/1</FrameRate>
+   470	          <StartTime>0</StartTime>
+   471	          <Duration>22.88</Duration>
+   472	          <FrameCount>572</FrameCount>
+   473	          <BitDepth>8</BitDepth>
+   474	          <PixelFormat>yuv420p</PixelFormat>
+   475	          <ColorSpace>bt709</ColorSpace>
+   476	          <Height>720</Height>
+   477	          <Width>1280</Width>
+   478	        </VideoStream>
+   479	      </VideoStreams>
+   480	      <AudioStreams>
+   481	        <AudioStream>
+   482	          <CodecName>aac</CodecName>
+   483	          <Bitrate>1048576</Bitrate>
+   484	          <SampleRate>48000</SampleRate>
+   485	          <StartTime>0.0235</StartTime>
+   486	          <Duration>3.690667</Duration>
+   487	          <Channels>2</Channels>
+   488	          <Language>en</Language>
+   489	        </AudioStream>
+   490	      </AudioStreams>
+   491	      <Subtitles>
+   492	        <Subtitle>
+   493	          <CodecName>mov_text</CodecName>
+   494	          <Language>en</Language>
+   495	          <StartTime>0</StartTime>
+   496	          <Duration>71.378</Duration>
+   497	        </Subtitle>
+   498	        <Subtitle>
+   499	          <CodecName>mov_text</CodecName>
+   500	          <Language>en</Language>
+   501	          <StartTime>72</StartTime>
+   502	          <Duration>71.378</Duration>
+   503	        </Subtitle>
+   504	      </Subtitles>
+   505	      <Bitrate>5407765</Bitrate>
+   506	      <Artist>Jane</Artist>
+   507	      <AlbumArtist>Jenny</AlbumArtist>
+   508	      <Composer>Jane</Composer>
+   509	      <Performer>Jane</Performer>
+   510	      <Album>FirstAlbum</Album>
+   511	      <Duration>71.378</Duration>
+   512	      <Addresses>
+   513	        <Address>
+   514	          <AddressLine>中国浙江省杭州市余杭区文一西路969号</AddressLine>
+   515	          <City>杭州市</City>
+   516	          <Country>中国</Country>
+   517	          <District>余杭区</District>
+   518	          <Language>zh-Hans</Language>
+   519	          <Province>浙江省</Province>
+   520	          <Township>文一西路</Township>
+   521	        </Address>
+   522	        <Address>
+   523	          <AddressLine>中国浙江省杭州市余杭区文一西路970号</AddressLine>
+   524	          <City>杭州市</City>
+   525	          <Country>中国</Country>
+   526	          <District>余杭区</District>
+   527	          <Language>zh-Hans</Language>
+   528	          <Province>浙江省</Province>
+   529	          <Township>文一西路</Township>
+   530	        </Address>
+   531	      </Addresses>
+   532	      <OSSObjectType>Normal</OSSObjectType>
+   533	      <OSSStorageClass>Standard</OSSStorageClass>
+   534	      <OSSTaggingCount>2</OSSTaggingCount>
+   535	      <OSSTagging>
+   536	        <Tagging>
+   537	          <Key>key</Key>
+   538	          <Value>val</Value>
+   539	        </Tagging>
+   540	        <Tagging>
+   541	          <Key>key</Key>
+   542	          <Value>val</Value>
+   543	        </Tagging>
+   544	      </OSSTagging>
+   545	      <OSSUserMeta>
+   546	        <UserMeta>
+   547	          <Key>key</Key>
+   548	          <Value>val</Value>
+   549	        </UserMeta>
+   550	      </OSSUserMeta>
+   551	      <Insights>
+   552	        <Video>
+   553	          <Caption>视频中展示了两个不同场景：一个是静止的白色盘子、黑色瓶子和透明玻璃杯，另一个是手拿着标有“YEZOLU”的洗发水瓶在浴室中缓慢上移</Caption>
+   554	        </Video>
+   555	      </Insights>
+   556	    </File>
+   557	  </Files>
+   558	</MetaQuery>
+   559	```
+   560	
+   561	## Query示例
+   562	
+   563	Query支持嵌套使用，您可以通过Query的嵌套构建复杂的查询条件，精确查询到所需内容。
+   564	
+   565	-   如果要搜索名称为exampleobject.txt且大小小于1000字节的文件，则Query填写示例如下：
+   566	    
+   567	    ```
+   568	    
+   569	    {
+   570	      "SubQueries":[
+   571	        {
+   572	          "Field":"Filename",
+   573	          "Value": "exampleobject.txt",
+   574	          "Operation":"eq"
+   575	        },         
+   576	        {
+   577	          "Field":"Size",
+   578	          "Value":"1000",
+   579	          "Operation":"lt"
+   580	        }
+   581	      ],
+   582	      "Operation":"and"
+   583	    }
+   584	                
+   585	    ```
+   586	    
+   587	-   如果要搜索以`exampledir/`为前缀，包含`type=document`或`owner=John`标签且大小大于10 MB的文件，则Query填写示例如下：
+   588	    
+   589	    ```
+   590	    
+   591	    {
+   592	      "SubQueries": [
+   593	        {
+   594	          "Field": "Filename",
+   595	          "Value": "exampledir/",
+   596	          "Operation": "prefix"
+   597	        },
+   598	        {
+   599	          "Field": "Size",
+   600	          "Value": "1048576",
+   601	          "Operation": "gt"
+   602	        },
+   603	        {
+   604	          "SubQueries": [
+   605	            {
+   606	              "Field": "OSSTagging.type",
+   607	              "Value": "document",
+   608	              "Operation": "eq"
+   609	            },
+   610	            {
+   611	              "Field": "OSSTagging.owner",
+   612	              "Value": "John",
+   613	              "Operation": "eq"
+   614	            }
+   615	          ],
+   616	          "Operation": "or"
+   617	        }
+   618	      ],
+   619	      "Operation": "and"
+   620	    }
+   621	            
+   622	                
+   623	    ```
+   624	    
+   625	
+   626	结合以上搜索条件，您还可以通过聚合操作实现不同数据的统计和分析，例如计算符合搜索条件的所有文件的大小总和、数量、平均值或者最值，统计所有符合搜索条件图片的尺寸分布情况。
+   627	
+   628	## SDK
+   629	
+   630	本接口对应的各语言SDK如下：
+   631	
+   632	-   [Java](https://help.aliyun.com/zh/oss/developer-reference/data-indexing-2)
+   633	    
+   634	-   [Python V2](https://help.aliyun.com/zh/oss/developer-reference/data-indexing-using-oss-sdk-for-python-v2)
+   635	    
+   636	-   [Go V2](https://help.aliyun.com/zh/oss/developer-reference/data-indexing-3)
+   637	    
+   638	-   [PHP V2](https://help.aliyun.com/zh/oss/developer-reference/data-indexing-using-oss-sdk-for-php-v2)
+   639	    
+   640	
+   641	## **命令行工具ossutil**
+   642	
+   643	DoMetaQuery接口所对应的ossutil命令为[do-meta-query](https://help.aliyun.com/zh/oss/developer-reference/do-meta-query)。
+   644	
