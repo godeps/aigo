@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -43,8 +44,8 @@ func TestWithHTTPHooksAllowsCustomRequestAndResponseHooks(t *testing.T) {
 	respHook := &testResponseHook{}
 	client := WithHTTPHooks(
 		srv.Client(),
-		testRequestHook{header: "X-Custom", value: "from-hook"},
-		respHook,
+		WithRequestHooks(testRequestHook{header: "X-Custom", value: "from-hook"}),
+		WithResponseHooks(respHook),
 	)
 	resp, err := client.Get(srv.URL)
 	if err != nil {
@@ -60,5 +61,67 @@ func TestWithHTTPHooksAllowsCustomRequestAndResponseHooks(t *testing.T) {
 	}
 	if respHook.header != "yes" {
 		t.Fatalf("captured header = %q, want yes", respHook.header)
+	}
+}
+
+func TestAppendHTTPHooksDoesNotNestHookTransport(t *testing.T) {
+	t.Parallel()
+
+	client := WithHTTPHooks(nil, WithRequestHooks(testRequestHook{header: "X-One", value: "1"}))
+	client = AppendHTTPHooks(client, WithRequestHooks(testRequestHook{header: "X-Two", value: "2"}))
+
+	transport, ok := client.Transport.(*HookTransport)
+	if !ok {
+		t.Fatalf("transport = %T, want *HookTransport", client.Transport)
+	}
+	if _, nested := transport.Base.(*HookTransport); nested {
+		t.Fatal("expected AppendHTTPHooks to avoid nested HookTransport")
+	}
+	if len(transport.RequestHooks) != 2 {
+		t.Fatalf("request hook count = %d, want 2", len(transport.RequestHooks))
+	}
+}
+
+func TestResponseCaptureFiltersSensitiveHeaders(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-DashScope-Request-Id", "req-123")
+		w.Header().Set("X-RateLimit-Remaining", "9")
+		w.Header().Set("Set-Cookie", "sid=secret")
+		w.Header().Set("X-Api-Key", "secret")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer srv.Close()
+
+	capture := NewResponseCapture()
+	ctx := WithResponseCapture(context.Background(), capture)
+	client := WithHTTPHooks(srv.Client(), WithResponseHooks(ResponseCaptureHook{}))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+
+	records := capture.Records()
+	if len(records) != 1 {
+		t.Fatalf("captured records = %d, want 1", len(records))
+	}
+	headers := records[0].Headers
+	if got := headers["X-Dashscope-Request-Id"]; len(got) != 1 || got[0] != "req-123" {
+		t.Fatalf("captured request id = %v", got)
+	}
+	if got := headers["X-Ratelimit-Remaining"]; len(got) != 1 || got[0] != "9" {
+		t.Fatalf("captured ratelimit = %v", got)
+	}
+	for _, name := range []string{"Set-Cookie", "X-Api-Key", "Content-Type"} {
+		if _, ok := headers[name]; ok {
+			t.Fatalf("sensitive or unlisted header %q was captured: %v", name, headers[name])
+		}
 	}
 }

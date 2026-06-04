@@ -15,38 +15,68 @@ type RequestHook interface {
 }
 
 // ResponseHook can inspect a response returned by the wrapped transport.
+// Returning an error makes the client call fail after the response is received;
+// observer hooks should return nil.
 type ResponseHook interface {
 	AfterResponse(*http.Response) error
+}
+
+// HookOption configures request/response hooks for HookTransport.
+type HookOption func(*hookOptions)
+
+type hookOptions struct {
+	requestHooks  []RequestHook
+	responseHooks []ResponseHook
+}
+
+// WithRequestHooks appends hooks that run before the underlying transport.
+func WithRequestHooks(hooks ...RequestHook) HookOption {
+	return func(o *hookOptions) {
+		for _, hook := range hooks {
+			if hook != nil {
+				o.requestHooks = append(o.requestHooks, hook)
+			}
+		}
+	}
+}
+
+// WithResponseHooks appends hooks that run after the underlying transport
+// returns a response.
+func WithResponseHooks(hooks ...ResponseHook) HookOption {
+	return func(o *hookOptions) {
+		for _, hook := range hooks {
+			if hook != nil {
+				o.responseHooks = append(o.responseHooks, hook)
+			}
+		}
+	}
 }
 
 // HookTransport applies request and response hooks around an underlying
 // RoundTripper.
 type HookTransport struct {
-	Base  http.RoundTripper
-	Hooks []any
+	Base          http.RoundTripper
+	RequestHooks  []RequestHook
+	ResponseHooks []ResponseHook
 }
 
 func (t *HookTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	var err error
-	for _, hook := range t.Hooks {
-		if h, ok := hook.(RequestHook); ok {
-			req, err = h.BeforeRequest(req)
-			if err != nil {
-				return nil, err
-			}
-			if req == nil {
-				return nil, ErrNilHookRequest
-			}
+	for _, hook := range t.RequestHooks {
+		req, err = hook.BeforeRequest(req)
+		if err != nil {
+			return nil, err
+		}
+		if req == nil {
+			return nil, ErrNilHookRequest
 		}
 	}
 
 	resp, err := roundTripperOrDefault(t.Base).RoundTrip(req)
 	if resp != nil {
-		for _, hook := range t.Hooks {
-			if h, ok := hook.(ResponseHook); ok {
-				if hookErr := h.AfterResponse(resp); hookErr != nil && err == nil {
-					err = hookErr
-				}
+		for _, hook := range t.ResponseHooks {
+			if hookErr := hook.AfterResponse(resp); hookErr != nil && err == nil {
+				err = hookErr
 			}
 		}
 	}
@@ -54,21 +84,48 @@ func (t *HookTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 // WithHTTPHooks returns a shallow clone of client whose transport applies the
-// supplied request/response hooks. Nil hooks are ignored.
-func WithHTTPHooks(client *http.Client, hooks ...any) *http.Client {
+// supplied request/response hooks.
+func WithHTTPHooks(client *http.Client, opts ...HookOption) *http.Client {
 	if client == nil {
 		client = http.DefaultClient
 	}
-	filtered := make([]any, 0, len(hooks))
-	for _, hook := range hooks {
-		if hook != nil {
-			filtered = append(filtered, hook)
+	var cfg hookOptions
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&cfg)
 		}
 	}
 	out := *client
 	out.Transport = &HookTransport{
-		Base:  client.Transport,
-		Hooks: filtered,
+		Base:          client.Transport,
+		RequestHooks:  append([]RequestHook(nil), cfg.requestHooks...),
+		ResponseHooks: append([]ResponseHook(nil), cfg.responseHooks...),
+	}
+	return &out
+}
+
+// AppendHTTPHooks returns a shallow clone of client with hooks appended. If the
+// client already uses HookTransport, hooks are appended to the existing
+// transport instead of nesting another HookTransport.
+func AppendHTTPHooks(client *http.Client, opts ...HookOption) *http.Client {
+	if client == nil {
+		return WithHTTPHooks(nil, opts...)
+	}
+	if _, ok := client.Transport.(*HookTransport); !ok {
+		return WithHTTPHooks(client, opts...)
+	}
+	var cfg hookOptions
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&cfg)
+		}
+	}
+	out := *client
+	existing := client.Transport.(*HookTransport)
+	out.Transport = &HookTransport{
+		Base:          existing.Base,
+		RequestHooks:  append(append([]RequestHook(nil), existing.RequestHooks...), cfg.requestHooks...),
+		ResponseHooks: append(append([]ResponseHook(nil), existing.ResponseHooks...), cfg.responseHooks...),
 	}
 	return &out
 }

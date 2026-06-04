@@ -81,10 +81,24 @@ func captureResponse(ctx context.Context, rawURL string, statusCode int, headers
 func cloneSafeHeaders(headers http.Header) map[string][]string {
 	out := make(map[string][]string, len(headers))
 	for k, vals := range headers {
-		if strings.EqualFold(k, "Set-Cookie") {
+		if !isSafeResponseHeader(k) {
 			continue
 		}
 		out[k] = append([]string(nil), vals...)
 	}
 	return out
+}
+
+func isSafeResponseHeader(name string) bool {
+	name = strings.ToLower(strings.TrimSpace(name))
+	switch name {
+	case "x-request-id",
+		"x-correlation-id",
+		"x-trace-id",
+		"x-dashscope-request-id",
+		"retry-after":
+		return true
+	}
+	return strings.HasPrefix(name, "x-ratelimit-") ||
+		strings.HasPrefix(name, "ratelimit-")
 }

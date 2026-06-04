@@ -25,6 +25,13 @@ var (
 	ErrEngineDisabled  = errors.New("aigo: engine is disabled")
 )
 
+const (
+	// MetadataResults stores multi-result engine outputs on public Result metadata.
+	MetadataResults = "results"
+	// MetadataResponseHeaders stores captured upstream response header records.
+	MetadataResponseHeaders = "response_headers"
+)
+
 // ReferenceType identifies the kind of remote asset to attach to an agent task.
 type ReferenceType string
 
@@ -482,7 +489,7 @@ func (c *Client) Execute(ctx context.Context, engineName string, graph workflow.
 		Elapsed: elapsed,
 	}
 	if len(er.Results) > 0 {
-		result.Metadata = map[string]any{"results": er.Results}
+		result.Metadata = map[string]any{MetadataResults: er.Results}
 	}
 	if capture := httpx.ResponseCaptureFromContext(ctx); capture != nil {
 		records := capture.Records()
@@ -490,7 +497,7 @@ func (c *Client) Execute(ctx context.Context, engineName string, graph workflow.
 			if result.Metadata == nil {
 				result.Metadata = map[string]any{}
 			}
-			result.Metadata["response_headers"] = records
+			result.Metadata[MetadataResponseHeaders] = records
 		}
 	}
 
