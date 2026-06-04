@@ -4,6 +4,9 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -169,5 +172,30 @@ func TestProviderFactoriesPassHTTPHooks(t *testing.T) {
 func promptGraph(prompt string) workflow.Graph {
 	return workflow.Graph{
 		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": prompt}},
+	}
+}
+
+func TestProviderFactoriesUseHookedHTTPClient(t *testing.T) {
+	t.Parallel()
+
+	providers, err := filepath.Glob(filepath.Join("..", "engine", "*", "provider.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(providers) == 0 {
+		t.Fatal("no provider.go files found")
+	}
+	for _, path := range providers {
+		path := path
+		t.Run(filepath.Base(filepath.Dir(path)), func(t *testing.T) {
+			t.Parallel()
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(raw), "cfg.ClientWithHooks()") {
+				t.Fatalf("%s must pass cfg.ClientWithHooks() into provider engine config", path)
+			}
+		})
 	}
 }
