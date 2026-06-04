@@ -3,10 +3,13 @@ package aigo
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"testing"
 
 	"github.com/godeps/aigo/engine"
+	"github.com/godeps/aigo/engine/httpx"
 	"github.com/godeps/aigo/workflow"
 )
 
@@ -77,6 +80,65 @@ type captureEngine struct {
 func (c *captureEngine) Execute(_ context.Context, graph workflow.Graph) (engine.Result, error) {
 	c.graph = graph
 	return engine.Result{Value: "captured"}, nil
+}
+
+type responseHeaderEngine struct {
+	client *http.Client
+	url    string
+}
+
+func (e responseHeaderEngine) Execute(ctx context.Context, _ workflow.Graph) (engine.Result, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, e.url, nil)
+	if err != nil {
+		return engine.Result{}, err
+	}
+	resp, err := e.client.Do(req)
+	if err != nil {
+		return engine.Result{}, err
+	}
+	defer resp.Body.Close()
+	return engine.Result{Value: "ok"}, nil
+}
+
+func TestClientExecuteCapturesResponseHeadersMetadata(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Dashscope-Request-Id", "dashscope-request-1")
+		w.Header().Set("Authorization", "sensitive")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	client := NewClient()
+	hc := httpx.WithHTTPHooks(srv.Client(), httpx.WithResponseHooks(httpx.ResponseCaptureHook{}))
+	if err := client.RegisterEngine("headers", responseHeaderEngine{client: hc, url: srv.URL}); err != nil {
+		t.Fatalf("RegisterEngine() error = %v", err)
+	}
+
+	ctx := httpx.WithResponseCapture(context.Background(), httpx.NewResponseCapture())
+	got, err := client.Execute(ctx, "headers", workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "hello"}},
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	records, ok := got.Metadata[MetadataResponseHeaders].([]httpx.ResponseRecord)
+	if !ok {
+		t.Fatalf("metadata[%q] = %T, want []httpx.ResponseRecord", MetadataResponseHeaders, got.Metadata[MetadataResponseHeaders])
+	}
+	if len(records) != 1 {
+		t.Fatalf("captured records = %d, want 1", len(records))
+	}
+	if records[0].Method != http.MethodPost {
+		t.Fatalf("captured method = %q, want POST", records[0].Method)
+	}
+	if got := records[0].Headers["X-Dashscope-Request-Id"]; len(got) != 1 || got[0] != "dashscope-request-1" {
+		t.Fatalf("captured dashscope request id = %v", got)
+	}
+	if _, ok := records[0].Headers["Authorization"]; ok {
+		t.Fatal("sensitive response header should not be captured")
+	}
 }
 
 func TestClientExecutePromptBuildsGraph(t *testing.T) {
@@ -225,11 +287,11 @@ func TestBuildGraphStructuredOverrides(t *testing.T) {
 		Duration:  1,
 		Watermark: &wmTrue,
 		Structured: &AgentTaskStructured{
-			ImageSize:       "512x512",
-			ImageWatermark:  &wmFalse,
-			VideoDuration:   8,
-			VideoSize:       "1920x1080",
-			VideoWatermark:  &wmFalse,
+			ImageSize:      "512x512",
+			ImageWatermark: &wmFalse,
+			VideoDuration:  8,
+			VideoSize:      "1920x1080",
+			VideoWatermark: &wmFalse,
 		},
 	})
 	img, ok := g["2"]
