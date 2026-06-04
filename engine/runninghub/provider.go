@@ -8,7 +8,7 @@ func init() {
 		return New(Config{
 			APIKey:            cfg.APIKey,
 			BaseURL:           cfg.BaseURL,
-			HTTPClient:        cfg.HTTPClient,
+			HTTPClient:        cfg.ClientWithHooks(),
 			Endpoint:          cfg.Meta("endpoint", ""),
 			Model:             cfg.Model,
 			WaitForCompletion: true,

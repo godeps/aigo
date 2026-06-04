@@ -8,7 +8,7 @@ func init() {
 			AppID:       cfg.Meta("appId", ""),
 			AccessToken: cfg.APIKey,
 			BaseURL:     cfg.BaseURL,
-			HTTPClient:  cfg.HTTPClient,
+			HTTPClient:  cfg.ClientWithHooks(),
 			Model:       cfg.Model,
 		}), nil
 	})

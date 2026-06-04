@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/godeps/aigo/engine/httpx"
 )
 
 // EngineConfig is a generic, JSON-friendly configuration for creating an engine.
@@ -39,6 +41,10 @@ type EngineConfig struct {
 	// through generic factories. It is intentionally excluded from JSON config
 	// so callers can inject transports without serializing runtime state.
 	HTTPClient *http.Client `json:"-"`
+
+	// HTTPHookOptions optionally append request/response hooks to HTTPClient.
+	// It is excluded from JSON config for the same reason as HTTPClient.
+	HTTPHookOptions []httpx.HookOption `json:"-"`
 }
 
 // WaitForCompletionOr returns the resolved WaitForCompletion value, falling
@@ -63,6 +69,15 @@ func (c EngineConfig) Meta(key, fallback string) string {
 // IsEnabled returns whether this engine config is enabled (default true).
 func (c EngineConfig) IsEnabled() bool {
 	return c.Enabled == nil || *c.Enabled
+}
+
+// ClientWithHooks returns HTTPClient with HTTPHookOptions appended, avoiding
+// nested hook transports when the client is already hook-enabled.
+func (c EngineConfig) ClientWithHooks() *http.Client {
+	if len(c.HTTPHookOptions) == 0 {
+		return c.HTTPClient
+	}
+	return httpx.AppendHTTPHooks(c.HTTPClient, c.HTTPHookOptions...)
 }
 
 // EngineFactory creates an Engine from a generic EngineConfig.

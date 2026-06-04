@@ -11,7 +11,7 @@ func init() {
 		return New(Config{
 			Mode:         mode,
 			OutputFormat: cfg.Meta("outputFormat", "mp3"),
-			HTTPClient:   cfg.HTTPClient,
+			HTTPClient:   cfg.ClientWithHooks(),
 		}), nil
 	})
 	engine.RegisterModelInfos(ModelInfos())

@@ -2,8 +2,11 @@ package engine
 
 import (
 	"encoding/json"
+	"net/http"
 	"testing"
 	"time"
+
+	"github.com/godeps/aigo/engine/httpx"
 )
 
 // TestEngineConfig_WaitForCompletionRoundTrip pins the JSON wire shape so
@@ -83,5 +86,33 @@ func TestEngineConfig_PollIntervalRoundTrip(t *testing.T) {
 	}
 	if back.PollInterval != 2*time.Second {
 		t.Fatalf("got %v, want 2s", back.PollInterval)
+	}
+}
+
+type factoryTestRequestHook struct{}
+
+func (factoryTestRequestHook) BeforeRequest(req *http.Request) (*http.Request, error) {
+	return req, nil
+}
+
+func TestEngineConfig_ClientWithHooksAppendsHooks(t *testing.T) {
+	t.Parallel()
+
+	base := httpx.WithHTTPHooks(nil, httpx.WithRequestHooks(factoryTestRequestHook{}))
+	cfg := EngineConfig{
+		HTTPClient:      base,
+		HTTPHookOptions: []httpx.HookOption{httpx.WithRequestHooks(factoryTestRequestHook{})},
+	}
+
+	client := cfg.ClientWithHooks()
+	transport, ok := client.Transport.(*httpx.HookTransport)
+	if !ok {
+		t.Fatalf("transport = %T, want *httpx.HookTransport", client.Transport)
+	}
+	if _, nested := transport.Base.(*httpx.HookTransport); nested {
+		t.Fatal("ClientWithHooks should append hooks, not nest HookTransport")
+	}
+	if len(transport.RequestHooks) != 2 {
+		t.Fatalf("request hook count = %d, want 2", len(transport.RequestHooks))
 	}
 }

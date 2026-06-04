@@ -10,7 +10,7 @@ func init() {
 		return New(Config{
 			APIKey:            cfg.APIKey,
 			BaseURL:           cfg.BaseURL,
-			HTTPClient:        cfg.HTTPClient,
+			HTTPClient:        cfg.ClientWithHooks(),
 			Model:             cfg.Model,
 			WaitForCompletion: wait,
 			PollInterval:      cfg.PollInterval,
