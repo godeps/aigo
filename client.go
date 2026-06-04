@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/godeps/aigo/engine"
+	"github.com/godeps/aigo/engine/httpx"
 	"github.com/godeps/aigo/engine/poll"
 	"github.com/godeps/aigo/material"
 	"github.com/godeps/aigo/workflow"
@@ -48,13 +49,13 @@ type TTSOptions struct {
 
 // MusicOptions groups music generation parameters.
 type MusicOptions struct {
-	Lyrics         string
-	IsInstrumental *bool
+	Lyrics          string
+	IsInstrumental  *bool
 	LyricsOptimizer *bool
-	OutputFormat   string // "url" or "hex"
-	SampleRate     int
-	Bitrate        int
-	Format         string // "mp3", "wav", "flac"
+	OutputFormat    string // "url" or "hex"
+	SampleRate      int
+	Bitrate         int
+	Format          string // "mp3", "wav", "flac"
 }
 
 // SFXOptions groups sound effects generation parameters.
@@ -144,9 +145,9 @@ type AgentTaskStructured struct {
 	ImageResolution  string // "1K", "2K", "4K"
 	ImageCameraAngle string
 	ImageWatermark   *bool
-	VideoDuration  int
-	VideoSize      string
-	VideoWatermark *bool
+	VideoDuration    int
+	VideoSize        string
+	VideoWatermark   *bool
 	VideoAspectRatio string
 	VideoResolution  string // "480P", "720P", "1080P"
 	VideoAudio       *bool
@@ -479,6 +480,18 @@ func (c *Client) Execute(ctx context.Context, engineName string, graph workflow.
 		Kind:    kind,
 		Engine:  engineName,
 		Elapsed: elapsed,
+	}
+	if len(er.Results) > 0 {
+		result.Metadata = map[string]any{"results": er.Results}
+	}
+	if capture := httpx.ResponseCaptureFromContext(ctx); capture != nil {
+		records := capture.Records()
+		if len(records) > 0 {
+			if result.Metadata == nil {
+				result.Metadata = map[string]any{}
+			}
+			result.Metadata["response_headers"] = records
+		}
 	}
 
 	if cfg.onProgress != nil {

@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"net/http"
 	"sync"
 	"time"
 )
@@ -9,12 +10,12 @@ import (
 // Used by LoadConfig / ApplyConfig for declarative engine setup.
 type EngineConfig struct {
 	Name     string            `json:"name"`               // registration name
-	Provider string            `json:"provider"`            // engine package key, e.g. "alibabacloud", "kling"
-	Model    string            `json:"model,omitempty"`      // model override
-	APIKey   string            `json:"api_key,omitempty"`    // explicit API key (overrides env)
-	BaseURL  string            `json:"base_url,omitempty"`   // custom API endpoint
-	Enabled  *bool             `json:"enabled,omitempty"`    // default true; set false to skip
-	Metadata map[string]string `json:"metadata,omitempty"`   // provider-specific fields (e.g. voiceId, endpoint)
+	Provider string            `json:"provider"`           // engine package key, e.g. "alibabacloud", "kling"
+	Model    string            `json:"model,omitempty"`    // model override
+	APIKey   string            `json:"api_key,omitempty"`  // explicit API key (overrides env)
+	BaseURL  string            `json:"base_url,omitempty"` // custom API endpoint
+	Enabled  *bool             `json:"enabled,omitempty"`  // default true; set false to skip
+	Metadata map[string]string `json:"metadata,omitempty"` // provider-specific fields (e.g. voiceId, endpoint)
 
 	// Capability tells the factory what media capability this engine serves
 	// ("image", "video", "tts", "asr", "music", "3d"). Used by engines that
@@ -33,6 +34,11 @@ type EngineConfig struct {
 	// PollInterval overrides the engine's default polling cadence; only
 	// effective when WaitForCompletion resolves to true.
 	PollInterval time.Duration `json:"poll_interval,omitempty"`
+
+	// HTTPClient optionally overrides the HTTP client used by engines created
+	// through generic factories. It is intentionally excluded from JSON config
+	// so callers can inject transports without serializing runtime state.
+	HTTPClient *http.Client `json:"-"`
 }
 
 // WaitForCompletionOr returns the resolved WaitForCompletion value, falling
