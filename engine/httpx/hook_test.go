@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -113,6 +114,9 @@ func TestResponseCaptureFiltersSensitiveHeaders(t *testing.T) {
 		t.Fatalf("captured records = %d, want 1", len(records))
 	}
 	headers := records[0].Headers
+	if records[0].Method != http.MethodGet {
+		t.Fatalf("captured method = %q, want GET", records[0].Method)
+	}
 	if got := headers["X-Dashscope-Request-Id"]; len(got) != 1 || got[0] != "req-123" {
 		t.Fatalf("captured request id = %v", got)
 	}
@@ -123,5 +127,40 @@ func TestResponseCaptureFiltersSensitiveHeaders(t *testing.T) {
 		if _, ok := headers[name]; ok {
 			t.Fatalf("sensitive or unlisted header %q was captured: %v", name, headers[name])
 		}
+	}
+}
+
+func TestResponseCaptureLimitsRecordsAndHeaderValueLength(t *testing.T) {
+	t.Parallel()
+
+	longValue := strings.Repeat("a", defaultMaxResponseHeaderValue+10)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Request-Id", longValue)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	capture := NewResponseCapture()
+	ctx := WithResponseCapture(context.Background(), capture)
+	client := WithHTTPHooks(srv.Client(), WithResponseHooks(ResponseCaptureHook{}))
+	for i := 0; i < defaultMaxResponseRecords+5; i++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+	}
+
+	records := capture.Records()
+	if len(records) != defaultMaxResponseRecords {
+		t.Fatalf("captured records = %d, want %d", len(records), defaultMaxResponseRecords)
+	}
+	got := records[0].Headers["X-Request-Id"]
+	if len(got) != 1 || len(got[0]) != defaultMaxResponseHeaderValue {
+		t.Fatalf("captured X-Request-Id length = %v, want %d", got, defaultMaxResponseHeaderValue)
 	}
 }
