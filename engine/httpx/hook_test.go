@@ -164,3 +164,51 @@ func TestResponseCaptureLimitsRecordsAndHeaderValueLength(t *testing.T) {
 		t.Fatalf("captured X-Request-Id length = %v, want %d", got, defaultMaxResponseHeaderValue)
 	}
 }
+
+func TestResponseCaptureOptionsAndRecordsSnapshot(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Custom-Trace", "abcdef")
+		w.Header().Set("X-Dashscope-Request-Id", "filtered")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	capture := NewResponseCapture(
+		WithResponseCaptureLimits(1, 3),
+		WithResponseHeaderNames("X-Custom-Trace"),
+		WithResponseHeaderPrefixes(),
+	)
+	ctx := WithResponseCapture(context.Background(), capture)
+	client := WithHTTPHooks(srv.Client(), WithResponseHooks(ResponseCaptureHook{}))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, srv.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+
+	records := capture.Records()
+	if len(records) != 1 {
+		t.Fatalf("captured records = %d, want 1", len(records))
+	}
+	if records[0].Method != http.MethodPost {
+		t.Fatalf("captured method = %q, want POST", records[0].Method)
+	}
+	if got := records[0].Headers["X-Custom-Trace"]; len(got) != 1 || got[0] != "abc" {
+		t.Fatalf("captured custom trace = %v, want truncated abc", got)
+	}
+	if _, ok := records[0].Headers["X-Dashscope-Request-Id"]; ok {
+		t.Fatal("default header should be filtered when allowlist is replaced")
+	}
+
+	records[0].Headers["X-Custom-Trace"][0] = "mutated"
+	again := capture.Records()
+	if got := again[0].Headers["X-Custom-Trace"][0]; got != "abc" {
+		t.Fatalf("Records() returned mutable internal header state: %q", got)
+	}
+}

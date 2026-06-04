@@ -12,6 +12,20 @@ const (
 	defaultMaxResponseHeaderValue = 1024
 )
 
+var (
+	defaultResponseHeaderNames = []string{
+		"x-request-id",
+		"x-correlation-id",
+		"x-trace-id",
+		"x-dashscope-request-id",
+		"retry-after",
+	}
+	defaultResponseHeaderPrefixes = []string{
+		"x-ratelimit-",
+		"ratelimit-",
+	}
+)
+
 // ResponseCaptureHook records response headers when the request context has a
 // ResponseCapture attached.
 type ResponseCaptureHook struct{}
@@ -35,17 +49,65 @@ type ResponseRecord struct {
 
 // ResponseCapture stores response header records for requests sharing a context.
 type ResponseCapture struct {
-	mu          sync.Mutex
-	records     []ResponseRecord
-	maxRecords  int
-	maxValueLen int
+	mu             sync.Mutex
+	records        []ResponseRecord
+	maxRecords     int
+	maxValueLen    int
+	headerNames    map[string]struct{}
+	headerPrefixes []string
 }
 
+// ResponseCaptureOption configures response header capture behavior.
+type ResponseCaptureOption func(*ResponseCapture)
+
 // NewResponseCapture creates an empty response header collector.
-func NewResponseCapture() *ResponseCapture {
-	return &ResponseCapture{
-		maxRecords:  defaultMaxResponseRecords,
-		maxValueLen: defaultMaxResponseHeaderValue,
+func NewResponseCapture(opts ...ResponseCaptureOption) *ResponseCapture {
+	c := &ResponseCapture{
+		maxRecords:     defaultMaxResponseRecords,
+		maxValueLen:    defaultMaxResponseHeaderValue,
+		headerNames:    makeHeaderNameSet(defaultResponseHeaderNames),
+		headerPrefixes: append([]string(nil), defaultResponseHeaderPrefixes...),
+	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(c)
+		}
+	}
+	if c.maxRecords <= 0 {
+		c.maxRecords = defaultMaxResponseRecords
+	}
+	if c.maxValueLen <= 0 {
+		c.maxValueLen = defaultMaxResponseHeaderValue
+	}
+	return c
+}
+
+// WithResponseCaptureLimits overrides record count and header value length
+// limits. Non-positive values keep the default limit.
+func WithResponseCaptureLimits(maxRecords, maxValueLen int) ResponseCaptureOption {
+	return func(c *ResponseCapture) {
+		if maxRecords > 0 {
+			c.maxRecords = maxRecords
+		}
+		if maxValueLen > 0 {
+			c.maxValueLen = maxValueLen
+		}
+	}
+}
+
+// WithResponseHeaderNames replaces the exact response header allowlist. Header
+// names are matched case-insensitively.
+func WithResponseHeaderNames(names ...string) ResponseCaptureOption {
+	return func(c *ResponseCapture) {
+		c.headerNames = makeHeaderNameSet(names)
+	}
+}
+
+// WithResponseHeaderPrefixes replaces the response header prefix allowlist.
+// Prefixes are matched case-insensitively.
+func WithResponseHeaderPrefixes(prefixes ...string) ResponseCaptureOption {
+	return func(c *ResponseCapture) {
+		c.headerPrefixes = normalizeHeaderPrefixes(prefixes)
 	}
 }
 
@@ -56,7 +118,11 @@ func (c *ResponseCapture) Records() []ResponseRecord {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return append([]ResponseRecord(nil), c.records...)
+	out := make([]ResponseRecord, 0, len(c.records))
+	for _, record := range c.records {
+		out = append(out, cloneResponseRecord(record))
+	}
+	return out
 }
 
 type responseCaptureKey struct{}
@@ -82,35 +148,44 @@ func captureResponse(ctx context.Context, method, rawURL string, statusCode int,
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	maxRecords := c.maxRecords
-	if maxRecords <= 0 {
-		maxRecords = defaultMaxResponseRecords
-	}
-	if len(c.records) >= maxRecords {
+	if len(c.records) >= c.maxRecords {
 		return
-	}
-	maxValueLen := c.maxValueLen
-	if maxValueLen <= 0 {
-		maxValueLen = defaultMaxResponseHeaderValue
 	}
 	c.records = append(c.records, ResponseRecord{
 		Method:     method,
 		URL:        rawURL,
 		StatusCode: statusCode,
-		Headers:    cloneSafeHeaders(headers, maxValueLen),
+		Headers:    c.cloneSafeHeaders(headers),
 	})
 }
 
-func cloneSafeHeaders(headers http.Header, maxValueLen int) map[string][]string {
+func (c *ResponseCapture) cloneSafeHeaders(headers http.Header) map[string][]string {
 	out := make(map[string][]string, len(headers))
 	for k, vals := range headers {
-		if !isSafeResponseHeader(k) {
+		if !c.isSafeResponseHeader(k) {
 			continue
 		}
 		out[k] = make([]string, 0, len(vals))
 		for _, val := range vals {
-			out[k] = append(out[k], truncateHeaderValue(val, maxValueLen))
+			out[k] = append(out[k], truncateHeaderValue(val, c.maxValueLen))
 		}
+	}
+	return out
+}
+
+func cloneResponseRecord(record ResponseRecord) ResponseRecord {
+	return ResponseRecord{
+		Method:     record.Method,
+		URL:        record.URL,
+		StatusCode: record.StatusCode,
+		Headers:    cloneHeaderMap(record.Headers),
+	}
+}
+
+func cloneHeaderMap(headers map[string][]string) map[string][]string {
+	out := make(map[string][]string, len(headers))
+	for k, vals := range headers {
+		out[k] = append([]string(nil), vals...)
 	}
 	return out
 }
@@ -122,16 +197,37 @@ func truncateHeaderValue(value string, maxLen int) string {
 	return value[:maxLen]
 }
 
-func isSafeResponseHeader(name string) bool {
+func (c *ResponseCapture) isSafeResponseHeader(name string) bool {
 	name = strings.ToLower(strings.TrimSpace(name))
-	switch name {
-	case "x-request-id",
-		"x-correlation-id",
-		"x-trace-id",
-		"x-dashscope-request-id",
-		"retry-after":
+	if _, ok := c.headerNames[name]; ok {
 		return true
 	}
-	return strings.HasPrefix(name, "x-ratelimit-") ||
-		strings.HasPrefix(name, "ratelimit-")
+	for _, prefix := range c.headerPrefixes {
+		if strings.HasPrefix(name, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func makeHeaderNameSet(names []string) map[string]struct{} {
+	out := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		name = strings.ToLower(strings.TrimSpace(name))
+		if name != "" {
+			out[name] = struct{}{}
+		}
+	}
+	return out
+}
+
+func normalizeHeaderPrefixes(prefixes []string) []string {
+	out := make([]string, 0, len(prefixes))
+	for _, prefix := range prefixes {
+		prefix = strings.ToLower(strings.TrimSpace(prefix))
+		if prefix != "" {
+			out = append(out, prefix)
+		}
+	}
+	return out
 }
