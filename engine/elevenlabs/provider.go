@@ -5,10 +5,11 @@ import "github.com/godeps/aigo/engine"
 func init() {
 	engine.RegisterFactory("elevenlabs", func(cfg engine.EngineConfig) (engine.Engine, error) {
 		return New(Config{
-			APIKey:  cfg.APIKey,
-			BaseURL: cfg.BaseURL,
-			Model:   cfg.Model,
-			VoiceID: cfg.Meta("voiceId", ""),
+			APIKey:     cfg.APIKey,
+			BaseURL:    cfg.BaseURL,
+			HTTPClient: cfg.HTTPClient,
+			Model:      cfg.Model,
+			VoiceID:    cfg.Meta("voiceId", ""),
 		}), nil
 	})
 	engine.RegisterModelInfos(ModelInfos())

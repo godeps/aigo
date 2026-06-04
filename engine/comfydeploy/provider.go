@@ -8,6 +8,7 @@ func init() {
 		return New(Config{
 			APIToken:          cfg.APIKey,
 			BaseURL:           cfg.BaseURL,
+			HTTPClient:        cfg.HTTPClient,
 			DeploymentID:      cfg.Meta("deploymentId", ""),
 			WaitForCompletion: true,
 		}), nil

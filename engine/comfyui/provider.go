@@ -8,6 +8,7 @@ func init() {
 		return New(Config{
 			APIKey:            cfg.APIKey,
 			BaseURL:           cfg.BaseURL,
+			HTTPClient:        cfg.HTTPClient,
 			WaitForCompletion: true,
 		}), nil
 	})

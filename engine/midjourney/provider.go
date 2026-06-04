@@ -7,6 +7,7 @@ func init() {
 		return New(Config{
 			APIKey:            cfg.APIKey,
 			BaseURL:           cfg.BaseURL,
+			HTTPClient:        cfg.HTTPClient,
 			ProcessMode:       cfg.Meta("processMode", "fast"),
 			WaitForCompletion: true,
 		}), nil

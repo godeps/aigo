@@ -5,9 +5,10 @@ import "github.com/godeps/aigo/engine"
 func init() {
 	engine.RegisterFactory("gpt4o", func(cfg engine.EngineConfig) (engine.Engine, error) {
 		return New(Config{
-			APIKey:  cfg.APIKey,
-			BaseURL: cfg.BaseURL,
-			Model:   cfg.Model,
+			APIKey:     cfg.APIKey,
+			BaseURL:    cfg.BaseURL,
+			HTTPClient: cfg.HTTPClient,
+			Model:      cfg.Model,
 		}), nil
 	})
 	engine.RegisterModelInfos(ModelInfos())
