@@ -1,12 +1,10 @@
 package httpx
 
 import (
-	"context"
 	"net"
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 )
 
 // DomainToken maps a host pattern to a bearer token.
@@ -15,118 +13,29 @@ type DomainToken struct {
 	Token  string
 }
 
-// DomainTokenTransport injects Authorization: Bearer tokens for requests whose
-// URL host matches a configured domain token. Explicit Authorization headers
-// always win.
-type DomainTokenTransport struct {
-	Base   http.RoundTripper
+// DomainTokenHook injects Authorization: Bearer tokens for requests whose URL
+// host matches a configured domain token. Explicit Authorization headers always
+// win.
+type DomainTokenHook struct {
 	Tokens []DomainToken
 }
 
-func (t *DomainTokenTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	if token, ok := resolveDomainToken(req.URL, t.Tokens); ok && req.Header.Get("Authorization") == "" {
+// BeforeRequest implements RequestHook.
+func (h DomainTokenHook) BeforeRequest(req *http.Request) (*http.Request, error) {
+	if token, ok := resolveDomainToken(req.URL, h.Tokens); ok && req.Header.Get("Authorization") == "" {
 		clone := req.Clone(req.Context())
 		clone.Header = req.Header.Clone()
 		clone.Header.Set("Authorization", "Bearer "+token)
-		req = clone
+		return clone, nil
 	}
-
-	resp, err := roundTripperOrDefault(t.Base).RoundTrip(req)
-	if resp != nil {
-		captureResponse(req.Context(), req.URL.String(), resp.StatusCode, resp.Header)
-	}
-	return resp, err
+	return req, nil
 }
 
 // WithDomainTokens returns a shallow clone of client whose transport injects
 // domain-scoped bearer tokens and captures response headers when a context
 // collector is attached. Empty tokens still install the capturing transport.
 func WithDomainTokens(client *http.Client, tokens []DomainToken) *http.Client {
-	if client == nil {
-		client = http.DefaultClient
-	}
-	out := *client
-	out.Transport = &DomainTokenTransport{
-		Base:   client.Transport,
-		Tokens: append([]DomainToken(nil), tokens...),
-	}
-	return &out
-}
-
-// ResponseRecord captures response headers observed by a wrapped HTTP client.
-type ResponseRecord struct {
-	URL        string              `json:"url"`
-	StatusCode int                 `json:"status_code"`
-	Headers    map[string][]string `json:"headers"`
-}
-
-// ResponseCapture stores response header records for requests sharing a context.
-type ResponseCapture struct {
-	mu      sync.Mutex
-	records []ResponseRecord
-}
-
-// NewResponseCapture creates an empty response header collector.
-func NewResponseCapture() *ResponseCapture {
-	return &ResponseCapture{}
-}
-
-// Records returns a snapshot of captured response records.
-func (c *ResponseCapture) Records() []ResponseRecord {
-	if c == nil {
-		return nil
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return append([]ResponseRecord(nil), c.records...)
-}
-
-type responseCaptureKey struct{}
-
-// WithResponseCapture attaches a response header collector to ctx.
-func WithResponseCapture(ctx context.Context, c *ResponseCapture) context.Context {
-	if c == nil {
-		return ctx
-	}
-	return context.WithValue(ctx, responseCaptureKey{}, c)
-}
-
-// ResponseCaptureFromContext returns the collector attached to ctx, if any.
-func ResponseCaptureFromContext(ctx context.Context) *ResponseCapture {
-	c, _ := ctx.Value(responseCaptureKey{}).(*ResponseCapture)
-	return c
-}
-
-func captureResponse(ctx context.Context, rawURL string, statusCode int, headers http.Header) {
-	c := ResponseCaptureFromContext(ctx)
-	if c == nil {
-		return
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.records = append(c.records, ResponseRecord{
-		URL:        rawURL,
-		StatusCode: statusCode,
-		Headers:    cloneSafeHeaders(headers),
-	})
-}
-
-func cloneSafeHeaders(headers http.Header) map[string][]string {
-	out := make(map[string][]string, len(headers))
-	for k, vals := range headers {
-		if strings.EqualFold(k, "Set-Cookie") {
-			continue
-		}
-		out[k] = append([]string(nil), vals...)
-	}
-	return out
-}
-
-func roundTripperOrDefault(rt http.RoundTripper) http.RoundTripper {
-	if rt != nil {
-		return rt
-	}
-	return http.DefaultTransport
+	return WithHTTPHooks(client, DomainTokenHook{Tokens: append([]DomainToken(nil), tokens...)}, ResponseCaptureHook{})
 }
 
 func resolveDomainToken(u *url.URL, tokens []DomainToken) (string, bool) {
