@@ -322,6 +322,10 @@ inference, then `capability` fallback. Names such as `gpt-image-default` are
 recognized automatically because they start with `gpt-image-`; they use
 `/v1/images/generations` and the `gpt-image-*` request contract.
 
+Use `newapi.ResolveRoute(model, capability)` before engine creation, or
+`eng.RouteResolution()` after factory creation, to inspect the resolved route,
+media kind, capability, decision source, and image contract.
+
 For a model name that cannot be inferred, set `capability`:
 
 ```json
@@ -330,7 +334,7 @@ For a model name that cannot be inferred, set `capability`:
     {
       "name": "custom-img",
       "provider": "newapi",
-      "model": "aihub-custom-image-model",
+      "model": "aihub-render-default",
       "capability": "image",
       "quality": "high"
     }
@@ -339,7 +343,7 @@ For a model name that cannot be inferred, set `capability`:
 ```
 
 ```text
-newapi://sk-xxx@gateway.example.com/v1?model=aihub-custom-image-model&capability=image&quality=high&output_format=webp
+newapi://sk-xxx@gateway.example.com/v1?model=aihub-render-default&capability=image&quality=high&output_format=webp
 ```
 
 ## Model i18n Metadata

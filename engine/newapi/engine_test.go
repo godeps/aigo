@@ -240,6 +240,30 @@ func TestLookupRouteGPTImage2(t *testing.T) {
 	}
 }
 
+func TestRouteResolutionExplicitRoute(t *testing.T) {
+	t.Parallel()
+
+	eng := New(Config{
+		BaseURL: "https://gateway.example.com",
+		Model:   "custom-gpt-image",
+		Route:   RouteOpenAIImagesGenerations,
+		Kind:    KindImage,
+	})
+	got := eng.RouteResolution()
+	if got.Route != RouteOpenAIImagesGenerations {
+		t.Errorf("route = %q, want %q", got.Route, RouteOpenAIImagesGenerations)
+	}
+	if got.Kind != KindImage {
+		t.Errorf("kind = %q, want %q", got.Kind, KindImage)
+	}
+	if got.Source != RouteSourceExplicitRoute {
+		t.Errorf("source = %q, want %q", got.Source, RouteSourceExplicitRoute)
+	}
+	if got.ImageContract != "openai-image" {
+		t.Errorf("image contract = %q, want openai-image", got.ImageContract)
+	}
+}
+
 func TestExecuteGPTImage2OutputFormatDrivesDataURIMIME(t *testing.T) {
 	t.Parallel()
 

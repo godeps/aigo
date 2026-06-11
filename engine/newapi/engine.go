@@ -36,8 +36,10 @@ type Config struct {
 	BaseURL string // 网关 origin 或以 /v1 结尾的写法均可，见 NormalizeOrigin
 	Model   string
 	// Route 非空时优先；否则按 Kind 选择默认 OpenAI 路径族。
-	Route Route
-	Kind  MediaKind
+	Route       Route
+	Kind        MediaKind
+	Capability  string
+	RouteSource RouteSource
 
 	HTTPClient *http.Client
 	// 图像
@@ -62,6 +64,8 @@ type Engine struct {
 	origin                string
 	route                 Route
 	kind                  MediaKind
+	capability            string
+	routeSource           RouteSource
 	model                 string
 	apiKey                string
 	quality               string
@@ -103,6 +107,8 @@ func New(cfg Config) *Engine {
 		origin:                origin,
 		route:                 cfg.Route,
 		kind:                  kind,
+		capability:            strings.TrimSpace(cfg.Capability),
+		routeSource:           cfg.RouteSource,
 		model:                 strings.TrimSpace(cfg.Model),
 		apiKey:                strings.TrimSpace(cfg.APIKey),
 		quality:               cfg.Quality,
@@ -117,6 +123,22 @@ func New(cfg Config) *Engine {
 		jimengVer:             jv,
 		allowRemoteMediaFetch: !cfg.DisableRemoteMediaFetch,
 	}
+}
+
+// RouteResolution reports how this engine instance will route requests.
+func (e *Engine) RouteResolution() RouteResolution {
+	route := e.effectiveRoute()
+	source := e.routeSource
+	switch {
+	case source != "":
+	case e.route != RouteAuto && e.route != "":
+		source = RouteSourceExplicitRoute
+	case e.kind != "":
+		source = RouteSourceKindDefault
+	default:
+		source = RouteSourceUnresolved
+	}
+	return routeResolution(e.model, route, e.kind, e.capability, source)
 }
 
 func (e *Engine) effectiveRoute() Route {

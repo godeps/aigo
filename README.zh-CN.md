@@ -318,6 +318,10 @@ URI userinfo 会作为 `api_key`。如果 URI 包含 `@host/path`，它会成为
 例如 `gpt-image-default` 会因为以 `gpt-image-` 开头被自动识别，走
 `/v1/images/generations` 和 `gpt-image-*` 请求协议。
 
+创建引擎前可调用 `newapi.ResolveRoute(model, capability)`，通过 factory 创建后可调用
+`eng.RouteResolution()`，查看解析出的 route、media kind、capability、决策来源和
+image contract。
+
 如果模型名无法推断，需要设置 `capability`：
 
 ```json
@@ -326,7 +330,7 @@ URI userinfo 会作为 `api_key`。如果 URI 包含 `@host/path`，它会成为
     {
       "name": "custom-img",
       "provider": "newapi",
-      "model": "aihub-custom-image-model",
+      "model": "aihub-render-default",
       "capability": "image",
       "quality": "high"
     }
@@ -335,7 +339,7 @@ URI userinfo 会作为 `api_key`。如果 URI 包含 `@host/path`，它会成为
 ```
 
 ```text
-newapi://sk-xxx@gateway.example.com/v1?model=aihub-custom-image-model&capability=image&quality=high&output_format=webp
+newapi://sk-xxx@gateway.example.com/v1?model=aihub-render-default&capability=image&quality=high&output_format=webp
 ```
 
 ## 模型 i18n 元数据

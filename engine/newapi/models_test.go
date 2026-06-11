@@ -13,10 +13,10 @@ func TestLookupRoute_KnownModel(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		model    string
-		wantR    Route
-		wantK    MediaKind
-		wantCap  string
+		model   string
+		wantR   Route
+		wantK   MediaKind
+		wantCap string
 	}{
 		{"gpt-image-2", RouteOpenAIImagesGenerations, KindImage, "image"},
 		{"kling-v2-master", RouteKlingText2Video, KindVideo, "video"},
@@ -126,6 +126,81 @@ func TestLookupRoute_NoMatch(t *testing.T) {
 	}
 	if cap != "" {
 		t.Errorf("cap = %q, want empty", cap)
+	}
+}
+
+func TestResolveRouteExplainsSource(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		model        string
+		capability   string
+		wantRoute    Route
+		wantKind     MediaKind
+		wantCap      string
+		wantSource   RouteSource
+		wantContract string
+	}{
+		{
+			name:         "known model",
+			model:        "gpt-image-2",
+			wantRoute:    RouteOpenAIImagesGenerations,
+			wantKind:     KindImage,
+			wantCap:      "image",
+			wantSource:   RouteSourceKnownModel,
+			wantContract: "gpt-image",
+		},
+		{
+			name:         "name inference",
+			model:        "gpt-image-default",
+			wantRoute:    RouteOpenAIImagesGenerations,
+			wantKind:     KindImage,
+			wantCap:      "image",
+			wantSource:   RouteSourceModelNameInference,
+			wantContract: "gpt-image",
+		},
+		{
+			name:         "capability fallback",
+			model:        "aihub-render-default",
+			capability:   "image",
+			wantRoute:    RouteOpenAIImagesGenerations,
+			wantKind:     KindImage,
+			wantCap:      "image",
+			wantSource:   RouteSourceCapabilityFallback,
+			wantContract: "openai-image",
+		},
+		{
+			name:       "unresolved",
+			model:      "custom-default",
+			wantRoute:  RouteAuto,
+			wantKind:   "",
+			wantCap:    "",
+			wantSource: RouteSourceUnresolved,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := ResolveRoute(tc.model, tc.capability)
+			if got.Route != tc.wantRoute {
+				t.Errorf("route = %q, want %q", got.Route, tc.wantRoute)
+			}
+			if got.Kind != tc.wantKind {
+				t.Errorf("kind = %q, want %q", got.Kind, tc.wantKind)
+			}
+			if got.Capability != tc.wantCap {
+				t.Errorf("capability = %q, want %q", got.Capability, tc.wantCap)
+			}
+			if got.Source != tc.wantSource {
+				t.Errorf("source = %q, want %q", got.Source, tc.wantSource)
+			}
+			if got.ImageContract != tc.wantContract {
+				t.Errorf("image contract = %q, want %q", got.ImageContract, tc.wantContract)
+			}
+		})
 	}
 }
 

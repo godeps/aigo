@@ -258,7 +258,7 @@ func TestFactoryCustomModelUsesCapabilityFallback(t *testing.T) {
 	eng, err := factory(engine.EngineConfig{
 		APIKey:     "sk-test",
 		BaseURL:    server.URL,
-		Model:      "aihub-custom-image-model",
+		Model:      "aihub-render-default",
 		Capability: "image",
 	})
 	if err != nil {
@@ -271,8 +271,50 @@ func TestFactoryCustomModelUsesCapabilityFallback(t *testing.T) {
 	if _, err := eng.Execute(context.Background(), graph); err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	if gotPayload["model"] != "aihub-custom-image-model" {
+	if gotPayload["model"] != "aihub-render-default" {
 		t.Fatalf("model = %#v, want custom model; payload=%#v", gotPayload["model"], gotPayload)
+	}
+}
+
+func TestFactoryRouteResolution(t *testing.T) {
+	t.Parallel()
+
+	factory, ok := engine.GetFactory("newapi")
+	if !ok {
+		t.Fatal("newapi factory not registered")
+	}
+	eng, err := factory(engine.EngineConfig{
+		APIKey:     "sk-test",
+		BaseURL:    "https://gateway.example.com",
+		Model:      "aihub-render-default",
+		Capability: "image",
+	})
+	if err != nil {
+		t.Fatalf("factory: %v", err)
+	}
+
+	newAPIEngine, ok := eng.(*Engine)
+	if !ok {
+		t.Fatalf("factory returned %T, want *newapi.Engine", eng)
+	}
+	got := newAPIEngine.RouteResolution()
+	if got.Model != "aihub-render-default" {
+		t.Errorf("model = %q", got.Model)
+	}
+	if got.Route != RouteOpenAIImagesGenerations {
+		t.Errorf("route = %q, want %q", got.Route, RouteOpenAIImagesGenerations)
+	}
+	if got.Kind != KindImage {
+		t.Errorf("kind = %q, want %q", got.Kind, KindImage)
+	}
+	if got.Capability != "image" {
+		t.Errorf("capability = %q, want image", got.Capability)
+	}
+	if got.Source != RouteSourceCapabilityFallback {
+		t.Errorf("source = %q, want %q", got.Source, RouteSourceCapabilityFallback)
+	}
+	if got.ImageContract != "openai-image" {
+		t.Errorf("image contract = %q, want openai-image", got.ImageContract)
 	}
 }
 

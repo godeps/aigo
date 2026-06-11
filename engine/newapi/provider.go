@@ -7,7 +7,7 @@ func init() {
 	engine.RegisterFactory("newapi", func(cfg engine.EngineConfig) (engine.Engine, error) {
 		// Resolve route and kind via three-tier decision:
 		// knownModels > model name inference > cfg.Capability fallback.
-		route, kind, _ := LookupRoute(cfg.Model, cfg.Capability)
+		resolution := ResolveRoute(cfg.Model, cfg.Capability)
 
 		// Most New API gateway routes (Kling/Jimeng/Sora) are async; without
 		// polling the engine returns a task_id UUID instead of a media URL.
@@ -23,8 +23,10 @@ func init() {
 			OutputFormat:      cfg.MetaAny(cfg.OutputFormat, "outputFormat", "output_format"),
 			Moderation:        cfg.MetaAny(cfg.Moderation, "moderation"),
 			OutputCompression: cfg.MetaIntAny(cfg.OutputCompression, "outputCompression", "output_compression"),
-			Route:             route,
-			Kind:              kind,
+			Route:             resolution.Route,
+			Kind:              resolution.Kind,
+			Capability:        resolution.Capability,
+			RouteSource:       resolution.Source,
 			WaitForCompletion: wait,
 			PollInterval:      cfg.PollInterval,
 		}), nil

@@ -13,6 +13,28 @@ type knownModel struct {
 	cap   string // capability key: "image", "video", "tts"
 }
 
+// RouteSource describes which tier selected a NewAPI route.
+type RouteSource string
+
+const (
+	RouteSourceKnownModel         RouteSource = "known_model"
+	RouteSourceModelNameInference RouteSource = "model_name_inference"
+	RouteSourceCapabilityFallback RouteSource = "capability_fallback"
+	RouteSourceExplicitRoute      RouteSource = "explicit_route"
+	RouteSourceKindDefault        RouteSource = "kind_default"
+	RouteSourceUnresolved         RouteSource = "unresolved"
+)
+
+// RouteResolution explains how a NewAPI model is routed.
+type RouteResolution struct {
+	Model         string      `json:"model"`
+	Route         Route       `json:"route"`
+	Kind          MediaKind   `json:"kind"`
+	Capability    string      `json:"capability,omitempty"`
+	Source        RouteSource `json:"source"`
+	ImageContract string      `json:"image_contract,omitempty"`
+}
+
 // knownModels lists models that have been validated against newapi routes.
 // This serves as a static catalog for auto-discovery; the gateway may
 // support additional models not listed here.
@@ -219,23 +241,39 @@ func ModelsByCapability() map[string][]string {
 //
 // Returns (RouteAuto, "", "") when no tier matches — the caller must handle this.
 func LookupRoute(model string, capability string) (Route, MediaKind, string) {
-	// Tier 1: exact match in knownModels
+	res := ResolveRoute(model, capability)
+	return res.Route, res.Kind, res.Capability
+}
+
+// ResolveRoute resolves the route and records which decision tier matched.
+func ResolveRoute(model string, capability string) RouteResolution {
+	model = strings.TrimSpace(model)
+	capability = strings.TrimSpace(capability)
 	if entry, ok := knownModels[model]; ok {
-		return entry.route, entry.kind, entry.cap
+		return routeResolution(model, entry.route, entry.kind, entry.cap, RouteSourceKnownModel)
 	}
 
-	// Tier 2: model name pattern inference
 	if route, kind, cap := InferFromModelName(model); cap != "" {
-		return route, kind, cap
+		return routeResolution(model, route, kind, cap, RouteSourceModelNameInference)
 	}
 
-	// Tier 3: capability fallback
 	if capability != "" {
 		kind, route := capToKindAndRoute(capability)
-		return route, kind, capability
+		return routeResolution(model, route, kind, capability, RouteSourceCapabilityFallback)
 	}
 
-	return RouteAuto, "", ""
+	return routeResolution(model, RouteAuto, "", "", RouteSourceUnresolved)
+}
+
+func routeResolution(model string, route Route, kind MediaKind, cap string, source RouteSource) RouteResolution {
+	return RouteResolution{
+		Model:         model,
+		Route:         route,
+		Kind:          kind,
+		Capability:    cap,
+		Source:        source,
+		ImageContract: imageContractForModelRoute(model, route),
+	}
 }
 
 // InferFromModelName attempts to determine the capability, route, and kind
@@ -335,5 +373,17 @@ func capToKindAndRoute(capability string) (MediaKind, Route) {
 		return KindVision, RouteChatCompletions
 	default:
 		return KindImage, RouteOpenAIImagesGenerations
+	}
+}
+
+func imageContractForModelRoute(model string, route Route) string {
+	switch route {
+	case RouteOpenAIImagesGenerations, RouteOpenAIImagesEdits:
+		if isGPTImageModel(model) {
+			return "gpt-image"
+		}
+		return "openai-image"
+	default:
+		return ""
 	}
 }
