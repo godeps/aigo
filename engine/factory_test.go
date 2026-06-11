@@ -3,6 +3,7 @@ package engine
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -86,6 +87,26 @@ func TestEngineConfig_PollIntervalRoundTrip(t *testing.T) {
 	}
 	if back.PollInterval != 2*time.Second {
 		t.Fatalf("got %v, want 2s", back.PollInterval)
+	}
+}
+
+func TestEngineConfig_QualityRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	raw := `{"name":"x","provider":"newapi","model":"gpt-image-1-mini","quality":"high"}`
+	var cfg EngineConfig
+	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if cfg.Quality != "high" {
+		t.Fatalf("quality = %q, want high", cfg.Quality)
+	}
+	out, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !strings.Contains(string(out), `"quality":"high"`) {
+		t.Fatalf("marshaled config missing quality: %s", out)
 	}
 }
 

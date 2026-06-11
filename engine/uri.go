@@ -45,6 +45,7 @@ const EnvEngineURIs = "ENGINE_URIS"
 //
 //	base_url       → BaseURL (overrides host-based URL)
 //	model          → Model
+//	quality        → Quality
 //	name           → Name (defaults to Provider-Model or Provider if no model)
 //	wait           → WaitForCompletion ("true"/"false")
 //	poll_interval  → PollInterval (Go duration string)
@@ -299,6 +300,9 @@ func ToURI(cfg EngineConfig) string {
 	if cfg.Model != "" {
 		params.Set("model", cfg.Model)
 	}
+	if cfg.Quality != "" {
+		params.Set("quality", cfg.Quality)
+	}
 	if cfg.Name != "" && cfg.Name != cfg.Provider && cfg.Name != cfg.Provider+"-"+sanitizeName(cfg.Model) {
 		params.Set("name", cfg.Name)
 	}
@@ -392,6 +396,7 @@ func resolveScheme(scheme string) string {
 var knownParams = map[string]bool{
 	"base_url":      true,
 	"model":         true,
+	"quality":       true,
 	"name":          true,
 	"wait":          true,
 	"poll_interval": true,
@@ -405,6 +410,9 @@ func applyParams(cfg *EngineConfig, params url.Values) {
 	}
 	if v := params.Get("model"); v != "" {
 		cfg.Model = v
+	}
+	if v := params.Get("quality"); v != "" {
+		cfg.Quality = v
 	}
 	if v := params.Get("name"); v != "" {
 		cfg.Name = v

@@ -1,7 +1,14 @@
 package newapi
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+
+	"github.com/godeps/aigo/engine"
+	"github.com/godeps/aigo/workflow"
 )
 
 func TestConfigSchema(t *testing.T) {
@@ -86,6 +93,51 @@ func TestDefaultProvider(t *testing.T) {
 	}
 	if len(cfg.EnvVars) == 0 {
 		t.Error("config envvars is empty")
+	}
+}
+
+func TestFactoryPassesQuality(t *testing.T) {
+	t.Parallel()
+
+	var gotPayload map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/images/generations" {
+			t.Errorf("path = %q, want /v1/images/generations", r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
+		}
+		if err := json.NewDecoder(r.Body).Decode(&gotPayload); err != nil {
+			t.Errorf("decode body: %v", err)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"b64_json":"AAECAw=="}]}`))
+	}))
+	defer server.Close()
+
+	factory, ok := engine.GetFactory("newapi")
+	if !ok {
+		t.Fatal("newapi factory not registered")
+	}
+	eng, err := factory(engine.EngineConfig{
+		APIKey:  "sk-test",
+		BaseURL: server.URL,
+		Model:   "gpt-image-1-mini",
+		Quality: "high",
+	})
+	if err != nil {
+		t.Fatalf("factory: %v", err)
+	}
+
+	graph := workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "a studio product photo"}},
+	}
+	if _, err := eng.Execute(context.Background(), graph); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if gotPayload["quality"] != "high" {
+		t.Fatalf("quality = %#v, want high; payload=%#v", gotPayload["quality"], gotPayload)
 	}
 }
 

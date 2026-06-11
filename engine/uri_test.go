@@ -459,6 +459,28 @@ func TestToURI_Roundtrip(t *testing.T) {
 	}
 }
 
+func TestURIQualityRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := ParseURI("newapi://sk-test@example.com/v1?model=gpt-image-1-mini&quality=high")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Quality != "high" {
+		t.Fatalf("quality = %q, want high", cfg.Quality)
+	}
+	if cfg.Metadata != nil {
+		if _, ok := cfg.Metadata["quality"]; ok {
+			t.Fatalf("quality should not be stored in metadata: %#v", cfg.Metadata)
+		}
+	}
+
+	uri := ToURI(cfg)
+	if !strings.Contains(uri, "quality=high") {
+		t.Fatalf("ToURI missing quality: %q", uri)
+	}
+}
+
 // --- 优化: 解析时校验 ---
 
 func TestParseAndValidateURI_UnknownProvider(t *testing.T) {

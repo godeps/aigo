@@ -17,6 +17,7 @@ func init() {
 			BaseURL:           cfg.BaseURL,
 			HTTPClient:        cfg.ClientWithHooks(),
 			Model:             cfg.Model,
+			Quality:           cfg.Quality,
 			Route:             route,
 			Kind:              kind,
 			WaitForCompletion: wait,

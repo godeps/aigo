@@ -9,6 +9,7 @@ func init() {
 			BaseURL:    cfg.BaseURL,
 			HTTPClient: cfg.ClientWithHooks(),
 			Model:      cfg.Model,
+			Quality:    cfg.Quality,
 		}), nil
 	})
 	engine.RegisterModelInfos(ModelInfos())

@@ -14,6 +14,7 @@ type EngineConfig struct {
 	Name     string            `json:"name"`               // registration name
 	Provider string            `json:"provider"`           // engine package key, e.g. "alibabacloud", "kling"
 	Model    string            `json:"model,omitempty"`    // model override
+	Quality  string            `json:"quality,omitempty"`  // image quality tier for providers that support it
 	APIKey   string            `json:"api_key,omitempty"`  // explicit API key (overrides env)
 	BaseURL  string            `json:"base_url,omitempty"` // custom API endpoint
 	Enabled  *bool             `json:"enabled,omitempty"`  // default true; set false to skip
