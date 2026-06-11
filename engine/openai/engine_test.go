@@ -355,14 +355,30 @@ func TestCapabilities_GPTImage(t *testing.T) {
 func TestConfigSchema(t *testing.T) {
 	t.Parallel()
 	fields := ConfigSchema()
-	if len(fields) != 2 {
-		t.Fatalf("ConfigSchema() returned %d fields, want 2", len(fields))
-	}
 	if fields[0].Key != "apiKey" || !fields[0].Required {
 		t.Errorf("first field = %+v, want apiKey required", fields[0])
 	}
 	if fields[1].Key != "baseUrl" {
 		t.Errorf("second field key = %q, want baseUrl", fields[1].Key)
+	}
+	want := map[string]bool{
+		"model":              false,
+		"quality":            false,
+		"style":              false,
+		"background":         false,
+		"output_format":      false,
+		"moderation":         false,
+		"output_compression": false,
+	}
+	for _, f := range fields {
+		if _, ok := want[f.Key]; ok {
+			want[f.Key] = true
+		}
+	}
+	for key, ok := range want {
+		if !ok {
+			t.Errorf("ConfigSchema missing %q", key)
+		}
 	}
 }
 

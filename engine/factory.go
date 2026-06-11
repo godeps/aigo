@@ -2,6 +2,8 @@ package engine
 
 import (
 	"net/http"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -15,10 +17,18 @@ type EngineConfig struct {
 	Provider string            `json:"provider"`           // engine package key, e.g. "alibabacloud", "kling"
 	Model    string            `json:"model,omitempty"`    // model override
 	Quality  string            `json:"quality,omitempty"`  // image quality tier for providers that support it
+	Style    string            `json:"style,omitempty"`    // image style hint for providers that support it
 	APIKey   string            `json:"api_key,omitempty"`  // explicit API key (overrides env)
 	BaseURL  string            `json:"base_url,omitempty"` // custom API endpoint
 	Enabled  *bool             `json:"enabled,omitempty"`  // default true; set false to skip
 	Metadata map[string]string `json:"metadata,omitempty"` // provider-specific fields (e.g. voiceId, endpoint)
+
+	// OpenAI-compatible image options. Providers that do not support these
+	// fields should ignore them.
+	Background        string `json:"background,omitempty"`
+	OutputFormat      string `json:"output_format,omitempty"`
+	Moderation        string `json:"moderation,omitempty"`
+	OutputCompression int    `json:"output_compression,omitempty"`
 
 	// Capability tells the factory what media capability this engine serves
 	// ("image", "video", "tts", "asr", "music", "3d"). Used by engines that
@@ -61,6 +71,39 @@ func (c EngineConfig) WaitForCompletionOr(def bool) bool {
 func (c EngineConfig) Meta(key, fallback string) string {
 	if c.Metadata != nil {
 		if v, ok := c.Metadata[key]; ok && v != "" {
+			return v
+		}
+	}
+	return fallback
+}
+
+// MetaAny returns fallback when it is non-empty, otherwise the first non-empty
+// metadata value for keys.
+func (c EngineConfig) MetaAny(fallback string, keys ...string) string {
+	if strings.TrimSpace(fallback) != "" {
+		return fallback
+	}
+	for _, key := range keys {
+		if v := strings.TrimSpace(c.Meta(key, "")); v != "" {
+			return v
+		}
+	}
+	return fallback
+}
+
+// MetaIntAny returns fallback when it is non-zero, otherwise the first
+// parseable integer metadata value for keys.
+func (c EngineConfig) MetaIntAny(fallback int, keys ...string) int {
+	if fallback != 0 {
+		return fallback
+	}
+	for _, key := range keys {
+		raw := strings.TrimSpace(c.Meta(key, ""))
+		if raw == "" {
+			continue
+		}
+		v, err := strconv.Atoi(raw)
+		if err == nil {
 			return v
 		}
 	}

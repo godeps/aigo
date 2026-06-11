@@ -357,14 +357,14 @@ func TestModelsByCapability(t *testing.T) {
 	t.Parallel()
 
 	m := ModelsByCapability()
-	if len(m["text"]) != 3 {
-		t.Errorf("expected 3 text models, got %d", len(m["text"]))
+	if len(m["text"]) != 4 {
+		t.Errorf("expected 4 text models, got %d", len(m["text"]))
 	}
-	if len(m["image"]) != 3 {
-		t.Errorf("expected 3 image models, got %d", len(m["image"]))
+	if len(m["image"]) != 4 {
+		t.Errorf("expected 4 image models, got %d", len(m["image"]))
 	}
-	if len(m["video"]) != 3 {
-		t.Errorf("expected 3 video models, got %d", len(m["video"]))
+	if len(m["video"]) != 4 {
+		t.Errorf("expected 4 video models, got %d", len(m["video"]))
 	}
 	if len(m["audio"]) != 1 {
 		t.Errorf("expected 1 audio model, got %d", len(m["audio"]))
@@ -411,8 +411,8 @@ func TestResolveModel(t *testing.T) {
 		input string
 		want  string
 	}{
-		{"qwen-vl-max", ModelQwen36Plus},
-		{"qwen-vl-max-latest", ModelQwen36Plus},
+		{"qwen-vl-max", ModelQwen37Plus},
+		{"qwen-vl-max-latest", ModelQwen37Plus},
 		{"qwen-vl-plus", ModelQwen36Flash},
 		{"qwen-vl-plus-latest", ModelQwen36Flash},
 		{"qwen3.6-plus", "qwen3.6-plus"},
@@ -432,8 +432,8 @@ func TestNew_LegacyModelAlias(t *testing.T) {
 
 	eng := New(Config{Model: "qwen-vl-max"})
 	cap := eng.Capabilities()
-	if cap.Models[0] != ModelQwen36Plus {
-		t.Errorf("model = %q, want %q", cap.Models[0], ModelQwen36Plus)
+	if cap.Models[0] != ModelQwen37Plus {
+		t.Errorf("model = %q, want %q", cap.Models[0], ModelQwen37Plus)
 	}
 }
 

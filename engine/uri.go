@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -46,6 +47,11 @@ const EnvEngineURIs = "ENGINE_URIS"
 //	base_url       → BaseURL (overrides host-based URL)
 //	model          → Model
 //	quality        → Quality
+//	style          → Style
+//	background     → Background
+//	output_format  → OutputFormat
+//	moderation     → Moderation
+//	output_compression → OutputCompression
 //	name           → Name (defaults to Provider-Model or Provider if no model)
 //	wait           → WaitForCompletion ("true"/"false")
 //	poll_interval  → PollInterval (Go duration string)
@@ -303,6 +309,21 @@ func ToURI(cfg EngineConfig) string {
 	if cfg.Quality != "" {
 		params.Set("quality", cfg.Quality)
 	}
+	if cfg.Style != "" {
+		params.Set("style", cfg.Style)
+	}
+	if cfg.Background != "" {
+		params.Set("background", cfg.Background)
+	}
+	if cfg.OutputFormat != "" {
+		params.Set("output_format", cfg.OutputFormat)
+	}
+	if cfg.Moderation != "" {
+		params.Set("moderation", cfg.Moderation)
+	}
+	if cfg.OutputCompression > 0 {
+		params.Set("output_compression", fmt.Sprintf("%d", cfg.OutputCompression))
+	}
 	if cfg.Name != "" && cfg.Name != cfg.Provider && cfg.Name != cfg.Provider+"-"+sanitizeName(cfg.Model) {
 		params.Set("name", cfg.Name)
 	}
@@ -394,14 +415,19 @@ func resolveScheme(scheme string) string {
 }
 
 var knownParams = map[string]bool{
-	"base_url":      true,
-	"model":         true,
-	"quality":       true,
-	"name":          true,
-	"wait":          true,
-	"poll_interval": true,
-	"capability":    true,
-	"scheme":        true,
+	"base_url":           true,
+	"model":              true,
+	"quality":            true,
+	"style":              true,
+	"background":         true,
+	"output_format":      true,
+	"moderation":         true,
+	"output_compression": true,
+	"name":               true,
+	"wait":               true,
+	"poll_interval":      true,
+	"capability":         true,
+	"scheme":             true,
 }
 
 func applyParams(cfg *EngineConfig, params url.Values) {
@@ -413,6 +439,23 @@ func applyParams(cfg *EngineConfig, params url.Values) {
 	}
 	if v := params.Get("quality"); v != "" {
 		cfg.Quality = v
+	}
+	if v := params.Get("style"); v != "" {
+		cfg.Style = v
+	}
+	if v := params.Get("background"); v != "" {
+		cfg.Background = v
+	}
+	if v := params.Get("output_format"); v != "" {
+		cfg.OutputFormat = v
+	}
+	if v := params.Get("moderation"); v != "" {
+		cfg.Moderation = v
+	}
+	if v := params.Get("output_compression"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			cfg.OutputCompression = n
+		}
 	}
 	if v := params.Get("name"); v != "" {
 		cfg.Name = v

@@ -21,7 +21,20 @@ func TestConfigSchema(t *testing.T) {
 
 	foundAPIKey := false
 	foundBaseURL := false
+	found := map[string]bool{
+		"model":              false,
+		"capability":         false,
+		"quality":            false,
+		"style":              false,
+		"background":         false,
+		"output_format":      false,
+		"moderation":         false,
+		"output_compression": false,
+	}
 	for _, f := range fields {
+		if _, ok := found[f.Key]; ok {
+			found[f.Key] = true
+		}
 		switch f.Key {
 		case "apiKey":
 			foundAPIKey = true
@@ -43,6 +56,11 @@ func TestConfigSchema(t *testing.T) {
 	}
 	if !foundBaseURL {
 		t.Error("ConfigSchema missing baseUrl field")
+	}
+	for key, ok := range found {
+		if !ok {
+			t.Errorf("ConfigSchema missing %s field", key)
+		}
 	}
 }
 
@@ -96,7 +114,7 @@ func TestDefaultProvider(t *testing.T) {
 	}
 }
 
-func TestFactoryPassesQuality(t *testing.T) {
+func TestFactoryPassesImageOptions(t *testing.T) {
 	t.Parallel()
 
 	var gotPayload map[string]any
@@ -121,10 +139,15 @@ func TestFactoryPassesQuality(t *testing.T) {
 		t.Fatal("newapi factory not registered")
 	}
 	eng, err := factory(engine.EngineConfig{
-		APIKey:  "sk-test",
-		BaseURL: server.URL,
-		Model:   "gpt-image-1-mini",
-		Quality: "high",
+		APIKey:            "sk-test",
+		BaseURL:           server.URL,
+		Model:             "gpt-image-1-mini",
+		Quality:           "high",
+		Style:             "vivid",
+		Background:        "transparent",
+		OutputFormat:      "webp",
+		Moderation:        "low",
+		OutputCompression: 72,
 	})
 	if err != nil {
 		t.Fatalf("factory: %v", err)
@@ -138,6 +161,118 @@ func TestFactoryPassesQuality(t *testing.T) {
 	}
 	if gotPayload["quality"] != "high" {
 		t.Fatalf("quality = %#v, want high; payload=%#v", gotPayload["quality"], gotPayload)
+	}
+	if _, ok := gotPayload["style"]; ok {
+		t.Fatalf("gpt-image-* payload must omit style: %#v", gotPayload)
+	}
+	if gotPayload["background"] != "transparent" {
+		t.Fatalf("background = %#v, want transparent; payload=%#v", gotPayload["background"], gotPayload)
+	}
+	if gotPayload["output_format"] != "webp" {
+		t.Fatalf("output_format = %#v, want webp; payload=%#v", gotPayload["output_format"], gotPayload)
+	}
+	if gotPayload["moderation"] != "low" {
+		t.Fatalf("moderation = %#v, want low; payload=%#v", gotPayload["moderation"], gotPayload)
+	}
+	if gotPayload["output_compression"] != float64(72) {
+		t.Fatalf("output_compression = %#v, want 72; payload=%#v", gotPayload["output_compression"], gotPayload)
+	}
+}
+
+func TestFactoryPassesMetadataImageOptions(t *testing.T) {
+	t.Parallel()
+
+	var gotPayload map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&gotPayload); err != nil {
+			t.Errorf("decode body: %v", err)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"b64_json":"AAECAw=="}]}`))
+	}))
+	defer server.Close()
+
+	factory, ok := engine.GetFactory("newapi")
+	if !ok {
+		t.Fatal("newapi factory not registered")
+	}
+	eng, err := factory(engine.EngineConfig{
+		APIKey:  "sk-test",
+		BaseURL: server.URL,
+		Model:   "gpt-image-1-mini",
+		Metadata: map[string]string{
+			"quality":           "high",
+			"outputFormat":      "webp",
+			"outputCompression": "73",
+			"background":        "transparent",
+			"moderation":        "low",
+		},
+	})
+	if err != nil {
+		t.Fatalf("factory: %v", err)
+	}
+
+	graph := workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "a studio product photo"}},
+	}
+	if _, err := eng.Execute(context.Background(), graph); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if gotPayload["quality"] != "high" {
+		t.Fatalf("quality = %#v, want high; payload=%#v", gotPayload["quality"], gotPayload)
+	}
+	if gotPayload["output_format"] != "webp" {
+		t.Fatalf("output_format = %#v, want webp; payload=%#v", gotPayload["output_format"], gotPayload)
+	}
+	if gotPayload["output_compression"] != float64(73) {
+		t.Fatalf("output_compression = %#v, want 73; payload=%#v", gotPayload["output_compression"], gotPayload)
+	}
+}
+
+func TestFactoryCustomModelUsesCapabilityFallback(t *testing.T) {
+	t.Parallel()
+
+	var gotPayload map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/images/generations" {
+			t.Errorf("path = %q, want /v1/images/generations", r.URL.Path)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
+		}
+		if err := json.NewDecoder(r.Body).Decode(&gotPayload); err != nil {
+			t.Errorf("decode body: %v", err)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"url":"https://cdn.example.com/custom.png"}]}`))
+	}))
+	defer server.Close()
+
+	factory, ok := engine.GetFactory("newapi")
+	if !ok {
+		t.Fatal("newapi factory not registered")
+	}
+	eng, err := factory(engine.EngineConfig{
+		APIKey:     "sk-test",
+		BaseURL:    server.URL,
+		Model:      "aihub-custom-image-model",
+		Capability: "image",
+	})
+	if err != nil {
+		t.Fatalf("factory: %v", err)
+	}
+
+	graph := workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "a custom model prompt"}},
+	}
+	if _, err := eng.Execute(context.Background(), graph); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if gotPayload["model"] != "aihub-custom-image-model" {
+		t.Fatalf("model = %#v, want custom model; payload=%#v", gotPayload["model"], gotPayload)
 	}
 }
 

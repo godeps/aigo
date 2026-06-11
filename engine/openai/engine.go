@@ -30,11 +30,11 @@ var (
 
 // Config configures the OpenAI image engine.
 type Config struct {
-	APIKey     string
-	BaseURL    string
-	Model      string
-	Quality    string
-	Style      string
+	APIKey  string
+	BaseURL string
+	Model   string
+	Quality string
+	Style   string
 	// gpt-image-* 专属可选参数
 	Background        string // transparent | opaque | auto
 	OutputFormat      string // png | jpeg | webp
@@ -297,6 +297,13 @@ func ConfigSchema() []engine.ConfigField {
 	return []engine.ConfigField{
 		{Key: "apiKey", Label: "API Key", Type: "secret", Required: true, EnvVar: "OPENAI_API_KEY", Description: "OpenAI API key"},
 		{Key: "baseUrl", Label: "Base URL", Type: "url", EnvVar: "OPENAI_BASE_URL", Description: "Custom API base URL (optional)"},
+		{Key: "model", Label: "Model", Type: "string", Description: "Image model, e.g. gpt-image-2, dall-e-3, or dall-e-2.", Default: defaultModel},
+		{Key: "quality", Label: "Quality", Type: "string", Description: "Image quality tier, e.g. low, medium, high, auto, standard, or hd."},
+		{Key: "style", Label: "Style", Type: "string", Description: "DALL-E style, e.g. vivid or natural."},
+		{Key: "background", Label: "Background", Type: "string", Description: "gpt-image-* background mode: transparent, opaque, or auto."},
+		{Key: "output_format", Label: "Output Format", Type: "string", Description: "gpt-image-* output format: png, jpeg, or webp."},
+		{Key: "moderation", Label: "Moderation", Type: "string", Description: "gpt-image-* moderation mode, e.g. low or auto."},
+		{Key: "output_compression", Label: "Output Compression", Type: "number", Description: "gpt-image-* JPEG/WebP compression from 0 to 100."},
 	}
 }
 

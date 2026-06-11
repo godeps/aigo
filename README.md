@@ -92,6 +92,18 @@ AgentTask ──► BuildGraph() ──► workflow.Graph (DAG)
 | `comfyui` | ComfyUI server (WebSocket) | `COMFY_CLOUD_API_KEY` |
 | `runninghub` | RunningHub (ComfyUI cloud) | `RH_API_KEY` |
 
+NewAPI accepts custom gateway model names. When the model is not in the built-in
+catalog and cannot be inferred from its name, set `capability` so the factory can
+choose the route:
+
+```text
+newapi://sk-xxx@gateway.example.com/v1?model=aihub-custom-image-model&capability=image&quality=high&output_format=webp
+```
+
+Declarative image options are available on `EngineConfig` and URI query strings:
+`quality`, `style`, `background`, `output_format`, `moderation`, and
+`output_compression`.
+
 ### Embedding
 
 | Engine | Backend | Env Var |

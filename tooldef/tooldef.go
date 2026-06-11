@@ -360,7 +360,6 @@ func TextToSpeech() ToolDef {
 				"voice": {
 					Type:        "string",
 					Description: "Voice identifier. Chinese female: Cherry (warm), Serena (bilingual zh/en), Bella (gentle), Momo (cute). Chinese male: Li (mature), Marcus (deep), Peter (standard). English female: Chelsie, Jennifer, Maia. English male: Ethan, Ryan, Aiden. IMPORTANT: Use Chinese voices for Chinese text.",
-					Enum:        []string{"Cherry", "Serena", "Ethan", "Chelsie", "Momo", "Vivian", "Maia", "Bella", "Jennifer", "Katerina", "Mia", "Bellona", "Bunny", "Elias", "Nini", "Seren", "Stella", "Sonrisa", "Sohee", "Jada", "Sunny", "Kiki", "Moon", "Kai", "Nofish", "Ryan", "Aiden", "Mochi", "Vincent", "Neil", "Arthur", "Pip", "Bodega", "Alek", "Dolce", "Lenn", "Emilien", "Andre", "Dylan", "Li", "Marcus", "Roy", "Peter", "Eric", "Rocky"},
 				},
 				"language": {
 					Type:        "string",

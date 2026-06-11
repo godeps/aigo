@@ -92,6 +92,16 @@ AgentTask ──► BuildGraph() ──► workflow.Graph (DAG)
 | `comfyui` | ComfyUI 服务（WebSocket） | `COMFY_CLOUD_API_KEY` |
 | `runninghub` | RunningHub（ComfyUI 云端） | `RH_API_KEY` |
 
+NewAPI 支持传入网关里的自定义模型名。模型不在内置目录里、且无法通过名称推断路由时，
+需要设置 `capability`，让 factory 选择正确接口：
+
+```text
+newapi://sk-xxx@gateway.example.com/v1?model=aihub-custom-image-model&capability=image&quality=high&output_format=webp
+```
+
+声明式图片选项可放在 `EngineConfig` 或 URI query 中：`quality`、`style`、
+`background`、`output_format`、`moderation`、`output_compression`。
+
 ### 向量嵌入
 
 | 引擎 | 后端 | 环境变量 |

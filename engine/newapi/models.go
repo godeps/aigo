@@ -54,18 +54,18 @@ var knownModels = map[string]knownModel{
 	"black-forest-labs/flux-1.1-pro": {route: RouteOpenAIImagesGenerations, kind: KindImage, cap: "image"},
 
 	// SiliconFlow
-	"InstantX/InstantID":             {route: RouteOpenAIImagesGenerations, kind: KindImage, cap: "image"},
-	"ByteDance/SDXL-Lightning":       {route: RouteOpenAIImagesGenerations, kind: KindImage, cap: "image"},
+	"InstantX/InstantID":               {route: RouteOpenAIImagesGenerations, kind: KindImage, cap: "image"},
+	"ByteDance/SDXL-Lightning":         {route: RouteOpenAIImagesGenerations, kind: KindImage, cap: "image"},
 	"black-forest-labs/FLUX.1-schnell": {route: RouteOpenAIImagesGenerations, kind: KindImage, cap: "image"},
 
 	// ═══ Image Edit (/v1/images/edits) ═══════════════════════
 
-	"qwen-image-edit":                   {route: RouteOpenAIImagesEdits, kind: KindImage, cap: "image_edit"},
-	"qwen-image-edit-max":               {route: RouteOpenAIImagesEdits, kind: KindImage, cap: "image_edit"},
-	"qwen-image-edit-max-2026-01-16":    {route: RouteOpenAIImagesEdits, kind: KindImage, cap: "image_edit"},
-	"qwen-image-edit-plus":              {route: RouteOpenAIImagesEdits, kind: KindImage, cap: "image_edit"},
-	"qwen-image-edit-plus-2025-12-15":   {route: RouteOpenAIImagesEdits, kind: KindImage, cap: "image_edit"},
-	"qwen-image-edit-plus-2025-10-30":   {route: RouteOpenAIImagesEdits, kind: KindImage, cap: "image_edit"},
+	"qwen-image-edit":                 {route: RouteOpenAIImagesEdits, kind: KindImage, cap: "image_edit"},
+	"qwen-image-edit-max":             {route: RouteOpenAIImagesEdits, kind: KindImage, cap: "image_edit"},
+	"qwen-image-edit-max-2026-01-16":  {route: RouteOpenAIImagesEdits, kind: KindImage, cap: "image_edit"},
+	"qwen-image-edit-plus":            {route: RouteOpenAIImagesEdits, kind: KindImage, cap: "image_edit"},
+	"qwen-image-edit-plus-2025-12-15": {route: RouteOpenAIImagesEdits, kind: KindImage, cap: "image_edit"},
+	"qwen-image-edit-plus-2025-10-30": {route: RouteOpenAIImagesEdits, kind: KindImage, cap: "image_edit"},
 
 	// ═══ Video Generation ════════════════════════════════════
 
@@ -137,10 +137,10 @@ var knownModels = map[string]knownModel{
 	// ═══ Vision Understanding (/v1/chat/completions) ════════
 
 	// Qwen vision & omni (DashScope OpenAI-compatible)
-	"qwen3.7-plus":        {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
-	"qwen3.6-plus":        {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
-	"qwen3.6-flash":       {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
-	"qwen3.5-omni-plus":   {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+	"qwen3.7-plus":      {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+	"qwen3.6-plus":      {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+	"qwen3.6-flash":     {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+	"qwen3.5-omni-plus": {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
 
 	// GLM-4V (ZhiPu)
 	"glm-4v":      {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
@@ -148,7 +148,7 @@ var knownModels = map[string]knownModel{
 	"glm-4.6v":    {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
 
 	// Yi Vision (Lingyiwanwu)
-	"yi-vision": {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+	"yi-vision":  {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
 	"yi-vl-plus": {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
 
 	// Grok Vision (xAI)
@@ -157,12 +157,12 @@ var knownModels = map[string]knownModel{
 	"grok-vision-beta":   {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
 
 	// Doubao Vision (ByteDance)
-	"Doubao-vision-lite-32k":     {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
-	"Doubao-vision-pro-32k":      {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
-	"Doubao-1.5-pro-vision-32k":  {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+	"Doubao-vision-lite-32k":    {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+	"Doubao-vision-pro-32k":     {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+	"Doubao-1.5-pro-vision-32k": {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
 
 	// Step Vision (StepFun)
-	"step-1v-8k":    {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
+	"step-1v-8k":     {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
 	"step-1.5v-mini": {route: RouteChatCompletions, kind: KindVision, cap: "video_understanding"},
 
 	// GPT-4V (OpenAI legacy vision)
@@ -190,6 +190,14 @@ func ConfigSchema() []engine.ConfigField {
 	return []engine.ConfigField{
 		{Key: "apiKey", Label: "API Key", Type: "secret", Required: true, EnvVar: "NEWAPI_API_KEY", Description: "NewAPI API key"},
 		{Key: "baseUrl", Label: "Base URL", Type: "url", EnvVar: "NEWAPI_BASE_URL", Description: "Custom API base URL (optional)"},
+		{Key: "model", Label: "Model", Type: "string", Description: "Model name. Known models are routed automatically; custom gateway model names should also set capability."},
+		{Key: "capability", Label: "Capability", Type: "string", Description: "Route hint for custom models: image, image_edit, video, tts, asr, video_understanding, or vision."},
+		{Key: "quality", Label: "Quality", Type: "string", Description: "Image quality tier for OpenAI-compatible image models, e.g. low, medium, high, auto, standard, or hd."},
+		{Key: "style", Label: "Style", Type: "string", Description: "Image style for models that support it, e.g. vivid or natural."},
+		{Key: "background", Label: "Background", Type: "string", Description: "gpt-image-* background mode: transparent, opaque, or auto."},
+		{Key: "output_format", Label: "Output Format", Type: "string", Description: "gpt-image-* output format: png, jpeg, or webp."},
+		{Key: "moderation", Label: "Moderation", Type: "string", Description: "gpt-image-* moderation mode, e.g. low or auto."},
+		{Key: "output_compression", Label: "Output Compression", Type: "number", Description: "gpt-image-* JPEG/WebP compression from 0 to 100."},
 	}
 }
 

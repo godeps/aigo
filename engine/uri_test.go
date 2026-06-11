@@ -459,15 +459,30 @@ func TestToURI_Roundtrip(t *testing.T) {
 	}
 }
 
-func TestURIQualityRoundTrip(t *testing.T) {
+func TestURIImageOptionsRoundTrip(t *testing.T) {
 	t.Parallel()
 
-	cfg, err := ParseURI("newapi://sk-test@example.com/v1?model=gpt-image-1-mini&quality=high")
+	cfg, err := ParseURI("newapi://sk-test@example.com/v1?model=gpt-image-1-mini&quality=high&style=vivid&background=transparent&output_format=webp&moderation=low&output_compression=72")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if cfg.Quality != "high" {
 		t.Fatalf("quality = %q, want high", cfg.Quality)
+	}
+	if cfg.Style != "vivid" {
+		t.Fatalf("style = %q, want vivid", cfg.Style)
+	}
+	if cfg.Background != "transparent" {
+		t.Fatalf("background = %q, want transparent", cfg.Background)
+	}
+	if cfg.OutputFormat != "webp" {
+		t.Fatalf("output_format = %q, want webp", cfg.OutputFormat)
+	}
+	if cfg.Moderation != "low" {
+		t.Fatalf("moderation = %q, want low", cfg.Moderation)
+	}
+	if cfg.OutputCompression != 72 {
+		t.Fatalf("output_compression = %d, want 72", cfg.OutputCompression)
 	}
 	if cfg.Metadata != nil {
 		if _, ok := cfg.Metadata["quality"]; ok {
@@ -478,6 +493,11 @@ func TestURIQualityRoundTrip(t *testing.T) {
 	uri := ToURI(cfg)
 	if !strings.Contains(uri, "quality=high") {
 		t.Fatalf("ToURI missing quality: %q", uri)
+	}
+	for _, want := range []string{"style=vivid", "background=transparent", "output_format=webp", "moderation=low", "output_compression=72"} {
+		if !strings.Contains(uri, want) {
+			t.Fatalf("ToURI missing %s: %q", want, uri)
+		}
 	}
 }
 

@@ -90,10 +90,10 @@ func TestEngineConfig_PollIntervalRoundTrip(t *testing.T) {
 	}
 }
 
-func TestEngineConfig_QualityRoundTrip(t *testing.T) {
+func TestEngineConfig_ImageOptionsRoundTrip(t *testing.T) {
 	t.Parallel()
 
-	raw := `{"name":"x","provider":"newapi","model":"gpt-image-1-mini","quality":"high"}`
+	raw := `{"name":"x","provider":"newapi","model":"gpt-image-1-mini","quality":"high","style":"vivid","background":"transparent","output_format":"webp","moderation":"low","output_compression":72}`
 	var cfg EngineConfig
 	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
 		t.Fatalf("unmarshal: %v", err)
@@ -101,12 +101,51 @@ func TestEngineConfig_QualityRoundTrip(t *testing.T) {
 	if cfg.Quality != "high" {
 		t.Fatalf("quality = %q, want high", cfg.Quality)
 	}
+	if cfg.Style != "vivid" {
+		t.Fatalf("style = %q, want vivid", cfg.Style)
+	}
+	if cfg.Background != "transparent" {
+		t.Fatalf("background = %q, want transparent", cfg.Background)
+	}
+	if cfg.OutputFormat != "webp" {
+		t.Fatalf("output_format = %q, want webp", cfg.OutputFormat)
+	}
+	if cfg.Moderation != "low" {
+		t.Fatalf("moderation = %q, want low", cfg.Moderation)
+	}
+	if cfg.OutputCompression != 72 {
+		t.Fatalf("output_compression = %d, want 72", cfg.OutputCompression)
+	}
 	out, err := json.Marshal(cfg)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
 	if !strings.Contains(string(out), `"quality":"high"`) {
 		t.Fatalf("marshaled config missing quality: %s", out)
+	}
+	if !strings.Contains(string(out), `"output_compression":72`) {
+		t.Fatalf("marshaled config missing output_compression: %s", out)
+	}
+}
+
+func TestEngineConfig_MetaAny(t *testing.T) {
+	t.Parallel()
+
+	cfg := EngineConfig{Metadata: map[string]string{
+		"outputFormat":      "webp",
+		"outputCompression": "72",
+	}}
+	if got := cfg.MetaAny("", "output_format", "outputFormat"); got != "webp" {
+		t.Fatalf("MetaAny = %q, want webp", got)
+	}
+	if got := cfg.MetaAny("png", "outputFormat"); got != "png" {
+		t.Fatalf("MetaAny top-level fallback = %q, want png", got)
+	}
+	if got := cfg.MetaIntAny(0, "output_compression", "outputCompression"); got != 72 {
+		t.Fatalf("MetaIntAny = %d, want 72", got)
+	}
+	if got := cfg.MetaIntAny(80, "outputCompression"); got != 80 {
+		t.Fatalf("MetaIntAny top-level fallback = %d, want 80", got)
 	}
 }
 
