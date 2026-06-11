@@ -193,6 +193,11 @@ func GenerateImage() ToolDef {
 					Enum:        []string{"1K", "2K", "4K"},
 					Default:     "2K",
 				},
+				"quality": {
+					Type:        "string",
+					Description: "Provider image quality tier. Use low for drafts, medium/high for final output, auto to let the model choose, or standard/hd for DALL-E compatible providers",
+					Enum:        []string{"low", "medium", "high", "auto", "standard", "hd"},
+				},
 				"camera_angle": {
 					Type:        "string",
 					Description: "Camera angle preset for the shot",

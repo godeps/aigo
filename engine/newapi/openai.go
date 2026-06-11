@@ -14,9 +14,9 @@ import (
 	"strings"
 
 	"github.com/godeps/aigo/engine/aigoerr"
-	epoll "github.com/godeps/aigo/engine/poll"
 	"github.com/godeps/aigo/engine/newapi/internal/graph"
 	"github.com/godeps/aigo/engine/newapi/internal/poll"
+	epoll "github.com/godeps/aigo/engine/poll"
 	"github.com/godeps/aigo/workflow"
 	"github.com/godeps/aigo/workflow/resolve"
 )
@@ -43,8 +43,8 @@ func (e *Engine) runOpenAIImageGenerations(ctx context.Context, apiKey string, g
 			payload["style"] = e.style
 		}
 	}
-	if e.quality != "" {
-		payload["quality"] = e.quality
+	if quality := e.imageQuality(g); quality != "" {
+		payload["quality"] = quality
 	}
 	if n, ok := graph.IntOption(g, "n"); ok && n >= 1 && n <= 10 {
 		payload["n"] = n
@@ -100,6 +100,9 @@ func (e *Engine) runOpenAIImageEdits(ctx context.Context, apiKey string, g workf
 	if n, ok := graph.IntOption(g, "n"); ok && n >= 1 && n <= 10 {
 		_ = w.WriteField("n", fmt.Sprintf("%d", n))
 	}
+	if quality := e.imageQuality(g); quality != "" {
+		_ = w.WriteField("quality", quality)
+	}
 	h := make(textproto.MIMEHeader)
 	h.Set("Content-Disposition", `form-data; name="image"; filename="image.png"`)
 	h.Set("Content-Type", "image/png")
@@ -119,6 +122,13 @@ func (e *Engine) runOpenAIImageEdits(ctx context.Context, apiKey string, g workf
 		return "", err
 	}
 	return decodeOpenAIImageData(respBody, e.b64ImageMIME())
+}
+
+func (e *Engine) imageQuality(g workflow.Graph) string {
+	if quality, ok := graph.StringOptionFromClassTypes(g, []string{"ImageOptions"}, "quality"); ok {
+		return strings.TrimSpace(quality)
+	}
+	return strings.TrimSpace(e.quality)
 }
 
 func (e *Engine) runOpenAIVideoGenerations(ctx context.Context, apiKey string, g workflow.Graph) (string, error) {

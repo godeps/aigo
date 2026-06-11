@@ -141,6 +141,12 @@ func (e *Engine) Compile(graph workflow.Graph) (Request, error) {
 			break
 		}
 	}
+	for _, ref := range graph.FindByClassType("ImageOptions") {
+		if quality, ok := ref.Node.StringInput("quality"); ok && strings.TrimSpace(quality) != "" {
+			req.Quality = strings.TrimSpace(quality)
+			break
+		}
+	}
 
 	if req.Prompt == "" {
 		return Request{}, ErrMissingPrompt

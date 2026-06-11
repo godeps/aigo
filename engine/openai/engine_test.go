@@ -162,6 +162,41 @@ func TestExecuteGPTImage2OmitsUnsupportedFieldsAndDecodesBase64(t *testing.T) {
 	}
 }
 
+func TestExecuteGPTImage2UsesGraphQuality(t *testing.T) {
+	t.Parallel()
+
+	var gotPayload map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&gotPayload); err != nil {
+			t.Errorf("decode body: %v", err)
+			http.Error(w, "test assertion failed", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"b64_json":"AAECAw=="}]}`))
+	}))
+	defer server.Close()
+
+	engine := New(Config{
+		APIKey:  "test-key",
+		BaseURL: server.URL,
+		Model:   "gpt-image-2",
+		Quality: "low",
+	})
+
+	graph := workflow.Graph{
+		"1": {ClassType: "CLIPTextEncode", Inputs: map[string]any{"text": "a quiet zen garden at dawn"}},
+		"2": {ClassType: "ImageOptions", Inputs: map[string]any{"quality": "high"}},
+	}
+
+	if _, err := engine.Execute(context.Background(), graph); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if gotPayload["quality"] != "high" {
+		t.Errorf("quality = %#v, want graph override high", gotPayload["quality"])
+	}
+}
+
 func TestNewQualityDefaultsByModelFamily(t *testing.T) {
 	t.Parallel()
 

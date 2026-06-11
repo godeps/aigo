@@ -284,10 +284,12 @@ func TestBuildGraphStructuredOverrides(t *testing.T) {
 	g := BuildGraph(AgentTask{
 		Prompt:    "p",
 		Size:      "1024x1024",
+		Quality:   "low",
 		Duration:  1,
 		Watermark: &wmTrue,
 		Structured: &AgentTaskStructured{
 			ImageSize:      "512x512",
+			ImageQuality:   "high",
 			ImageWatermark: &wmFalse,
 			VideoDuration:  8,
 			VideoSize:      "1920x1080",
@@ -300,6 +302,9 @@ func TestBuildGraphStructuredOverrides(t *testing.T) {
 	}
 	if s, _ := img.StringInput("size"); s != "512x512" {
 		t.Fatalf("image size %q", s)
+	}
+	if q, _ := img.StringInput("quality"); q != "high" {
+		t.Fatalf("image quality %q", q)
 	}
 	vid, ok := g["3"]
 	if !ok || vid.ClassType != "VideoOptions" {

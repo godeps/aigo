@@ -126,6 +126,7 @@ type AgentTask struct {
 	Width          int
 	Height         int
 	Size           string
+	Quality        string
 	Duration       int
 	Watermark      *bool
 	References     []ReferenceAsset
@@ -150,6 +151,7 @@ type AgentTaskStructured struct {
 	ImageSize        string
 	ImageAspectRatio string
 	ImageResolution  string // "1K", "2K", "4K"
+	ImageQuality     string // "low", "medium", "high", "auto", "standard", "hd"
 	ImageCameraAngle string
 	ImageWatermark   *bool
 	VideoDuration    int
@@ -728,6 +730,7 @@ func BuildGraph(task AgentTask) workflow.Graph {
 	vidWM := task.Watermark
 	var imgAspectRatio string
 	var imgResolution string
+	imgQuality := task.Quality
 	var vidAspectRatio string
 	var vidResolution string
 	var vidAudio *bool
@@ -740,6 +743,9 @@ func BuildGraph(task AgentTask) workflow.Graph {
 		}
 		if task.Structured.ImageResolution != "" {
 			imgResolution = task.Structured.ImageResolution
+		}
+		if task.Structured.ImageQuality != "" {
+			imgQuality = task.Structured.ImageQuality
 		}
 		if task.Structured.ImageWatermark != nil {
 			imgWM = task.Structured.ImageWatermark
@@ -775,6 +781,9 @@ func BuildGraph(task AgentTask) workflow.Graph {
 	}
 	if imgResolution != "" {
 		imageOptions["resolution"] = imgResolution
+	}
+	if imgQuality != "" {
+		imageOptions["quality"] = imgQuality
 	}
 	if vidSize != "" {
 		videoOptions["size"] = vidSize

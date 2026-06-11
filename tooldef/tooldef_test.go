@@ -91,6 +91,29 @@ func TestGenerateImage_SizeEnum(t *testing.T) {
 	}
 }
 
+func TestGenerateImage_QualityEnum(t *testing.T) {
+	t.Parallel()
+	tool := GenerateImage()
+	qualityProp, ok := tool.Parameters.Properties["quality"]
+	if !ok {
+		t.Fatal("missing quality property")
+	}
+	want := map[string]bool{
+		"low":      true,
+		"medium":   true,
+		"high":     true,
+		"auto":     true,
+		"standard": true,
+		"hd":       true,
+	}
+	for _, got := range qualityProp.Enum {
+		delete(want, got)
+	}
+	if len(want) != 0 {
+		t.Fatalf("quality enum missing values: %v", want)
+	}
+}
+
 func TestGenerateVideo_ReferenceImagesArray(t *testing.T) {
 	t.Parallel()
 	tool := GenerateVideo()
