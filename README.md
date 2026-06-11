@@ -92,18 +92,6 @@ AgentTask ──► BuildGraph() ──► workflow.Graph (DAG)
 | `comfyui` | ComfyUI server (WebSocket) | `COMFY_CLOUD_API_KEY` |
 | `runninghub` | RunningHub (ComfyUI cloud) | `RH_API_KEY` |
 
-NewAPI accepts custom gateway model names. When the model is not in the built-in
-catalog and cannot be inferred from its name, set `capability` so the factory can
-choose the route:
-
-```text
-newapi://sk-xxx@gateway.example.com/v1?model=aihub-custom-image-model&capability=image&quality=high&output_format=webp
-```
-
-Declarative image options are available on `EngineConfig` and URI query strings:
-`quality`, `style`, `background`, `output_format`, `moderation`, and
-`output_compression`.
-
 ### Embedding
 
 | Engine | Backend | Env Var |
@@ -245,17 +233,24 @@ registered, _ := client.RegisterProvider(alibabacloud.DefaultProvider())
 
 Every engine package exports `DefaultProvider()` with sensible presets.
 
-### Config-file-driven setup
+## Declarative Configuration
 
-Declare engines in a JSON file instead of code:
+Use declarative configuration when engines are selected by an application config,
+admin UI, or environment variable instead of hard-coded constructors. Provider
+factories consume `engine.EngineConfig`; import the engine packages you use so
+their factories are registered.
+
+### JSON Config
+
+Declare engines in a JSON file and apply it at startup:
 
 ```json
 {
   "engines": [
-    {"name": "img",   "provider": "alibabacloud", "model": "qwen-image"},
-    {"name": "video", "provider": "kling",         "model": "kling-v2-master"},
-    {"name": "tts",   "provider": "elevenlabs"},
-    {"name": "backup","provider": "runway",         "enabled": false}
+    {"name": "img", "provider": "newapi", "model": "gpt-image-default", "quality": "high", "output_format": "webp"},
+    {"name": "video", "provider": "kling", "model": "kling-v2-master", "wait_for_completion": true},
+    {"name": "tts", "provider": "elevenlabs"},
+    {"name": "backup", "provider": "runway", "enabled": false}
   ]
 }
 ```
@@ -265,15 +260,86 @@ cfg, _ := aigo.LoadConfig("engines.json")
 registered, _ := client.ApplyConfig(cfg)
 ```
 
-Each engine package registers its factory via `init()`, so importing the package is sufficient:
+Each engine package registers its factory via `init()`, so a blank import is
+enough for config-driven setup:
 
 ```go
 import (
+    _ "github.com/godeps/aigo/engine/newapi"
     _ "github.com/godeps/aigo/engine/alibabacloud"
     _ "github.com/godeps/aigo/engine/kling"
     _ "github.com/godeps/aigo/engine/elevenlabs"
     _ "github.com/godeps/aigo/engine/runway"
 )
+```
+
+### URI Config
+
+Use URI config for compact environment-driven setup:
+
+```bash
+export ENGINE_URIS='newapi://sk-xxx@gateway.example.com/v1?model=gpt-image-default&quality=high&output_format=webp,kling://sk-xxx?model=kling-v2-master&wait=true'
+```
+
+```go
+registered, _ := client.ApplyEnvURI()
+// Or: registered, _ := client.ApplyURI(os.Getenv("ENGINE_URIS"))
+```
+
+Provider userinfo becomes `api_key`. If a URI contains `@host/path`, that
+becomes `base_url`; otherwise provider defaults or environment variables apply.
+
+### Common Fields
+
+| Field | JSON / URI key | Purpose |
+|-------|----------------|---------|
+| `Name` | `name` | Client registration name. Required for JSON config; URI config generates one from provider and model when omitted. |
+| `Provider` | URI scheme / `provider` | Registered provider key such as `newapi`, `openai`, `kling`, `alibabacloud`. |
+| `Model` | `model` | Upstream model name. Custom gateway model names are allowed. |
+| `APIKey` | URI userinfo / `api_key` | Explicit API key. Provider env vars remain available as fallback. |
+| `BaseURL` | URI host/path / `base_url` | Custom API endpoint or gateway origin. |
+| `Capability` | `capability` | Route hint for multi-capability providers. Common values: `image`, `image_edit`, `video`, `tts`, `asr`, `video_understanding`, `vision`, `music`, `3d`. |
+| `WaitForCompletion` | `wait_for_completion` / `wait` | Poll async jobs until completion. |
+| `PollInterval` | `poll_interval` | Polling cadence, for example `5s`. |
+| `Enabled` | `enabled` | Set `false` to skip a JSON config entry. |
+| `Metadata` | other query keys / `metadata` | Provider-specific fields such as `voiceId`, `endpoint`, `secretKey`, or template IDs. |
+
+Image providers that support OpenAI-compatible options also accept:
+
+| Field | JSON / URI key | Notes |
+|-------|----------------|-------|
+| `Quality` | `quality` | Image quality tier, for example `low`, `medium`, `high`, `auto`, `standard`, or `hd`. |
+| `Style` | `style` | Style hint such as `vivid` or `natural`; ignored by `gpt-image-*` requests. |
+| `Background` | `background` | `gpt-image-*` background mode: `transparent`, `opaque`, or `auto`. |
+| `OutputFormat` | `output_format` | `gpt-image-*` output format: `png`, `jpeg`, or `webp`. |
+| `Moderation` | `moderation` | `gpt-image-*` moderation mode such as `low` or `auto`. |
+| `OutputCompression` | `output_compression` | JPEG/WebP compression from `0` to `100`. |
+
+### NewAPI Custom Models
+
+`newapi` resolves routes in this order: built-in model catalog, model-name
+inference, then `capability` fallback. Names such as `gpt-image-default` are
+recognized automatically because they start with `gpt-image-`; they use
+`/v1/images/generations` and the `gpt-image-*` request contract.
+
+For a model name that cannot be inferred, set `capability`:
+
+```json
+{
+  "engines": [
+    {
+      "name": "custom-img",
+      "provider": "newapi",
+      "model": "aihub-custom-image-model",
+      "capability": "image",
+      "quality": "high"
+    }
+  ]
+}
+```
+
+```text
+newapi://sk-xxx@gateway.example.com/v1?model=aihub-custom-image-model&capability=image&quality=high&output_format=webp
 ```
 
 ## Model i18n Metadata

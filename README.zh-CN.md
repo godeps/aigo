@@ -92,16 +92,6 @@ AgentTask ──► BuildGraph() ──► workflow.Graph (DAG)
 | `comfyui` | ComfyUI 服务（WebSocket） | `COMFY_CLOUD_API_KEY` |
 | `runninghub` | RunningHub（ComfyUI 云端） | `RH_API_KEY` |
 
-NewAPI 支持传入网关里的自定义模型名。模型不在内置目录里、且无法通过名称推断路由时，
-需要设置 `capability`，让 factory 选择正确接口：
-
-```text
-newapi://sk-xxx@gateway.example.com/v1?model=aihub-custom-image-model&capability=image&quality=high&output_format=webp
-```
-
-声明式图片选项可放在 `EngineConfig` 或 URI query 中：`quality`、`style`、
-`background`、`output_format`、`moderation`、`output_compression`。
-
 ### 向量嵌入
 
 | 引擎 | 后端 | 环境变量 |
@@ -243,17 +233,22 @@ registered, _ := client.RegisterProvider(alibabacloud.DefaultProvider())
 
 每个引擎包都导出 `DefaultProvider()`，包含合理的默认预设。
 
-### 配置文件驱动
+## 声明式配置
 
-通过 JSON 文件声明引擎，无需在代码中硬编码：
+当引擎来自应用配置、管理后台或环境变量，而不是硬编码构造函数时，使用声明式配置。
+Provider factory 使用 `engine.EngineConfig` 创建引擎；需要 import 对应引擎包，让它们注册 factory。
+
+### JSON 配置
+
+通过 JSON 文件声明引擎，并在启动时应用：
 
 ```json
 {
   "engines": [
-    {"name": "img",   "provider": "alibabacloud", "model": "qwen-image"},
-    {"name": "video", "provider": "kling",         "model": "kling-v2-master"},
-    {"name": "tts",   "provider": "elevenlabs"},
-    {"name": "backup","provider": "runway",         "enabled": false}
+    {"name": "img", "provider": "newapi", "model": "gpt-image-default", "quality": "high", "output_format": "webp"},
+    {"name": "video", "provider": "kling", "model": "kling-v2-master", "wait_for_completion": true},
+    {"name": "tts", "provider": "elevenlabs"},
+    {"name": "backup", "provider": "runway", "enabled": false}
   ]
 }
 ```
@@ -263,15 +258,84 @@ cfg, _ := aigo.LoadConfig("engines.json")
 registered, _ := client.ApplyConfig(cfg)
 ```
 
-每个引擎包通过 `init()` 注册工厂函数，只需 import 即可使用：
+每个引擎包通过 `init()` 注册工厂函数。配置驱动时，空 import 即可：
 
 ```go
 import (
+    _ "github.com/godeps/aigo/engine/newapi"
     _ "github.com/godeps/aigo/engine/alibabacloud"
     _ "github.com/godeps/aigo/engine/kling"
     _ "github.com/godeps/aigo/engine/elevenlabs"
     _ "github.com/godeps/aigo/engine/runway"
 )
+```
+
+### URI 配置
+
+URI 适合用环境变量做紧凑配置：
+
+```bash
+export ENGINE_URIS='newapi://sk-xxx@gateway.example.com/v1?model=gpt-image-default&quality=high&output_format=webp,kling://sk-xxx?model=kling-v2-master&wait=true'
+```
+
+```go
+registered, _ := client.ApplyEnvURI()
+// 或：registered, _ := client.ApplyURI(os.Getenv("ENGINE_URIS"))
+```
+
+URI userinfo 会作为 `api_key`。如果 URI 包含 `@host/path`，它会成为 `base_url`；
+否则使用 provider 默认值或环境变量。
+
+### 通用字段
+
+| 字段 | JSON / URI key | 用途 |
+|------|----------------|------|
+| `Name` | `name` | 客户端注册名。JSON 配置必填；URI 配置未设置时，会根据 provider 和 model 自动生成。 |
+| `Provider` | URI scheme / `provider` | 已注册 provider key，例如 `newapi`、`openai`、`kling`、`alibabacloud`。 |
+| `Model` | `model` | 上游模型名，允许传入网关中的自定义模型名。 |
+| `APIKey` | URI userinfo / `api_key` | 显式 API key。provider 对应环境变量仍可作为 fallback。 |
+| `BaseURL` | URI host/path / `base_url` | 自定义 API endpoint 或网关 origin。 |
+| `Capability` | `capability` | 多能力 provider 的路由提示。常见值：`image`、`image_edit`、`video`、`tts`、`asr`、`video_understanding`、`vision`、`music`、`3d`。 |
+| `WaitForCompletion` | `wait_for_completion` / `wait` | 异步任务是否轮询到完成。 |
+| `PollInterval` | `poll_interval` | 轮询间隔，例如 `5s`。 |
+| `Enabled` | `enabled` | JSON 配置中设为 `false` 可跳过该项。 |
+| `Metadata` | 其他 query key / `metadata` | provider-specific 字段，例如 `voiceId`、`endpoint`、`secretKey` 或模板 ID。 |
+
+支持 OpenAI-compatible 图片选项的 provider 还接受：
+
+| 字段 | JSON / URI key | 说明 |
+|------|----------------|------|
+| `Quality` | `quality` | 图片质量档位，例如 `low`、`medium`、`high`、`auto`、`standard`、`hd`。 |
+| `Style` | `style` | 风格提示，例如 `vivid` 或 `natural`；`gpt-image-*` 请求会忽略该字段。 |
+| `Background` | `background` | `gpt-image-*` 背景模式：`transparent`、`opaque`、`auto`。 |
+| `OutputFormat` | `output_format` | `gpt-image-*` 输出格式：`png`、`jpeg`、`webp`。 |
+| `Moderation` | `moderation` | `gpt-image-*` moderation 模式，例如 `low` 或 `auto`。 |
+| `OutputCompression` | `output_compression` | JPEG/WebP 压缩值，范围 `0` 到 `100`。 |
+
+### NewAPI 自定义模型
+
+`newapi` 按以下顺序解析路由：内置模型目录、模型名规则推断、`capability` 兜底。
+例如 `gpt-image-default` 会因为以 `gpt-image-` 开头被自动识别，走
+`/v1/images/generations` 和 `gpt-image-*` 请求协议。
+
+如果模型名无法推断，需要设置 `capability`：
+
+```json
+{
+  "engines": [
+    {
+      "name": "custom-img",
+      "provider": "newapi",
+      "model": "aihub-custom-image-model",
+      "capability": "image",
+      "quality": "high"
+    }
+  ]
+}
+```
+
+```text
+newapi://sk-xxx@gateway.example.com/v1?model=aihub-custom-image-model&capability=image&quality=high&output_format=webp
 ```
 
 ## 模型 i18n 元数据
